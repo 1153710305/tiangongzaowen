@@ -122,7 +122,7 @@ export default function App() {
                     <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">
                         天工造文
                     </h1>
-                    <p className="text-slate-500 text-xs mt-1">AI 爆款小说生成器 (Server Edition)</p>
+                    <p className="text-slate-500 text-xs mt-1">AI 爆款小说生成器 (CS架构版)</p>
                 </div>
                 
                 <NovelSettingsForm 
@@ -161,8 +161,8 @@ export default function App() {
                 </div>
                 
                 <div className="mt-8 pt-4 border-t border-slate-700 text-xs text-slate-500">
-                    <p>状态：已连接后端云服务</p>
-                    <p className="mt-2">Core: Node.js + Hono + Gemini</p>
+                    <p>状态：已连接云端服务器</p>
+                    <p className="mt-2">Core: Hono (Node.js) + Gemini Stream</p>
                 </div>
             </div>
 
@@ -180,7 +180,7 @@ export default function App() {
                         <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-50">
                             <svg className="w-24 h-24 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
                             <p>请在左侧配置小说设定并开始创作...</p>
-                            <p className="text-sm mt-2">提示：需启动 server/index.ts 后端服务</p>
+                            <p className="text-sm mt-2 font-mono bg-slate-800 p-1 rounded px-2">提示：需启动 server/index.ts 后端服务</p>
                         </div>
                     )}
 

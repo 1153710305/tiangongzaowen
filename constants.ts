@@ -17,11 +17,25 @@ export const DEFAULT_NOVEL_SETTINGS: NovelSettings = {
 
 /**
  * 后端 API 地址配置
- * 生产环境应通过环境变量注入
+ * 优先级：
+ * 1. Vite 环境变量 (VITE_API_BASE_URL)
+ * 2. CRA 环境变量 (REACT_APP_API_URL)
+ * 3. 本地默认值 (http://localhost:3000)
  */
-export const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+export const API_BASE_URL = 
+    // 使用类型断言 (as any) 规避 TypeScript 报错: Property 'env' does not exist on type 'ImportMeta'
+    (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_API_BASE_URL) || 
+    // 兼容 Create React App 或其他 Node.js 环境的全局 process.env
+    (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || 
+    'http://localhost:3000';
 
+/**
+ * API 接口端点集合
+ * 统一管理所有后端接口路径
+ */
 export const API_ENDPOINTS = {
+    /** 内容生成接口：用于流式生成小说创意、大纲、正文等 */
     GENERATE: `${API_BASE_URL}/api/generate`,
+    /** 配置池接口：用于获取后端的随机素材配置 */
     CONFIG: `${API_BASE_URL}/api/config/pool`
 };
