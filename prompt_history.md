@@ -3,6 +3,13 @@
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
 
+## 版本 v2.1 (Admin Dashboard)
+
+### 架构变更
+- **后台管理**: 新增 `/admin` 路由，提供服务端渲染的轻量级后台页面。
+- **文件结构**: 新增 `server/admin_ui.ts` 用于存放后台 HTML 模板，保持业务逻辑分离。
+- **权限管理**: 引入基于 JWT 的角色验证 (role: 'admin' vs 'user')。
+
 ## 版本 v2.0 (Backend Separation)
 
 ### 架构变更

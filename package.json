@@ -15,9 +15,9 @@
     "react-dom": "^19.2.1",
     "react-markdown": "^10.1.0",
     "@hono/node-server": "^1.19.6",
-    "path": "^0.12.7",
+    "better-sqlite3": "^12.5.0",
     "fs": "^0.0.1-security",
-    "better-sqlite3": "^12.5.0"
+    "path": "^0.12.7"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

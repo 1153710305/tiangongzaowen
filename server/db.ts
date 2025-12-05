@@ -77,3 +77,42 @@ export function deleteArchive(id: string, userId: string): void {
     const stmt = db.prepare('DELETE FROM archives WHERE id = ? AND user_id = ?');
     stmt.run(id, userId);
 }
+
+// === Admin Functions (新增后台管理功能) ===
+
+/**
+ * 获取系统统计信息
+ */
+export function getSystemStats() {
+    const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
+    const archiveCount = db.prepare('SELECT COUNT(*) as count FROM archives').get() as { count: number };
+    const lastActive = db.prepare('SELECT updated_at FROM archives ORDER BY updated_at DESC LIMIT 1').get() as { updated_at: string } | undefined;
+
+    return {
+        totalUsers: userCount.count,
+        totalArchives: archiveCount.count,
+        lastActiveTime: lastActive?.updated_at || '无数据'
+    };
+}
+
+/**
+ * 获取所有用户列表（后台用）
+ */
+export function getAllUsers(): User[] {
+    return db.prepare('SELECT id, username, created_at FROM users ORDER BY created_at DESC').all() as User[];
+}
+
+/**
+ * 删除用户及其所有存档
+ */
+export function deleteUserFull(userId: string) {
+    const deleteArchives = db.prepare('DELETE FROM archives WHERE user_id = ?');
+    const deleteUser = db.prepare('DELETE FROM users WHERE id = ?');
+    
+    const transaction = db.transaction(() => {
+        deleteArchives.run(userId);
+        deleteUser.run(userId);
+    });
+    
+    transaction();
+}

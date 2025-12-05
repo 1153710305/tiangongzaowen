@@ -7,6 +7,7 @@ import { GoogleGenAI } from '@google/genai';
 import { SYSTEM_INSTRUCTION, PROMPT_BUILDERS } from './prompts.ts';
 import { RANDOM_DATA_POOL } from './data.ts';
 import { NovelSettings, WorkflowStep } from './types.ts';
+import { ADMIN_HTML } from './admin_ui.ts';
 import * as db from './db.ts';
 
 // 初始化数据库
@@ -27,6 +28,8 @@ app.use('/*', cors({
 // API Key & JWT Secret
 const API_KEY = process.env.API_KEY;
 const JWT_SECRET = process.env.JWT_SECRET || 'skycraft_secret_key_change_me';
+// 后台管理员密码，默认 admin123，生产环境请修改 ENV
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'; 
 
 if (!API_KEY) {
     console.error("❌ 严重错误: API_KEY 未设置");
@@ -53,15 +56,12 @@ app.post('/api/auth/register', async (c) => {
             return c.json({ error: '用户名已存在' }, 400);
         }
 
-        // 简单模拟 Hash，生产环境建议使用 bcryptjs (但在纯 serverless/edge 环境 bcrypt 可能有问题，Hono 推荐 web crypto)
-        // 为了性能和兼容性，这里使用简单的 Web Crypto 模拟
-        // 注意：实际生产请用 bcryptjs 或 argon2
         const passwordHash = password; // ⚠️ DEMO ONLY: 真实项目请务必 Hash!
         
         const userId = crypto.randomUUID();
         const user = db.createUser(userId, username, passwordHash);
         
-        const token = await sign({ id: user.id, username: user.username, exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 }, JWT_SECRET); // 7天过期
+        const token = await sign({ id: user.id, username: user.username, role: 'user', exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 }, JWT_SECRET);
         
         return c.json({ token, user: { id: user.id, username: user.username } });
     } catch (e: any) {
@@ -75,12 +75,11 @@ app.post('/api/auth/login', async (c) => {
         const { username, password } = await c.req.json();
         const user = db.getUserByUsername(username);
         
-        // ⚠️ DEMO ONLY: 真实项目请对比 Hash
         if (!user || user.password_hash !== password) {
             return c.json({ error: '用户名或密码错误' }, 401);
         }
 
-        const token = await sign({ id: user.id, username: user.username, exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 }, JWT_SECRET);
+        const token = await sign({ id: user.id, username: user.username, role: 'user', exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 }, JWT_SECRET);
         
         return c.json({ token, user: { id: user.id, username: user.username } });
     } catch (e: any) {
@@ -88,9 +87,63 @@ app.post('/api/auth/login', async (c) => {
     }
 });
 
-// === 受保护路由 (需要 Bearer Token) ===
+// === Admin 路由组 (独立后台) ===
 
-// 中间件：JWT 验证
+// 1. 渲染后台 HTML 页面
+app.get('/admin', (c) => {
+    return c.html(ADMIN_HTML);
+});
+
+// 2. 后台登录接口
+app.post('/admin/api/login', async (c) => {
+    const { password } = await c.req.json();
+    if (password === ADMIN_PASSWORD) {
+        // 签发管理员 Token，有效期 1 小时
+        const token = await sign({ role: 'admin', exp: Math.floor(Date.now() / 1000) + 3600 }, JWT_SECRET);
+        return c.json({ token });
+    }
+    return c.json({ error: '管理员密码错误' }, 401);
+});
+
+// 3. 后台数据接口 (需要 Admin Token)
+const adminApp = new Hono();
+adminApp.use('/*', jwt({ secret: JWT_SECRET }));
+
+// 校验是否是 admin 角色
+adminApp.use('/*', async (c, next) => {
+    const payload = c.get('jwtPayload');
+    if (payload.role !== 'admin') {
+        return c.json({ error: '无权限访问' }, 403);
+    }
+    await next();
+});
+
+adminApp.get('/stats', (c) => {
+    const stats = db.getSystemStats();
+    return c.json(stats);
+});
+
+adminApp.get('/users', (c) => {
+    const users = db.getAllUsers();
+    // 隐藏密码hash
+    const safeUsers = users.map(u => ({ id: u.id, username: u.username, created_at: u.created_at }));
+    return c.json(safeUsers);
+});
+
+adminApp.delete('/users/:id', (c) => {
+    const id = c.req.param('id');
+    try {
+        db.deleteUserFull(id);
+        return c.json({ success: true });
+    } catch (e) {
+        return c.json({ error: '删除失败' }, 500);
+    }
+});
+
+app.route('/admin/api', adminApp);
+
+// === 普通用户受保护路由 ===
+
 app.use('/api/generate', jwt({ secret: JWT_SECRET }));
 app.use('/api/archives/*', jwt({ secret: JWT_SECRET }));
 
@@ -98,7 +151,7 @@ app.use('/api/archives/*', jwt({ secret: JWT_SECRET }));
 app.post('/api/generate', async (c) => {
     if (!API_KEY) return c.json({ error: "Server API Key not configured" }, 500);
 
-    const payload = c.get('jwtPayload'); // 获取用户信息 (Payload)
+    const payload = c.get('jwtPayload'); 
     console.log(`[Generate] User: ${payload.username}`);
 
     try {
@@ -163,11 +216,10 @@ app.post('/api/generate', async (c) => {
 app.get('/api/archives', (c) => {
     const payload = c.get('jwtPayload');
     const archives = db.getArchivesByUser(payload.id);
-    // 解析 JSON 内容
     const result = archives.map(a => {
         try {
             const content = JSON.parse(a.content);
-            return { ...a, ...content, content: undefined }; // 展平结构
+            return { ...a, ...content, content: undefined };
         } catch (e) {
             return a;
         }
@@ -183,11 +235,9 @@ app.post('/api/archives', async (c) => {
     const contentStr = JSON.stringify({ settings, history });
     
     if (id) {
-        // Update
         db.updateArchive(id, payload.id, title, contentStr);
         return c.json({ success: true, id });
     } else {
-        // Create
         const newId = crypto.randomUUID();
         db.createArchive(newId, payload.id, title, contentStr);
         return c.json({ success: true, id: newId });
@@ -209,6 +259,7 @@ if (typeof process !== 'undefined' && (process as any).versions && (process as a
     import('@hono/node-server').then(({ serve }) => {
         const port = Number(process.env.PORT) || 3000;
         console.log(`SkyCraft Server running on port ${port}`);
+        console.log(`Admin Dashboard available at http://localhost:${port}/admin`);
         serve({ fetch: app.fetch, port });
     });
 }
