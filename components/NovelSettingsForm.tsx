@@ -1,6 +1,8 @@
 import React from 'react';
 import { NovelSettings } from '../types';
 import { Button } from './Button';
+import { RANDOM_DATA_POOL } from '../constants';
+import { logger } from '../services/loggerService';
 
 interface Props {
     settings: NovelSettings;
@@ -10,16 +12,52 @@ interface Props {
 }
 
 export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGenerateIdea, isGenerating }) => {
+    
+    // 处理单个字段变更
     const handleChange = (key: keyof NovelSettings, value: string) => {
         onChange({ ...settings, [key]: value });
     };
 
+    // 随机获取数组中的一个元素
+    const getRandomItem = (arr: string[]) => {
+        return arr[Math.floor(Math.random() * arr.length)];
+    };
+
+    // 生成随机爆款配置
+    const handleRandomize = () => {
+        const newSettings: NovelSettings = {
+            genre: getRandomItem(RANDOM_DATA_POOL.genres),
+            trope: getRandomItem(RANDOM_DATA_POOL.tropes),
+            protagonistType: getRandomItem(RANDOM_DATA_POOL.protagonistTypes),
+            goldenFinger: getRandomItem(RANDOM_DATA_POOL.goldenFingers),
+            tone: getRandomItem(RANDOM_DATA_POOL.tones),
+            // 随机受众和节奏
+            targetAudience: Math.random() > 0.5 ? 'male' : 'female',
+            pacing: Math.random() > 0.3 ? 'fast' : (Math.random() > 0.5 ? 'normal' : 'slow')
+        };
+        
+        onChange(newSettings);
+        logger.info("用户使用了随机生成配置功能", newSettings);
+    };
+
     return (
-        <div className="space-y-4 p-4 bg-paper rounded-xl border border-slate-700">
-            <h2 className="text-xl font-bold text-primary mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
-                爆款设定 (Core Config)
-            </h2>
+        <div className="space-y-4 p-4 bg-paper rounded-xl border border-slate-700 relative">
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-primary flex items-center">
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                    爆款设定
+                </h2>
+                {/* 随机生成按钮 */}
+                <button 
+                    onClick={handleRandomize}
+                    disabled={isGenerating}
+                    className="text-xs flex items-center bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white px-3 py-1.5 rounded-full transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="点击随机生成一套爆款配置"
+                >
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                    一键随机爆款
+                </button>
+            </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -28,7 +66,7 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                         type="text" 
                         value={settings.genre} 
                         onChange={(e) => handleChange('genre', e.target.value)}
-                        className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                        className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
                         placeholder="例如：都市修仙"
                     />
                 </div>
@@ -38,7 +76,7 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                         type="text" 
                         value={settings.trope} 
                         onChange={(e) => handleChange('trope', e.target.value)}
-                        className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                        className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
                         placeholder="例如：重生+校花"
                     />
                 </div>
@@ -48,7 +86,7 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                         type="text" 
                         value={settings.protagonistType} 
                         onChange={(e) => handleChange('protagonistType', e.target.value)}
-                        className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                        className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
                         placeholder="例如：腹黑、智商在线、杀伐果断"
                     />
                 </div>
@@ -57,17 +95,28 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                     <textarea 
                         value={settings.goldenFinger} 
                         onChange={(e) => handleChange('goldenFinger', e.target.value)}
-                        className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none h-20 resize-none"
+                        className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none h-20 resize-none transition-colors"
                         placeholder="主角的特殊能力，爽点的核心来源..."
                     />
                 </div>
                 
+                <div className="md:col-span-2">
+                     <label className="block text-sm font-medium text-slate-400 mb-1">整体基调 (Tone)</label>
+                     <input 
+                        type="text" 
+                        value={settings.tone} 
+                        onChange={(e) => handleChange('tone', e.target.value)}
+                        className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
+                        placeholder="例如：热血、搞笑、克苏鲁压抑风"
+                    />
+                </div>
+
                 <div>
                     <label className="block text-sm font-medium text-slate-400 mb-1">节奏 (Pacing)</label>
                     <select 
                         value={settings.pacing} 
                         onChange={(e) => handleChange('pacing', e.target.value as any)}
-                        className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 outline-none"
+                        className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
                     >
                         <option value="fast">快节奏 (极爽/无脑)</option>
                         <option value="normal">常规节奏 (张弛有度)</option>
@@ -79,7 +128,7 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                     <select 
                         value={settings.targetAudience} 
                         onChange={(e) => handleChange('targetAudience', e.target.value as any)}
-                        className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 outline-none"
+                        className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
                     >
                         <option value="male">男频 (热血/征服)</option>
                         <option value="female">女频 (情感/复仇)</option>
@@ -94,8 +143,11 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                     className="w-full"
                     variant="secondary"
                 >
-                    ✨ 生成创意脑洞 (Idea)
+                    ✨ 基于配置生成创意脑洞 (Idea)
                 </Button>
+                <p className="text-xs text-center text-slate-500 mt-2">
+                    觉得配置不满意？点击右上角"随机"按钮重试，或手动修改上方输入框。
+                </p>
             </div>
         </div>
     );
