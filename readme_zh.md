@@ -10,10 +10,9 @@
 ## 📚 目录 (Table of Contents)
 
 1. [技术架构解析](#-技术架构解析)
-2. [后端部署手册 (Server)](#-后端部署手册-server)
+2. [服务器部署详细指南 (Server)](#-服务器部署详细指南-server)
 3. [前端部署手册 (Client)](#-前端部署手册-client)
 4. [使用说明书 (User Manual)](#-使用说明书-user-manual)
-5. [开发与配置](#-开发与配置)
 
 ---
 
@@ -32,40 +31,75 @@
 
 ---
 
-## 🖥 后端部署手册 (Server)
+## 🖥 服务器部署详细指南 (Server)
 
-后端负责处理业务逻辑和 AI 交互，必须部署在能够访问 Google API 的服务器上。
+### 1. 服务器目录结构
 
-### 部署环境要求
-*   Node.js v18.0.0 或更高版本。
-*   一个有效的 Google Gemini API Key。
+在您的远程服务器上，请创建一个名为 `skycraft-server`（或任意名称）的文件夹，并保持以下文件结构。**注意：服务端是完全独立的，不需要前端文件。**
 
-### 部署步骤
+```
+skycraft-server/
+├── package.json       (必须) 用于安装依赖
+├── tsconfig.json      (可选) 如果您需要自定义TS配置
+└── server/            (核心代码目录)
+    ├── index.ts       (入口文件)
+    ├── data.ts        (爆款素材池)
+    ├── prompts.ts     (提示词管理)
+    └── types.ts       (类型定义，已解耦)
+```
 
-1.  **上传代码**: 将 `server/` 目录及 `package.json`, `tsconfig.json` 上传至服务器。
-2.  **安装依赖**:
-    ```bash
-    npm install
-    # 确保安装了服务端核心依赖
-    npm install hono @hono/node-server @google/genai dotenv tsx
-    ```
-3.  **配置环境变量**:
-    在服务器终端设置 API Key（或创建 `.env` 文件）：
-    ```bash
-    export API_KEY="your_actual_google_api_key_here"
-    export PORT=3000
-    ```
-4.  **启动服务**:
-    ```bash
-    # 开发模式
-    npx tsx server/index.ts
+### 2. 部署步骤与命令
 
-    # 生产模式 (使用 PM2 守护进程)
-    npm install -g pm2
-    pm2 start "npx tsx server/index.ts" --name skycraft-backend
-    ```
-5.  **验证**:
-    访问 `http://your-server-ip:3000/`，如果看到 "SkyCraft AI Backend (Hono) is Running!" 即表示成功。
+请在服务器终端按照以下层级顺序执行命令：
+
+#### 第一步：准备环境
+确保服务器安装了 Node.js (v18+)。
+
+#### 第二步：上传文件
+将项目中的 `server/` 文件夹整体上传到服务器，同时在同级目录创建或上传 `package.json`。
+如果没有 `package.json`，可以使用以下命令快速初始化：
+
+```bash
+mkdir skycraft-server
+cd skycraft-server
+npm init -y
+```
+
+#### 第三步：安装依赖
+在 `skycraft-server` 目录下（即包含 `package.json` 的目录）执行：
+
+```bash
+# 安装运行时依赖
+npm install hono @hono/node-server @google/genai dotenv tsx
+```
+
+#### 第四步：设置环境变量
+在当前目录下设置 API Key：
+
+```bash
+# Linux/Mac
+export API_KEY="your_google_api_key_here"
+export PORT=3000
+
+# Windows Powershell
+$env:API_KEY="your_google_api_key_here"
+$env:PORT="3000"
+```
+
+#### 第五步：启动服务
+**关键**：命令执行目录必须是 `skycraft-server` 根目录。
+
+```bash
+# 启动命令
+npx tsx server/index.ts
+```
+
+如果看到以下输出，说明启动成功：
+```
+SkyCraft AI Server (v2.0) is running!
+➜  Local:   http://localhost:3000
+➜  API Key: Configured ✅
+```
 
 ---
 
@@ -117,25 +151,6 @@
     生成详细的主角、反派和配角小传，包含性格和金手指设定。
 *   **Step 4: 撰写正文 (Chapter)**
     系统会根据大纲和人设，尝试撰写第一章正文。
-    *技巧*: 您可以在对话框中输入“继续写第二章”，系统会尝试接续（需后续版本支持完全的多轮对话记忆，目前建议手动调整上下文）。
-
-### 4. 日志监控
-点击右下角的 **“日志”** 按钮，可以查看前端与后端的通信状态，方便排查错误。
-
----
-
-## ⚙️ 开发与配置
-
-### 如何修改 Prompt? (服务端)
-所有 Prompt 均位于 `server/prompts.ts`。
-*   修改 `SYSTEM_INSTRUCTION` 可调整 AI 的整体人设（如变得更毒舌、更文青）。
-*   修改 `PROMPT_BUILDERS` 下的函数可调整各个步骤的具体指令。
-*   **注意**: 修改后需要重启后端服务。
-
-### 如何更新爆款素材库? (服务端)
-所有随机数据位于 `server/data.ts`。
-*   您可以随时添加新的 `genres` (流派) 或 `tropes` (梗)。
-*   **优势**: 无需重新构建前端，重启后端服务后，所有用户点击“随机”时即可获取新素材。
 
 ---
 

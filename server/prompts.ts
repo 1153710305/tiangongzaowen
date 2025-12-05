@@ -1,5 +1,5 @@
 
-import { NovelSettings } from "../types";
+import { NovelSettings } from "./types.ts";
 
 /**
  * AI 角色设定 (System Instruction)

@@ -2,9 +2,9 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { GoogleGenAI } from '@google/genai';
-import { SYSTEM_INSTRUCTION, PROMPT_BUILDERS } from './prompts';
-import { RANDOM_DATA_POOL } from './data';
-import { NovelSettings, WorkflowStep } from '../types';
+import { SYSTEM_INSTRUCTION, PROMPT_BUILDERS } from './prompts.ts';
+import { RANDOM_DATA_POOL } from './data.ts';
+import { NovelSettings, WorkflowStep } from './types.ts';
 
 // 初始化应用
 // Hono 实例，以极速响应著称
