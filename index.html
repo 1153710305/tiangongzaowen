@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>天工造文 - AI爆款小说生成器</title>
+    <!-- 使用 Tailwind CDN 进行快速样式渲染 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -39,19 +40,21 @@
   <script type="importmap">
 {
   "imports": {
-    "react-markdown": "https://aistudiocdn.com/react-markdown@^10.1.0",
+    "hono": "https://aistudiocdn.com/hono@^4.10.7",
+    "hono/": "https://aistudiocdn.com/hono@^4.10.7/",
+    "@hono/node-server": "https://aistudiocdn.com/@hono/node-server@^1.19.6",
     "react/": "https://aistudiocdn.com/react@^19.2.1/",
     "react": "https://aistudiocdn.com/react@^19.2.1",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "hono/": "https://aistudiocdn.com/hono@^4.10.7/",
-    "hono": "https://aistudiocdn.com/hono@^4.10.7",
-    "@hono/node-server": "https://aistudiocdn.com/@hono/node-server@^1.19.6"
+    "react-markdown": "https://aistudiocdn.com/react-markdown@^10.1.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/"
   }
 }
 </script>
 </head>
   <body class="bg-dark text-slate-200 antialiased overflow-hidden">
     <div id="root" class="h-screen w-screen flex flex-col"></div>
+    <!-- 添加 React 应用入口脚本，适配 Vite 本地开发环境 -->
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
