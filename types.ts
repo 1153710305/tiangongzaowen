@@ -1,3 +1,4 @@
+
 // 消息角色枚举
 export enum Role {
     USER = 'user',
@@ -52,4 +53,26 @@ export enum WorkflowStep {
     CHARACTER = 'character', // 人设
     CHAPTER = 'chapter', // 正文
     REVIEW = 'review' // 审稿/润色
+}
+
+// === 新增：认证与存档相关接口 ===
+
+export interface User {
+    id: string;
+    username: string;
+}
+
+export interface AuthResponse {
+    token: string;
+    user: User;
+}
+
+export interface Archive {
+    id: string;
+    userId: string;
+    title: string;
+    settings: NovelSettings;
+    history: ChatMessage[];
+    createdAt: string; // ISO String
+    updatedAt: string; // ISO String
 }

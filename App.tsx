@@ -1,23 +1,31 @@
 
+
 import React, { useState, useRef, useEffect } from 'react';
 import { NovelSettingsForm } from './components/NovelSettingsForm';
 import { Button } from './components/Button';
 import { LogViewer } from './components/LogViewer';
+import { AuthForm } from './components/AuthForm'; // New
 import { 
     NovelSettings, 
     WorkflowStep, 
     ChatMessage, 
-    Role 
+    Role, 
+    User,
+    Archive 
 } from './types';
 import { 
     DEFAULT_NOVEL_SETTINGS 
 } from './constants';
-// 现在使用的是重构后的 ApiService (虽然名字还是 geminiService，但内部已改为 API 调用)
 import { apiService } from './services/geminiService';
 import { logger } from './services/loggerService';
+import { authService } from './services/authService';
 import ReactMarkdown from 'react-markdown';
 
 export default function App() {
+    // === 用户与认证 ===
+    const [user, setUser] = useState<User | null>(null);
+    const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
     // === 状态管理 ===
     const [settings, setSettings] = useState<NovelSettings>(DEFAULT_NOVEL_SETTINGS);
     const [currentStep, setCurrentStep] = useState<WorkflowStep>(WorkflowStep.IDEA);
@@ -27,18 +35,29 @@ export default function App() {
     const [generatedContent, setGeneratedContent] = useState<string>(''); // 当前显示的生成内容
     const [history, setHistory] = useState<ChatMessage[]>([]); // 历史记录
     
+    // 存档管理
+    const [archives, setArchives] = useState<Archive[]>([]);
+    const [currentArchiveId, setCurrentArchiveId] = useState<string | undefined>(undefined);
+    const [currentArchiveTitle, setCurrentArchiveTitle] = useState<string>('新小说计划');
+    const [isSaving, setIsSaving] = useState(false);
+    
     // 自动滚动引用
     const contentEndRef = useRef<HTMLDivElement>(null);
 
-    // === 辅助函数 ===
-    
-    const addToHistory = (role: Role, content: string) => {
-        setHistory(prev => [...prev, {
-            id: Date.now().toString(),
-            role,
-            content,
-            timestamp: Date.now()
-        }]);
+    // === 初始化 ===
+    useEffect(() => {
+        const currentUser = authService.getCurrentUser();
+        if (currentUser) {
+            setUser(currentUser);
+            loadArchives(); // 加载存档
+        }
+        setIsCheckingAuth(false);
+    }, []);
+
+    // 加载存档列表
+    const loadArchives = async () => {
+        const list = await apiService.getArchives();
+        setArchives(list);
     };
 
     // 滚动到底部
@@ -48,11 +67,17 @@ export default function App() {
 
     // === 核心业务逻辑 ===
 
+    const addToHistory = (role: Role, content: string) => {
+        setHistory(prev => [...prev, {
+            id: Date.now().toString(),
+            role,
+            content,
+            timestamp: Date.now()
+        }]);
+    };
+
     /**
      * 统一生成处理函数
-     * @param step 工作流步骤
-     * @param description 任务描述（用于日志）
-     * @param context 可选的上下文（如前文概要）
      */
     const handleGeneration = async (step: WorkflowStep, description: string, context?: string) => {
         if (isGenerating) return;
@@ -60,12 +85,10 @@ export default function App() {
         setCurrentStep(step);
         setGeneratedContent(''); // 清空当前展示区
         
-        // 记录用户操作到历史
         addToHistory(Role.USER, `开始任务：${description}`);
         logger.info(`启动任务: ${description} [${step}]`);
 
         try {
-            // 使用流式生成，现在不需要在前端传递 Prompt，只传递配置和步骤
             const finalContent = await apiService.generateStream(
                 settings, 
                 step, 
@@ -75,103 +98,189 @@ export default function App() {
                 }
             );
 
-            // 生成完成后，保存到历史记录
             addToHistory(Role.MODEL, finalContent);
             setGeneratedContent(''); 
-            
             logger.info(`任务完成: ${description}`);
+            
+            // 自动保存
+            if (currentArchiveId) {
+                saveArchive(currentArchiveId, currentArchiveTitle, [...history, {
+                    id: Date.now().toString(), role: Role.MODEL, content: finalContent, timestamp: Date.now()
+                }]);
+            }
         } catch (error) {
             logger.error(`生成出错: ${description}`, error);
             addToHistory(Role.SYSTEM, `❌ 生成失败: ${error instanceof Error ? error.message : '请检查后端服务是否启动'}`);
+            if (error instanceof Error && error.message.includes("登录")) {
+                authService.logout();
+                setUser(null);
+            }
         } finally {
             setIsGenerating(false);
         }
     };
 
-    // 1. 生成创意
-    const generateIdea = () => {
-        handleGeneration(WorkflowStep.IDEA, "生成创意脑洞");
+    // 保存存档
+    const saveArchive = async (id: string | undefined, title: string, historySnapshot = history) => {
+        setIsSaving(true);
+        try {
+            const res = await apiService.saveArchive(title, settings, historySnapshot, id);
+            if (!id) {
+                // 新建成功，更新ID和列表
+                setCurrentArchiveId(res.id);
+                setArchives(prev => [res, ...prev]);
+                logger.info("新存档已创建");
+            } else {
+                logger.info("存档已更新");
+            }
+        } catch (e) {
+            logger.error("保存失败", e);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
-    // 2. 生成大纲
+    // 加载存档
+    const loadArchive = (archive: Archive) => {
+        setCurrentArchiveId(archive.id);
+        setCurrentArchiveTitle(archive.title);
+        setSettings(archive.settings);
+        setHistory(archive.history);
+        setGeneratedContent('');
+        logger.info(`加载存档: ${archive.title}`);
+    };
+
+    // 新建存档
+    const resetArchive = () => {
+        setCurrentArchiveId(undefined);
+        setCurrentArchiveTitle(`新小说 ${new Date().toLocaleDateString()}`);
+        setSettings(DEFAULT_NOVEL_SETTINGS);
+        setHistory([]);
+        setGeneratedContent('');
+    };
+
+    // 删除存档
+    const deleteArchive = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if(!confirm("确定要删除这个存档吗？")) return;
+        await apiService.deleteArchive(id);
+        setArchives(prev => prev.filter(a => a.id !== id));
+        if (currentArchiveId === id) resetArchive();
+    };
+
+    // === 生成操作入口 ===
+    const generateIdea = () => handleGeneration(WorkflowStep.IDEA, "生成创意脑洞");
     const generateOutline = () => {
-        // 获取最近一次 AI 生成的内容作为上下文
         const context = history.filter(h => h.role === Role.MODEL).slice(-1)[0]?.content || "用户未提供具体创意";
         handleGeneration(WorkflowStep.OUTLINE, "生成黄金三章大纲", context);
     };
-
-    // 3. 生成人设
-    const generateCharacter = () => {
-        handleGeneration(WorkflowStep.CHARACTER, "生成人设小传");
-    };
-
-    // 4. 生成正文
+    const generateCharacter = () => handleGeneration(WorkflowStep.CHARACTER, "生成人设小传");
     const generateChapter = () => {
-        // 提取最后一次大纲内容作为上下文
         const context = history.filter(h => h.role === Role.MODEL).slice(-1)[0]?.content || "无大纲上下文";
         handleGeneration(WorkflowStep.CHAPTER, "撰写正文章节", context);
     };
 
-    // === 界面渲染 ===
+    // === 登录回调 ===
+    const handleLoginSuccess = (u: User) => {
+        setUser(u);
+        loadArchives();
+    };
+
+    if (isCheckingAuth) return null;
+
+    if (!user) {
+        return <AuthForm onLoginSuccess={handleLoginSuccess} />;
+    }
 
     return (
         <div className="flex h-screen bg-dark text-slate-200 font-sans">
             {/* 左侧边栏：配置区 */}
-            <div className="w-96 flex-shrink-0 border-r border-slate-700 bg-[#161b22] p-4 overflow-y-auto hidden md:block">
-                <div className="mb-6">
-                    <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">
-                        天工造文
-                    </h1>
-                    <p className="text-slate-500 text-xs mt-1">AI 爆款小说生成器 (CS架构版)</p>
+            <div className="w-96 flex-shrink-0 border-r border-slate-700 bg-[#161b22] flex flex-col h-full">
+                <div className="p-4 border-b border-slate-700">
+                    <div className="flex justify-between items-center mb-2">
+                         <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">
+                            天工造文
+                        </h1>
+                        <button onClick={() => { authService.logout(); setUser(null); }} className="text-xs text-slate-500 hover:text-white">
+                            退出 ({user.username})
+                        </button>
+                    </div>
+                    <p className="text-slate-500 text-xs">V2.0 企业版 (SQLite + JWT)</p>
                 </div>
-                
-                <NovelSettingsForm 
-                    settings={settings} 
-                    onChange={setSettings} 
-                    onGenerateIdea={generateIdea}
-                    isGenerating={isGenerating}
-                />
 
-                <div className="mt-6 space-y-3">
-                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">工作流 (Workflow)</h3>
-                    <Button 
-                        variant={currentStep === WorkflowStep.OUTLINE ? 'primary' : 'ghost'} 
-                        className="w-full justify-start"
-                        onClick={generateOutline}
-                        disabled={isGenerating}
-                    >
-                        📝 生成大纲 (Outline)
-                    </Button>
-                    <Button 
-                        variant={currentStep === WorkflowStep.CHARACTER ? 'primary' : 'ghost'} 
-                        className="w-full justify-start"
-                        onClick={generateCharacter}
-                        disabled={isGenerating}
-                    >
-                        👤 生成人设 (Character)
-                    </Button>
-                    <Button 
-                        variant={currentStep === WorkflowStep.CHAPTER ? 'primary' : 'ghost'} 
-                        className="w-full justify-start"
-                        onClick={generateChapter}
-                        disabled={isGenerating}
-                    >
-                        🚀 撰写正文 (Write)
-                    </Button>
-                </div>
-                
-                <div className="mt-8 pt-4 border-t border-slate-700 text-xs text-slate-500">
-                    <p>状态：已连接云端服务器</p>
-                    <p className="mt-2">Core: Hono (Node.js) + Gemini Stream</p>
+                <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                    {/* 存档列表 */}
+                    <div>
+                        <div className="flex justify-between items-center mb-2">
+                             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">我的存档</h3>
+                             <button onClick={resetArchive} className="text-xs text-primary hover:text-indigo-400">+ 新建</button>
+                        </div>
+                        <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+                            {archives.map(archive => (
+                                <div 
+                                    key={archive.id}
+                                    onClick={() => loadArchive(archive)}
+                                    className={`group flex justify-between items-center px-3 py-2 rounded-md text-sm cursor-pointer transition-colors ${
+                                        currentArchiveId === archive.id ? 'bg-primary/20 text-white' : 'text-slate-400 hover:bg-slate-800'
+                                    }`}
+                                >
+                                    <span className="truncate">{archive.title}</span>
+                                    <button 
+                                        onClick={(e) => deleteArchive(archive.id, e)}
+                                        className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            ))}
+                            {archives.length === 0 && <p className="text-xs text-slate-600 italic px-2">暂无历史存档</p>}
+                        </div>
+                    </div>
+
+                    <div className="border-t border-slate-700 pt-4">
+                        <div className="mb-4">
+                            <label className="block text-xs text-slate-500 mb-1">当前项目名称</label>
+                            <div className="flex gap-2">
+                                <input 
+                                    value={currentArchiveTitle}
+                                    onChange={(e) => setCurrentArchiveTitle(e.target.value)}
+                                    className="bg-black/20 border border-slate-700 rounded px-2 py-1 text-sm w-full outline-none focus:border-primary"
+                                />
+                                <Button size="sm" onClick={() => saveArchive(currentArchiveId, currentArchiveTitle)} isLoading={isSaving} variant="secondary">
+                                    保存
+                                </Button>
+                            </div>
+                        </div>
+
+                        <NovelSettingsForm 
+                            settings={settings} 
+                            onChange={setSettings} 
+                            onGenerateIdea={generateIdea}
+                            isGenerating={isGenerating}
+                            loadedFromArchive={currentArchiveId ? currentArchiveTitle : undefined}
+                        />
+                    </div>
+
+                    <div className="space-y-3 pb-4">
+                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">工作流 (Workflow)</h3>
+                        <Button variant={currentStep === WorkflowStep.OUTLINE ? 'primary' : 'ghost'} className="w-full justify-start" onClick={generateOutline} disabled={isGenerating}>
+                            📝 生成大纲 (Outline)
+                        </Button>
+                        <Button variant={currentStep === WorkflowStep.CHARACTER ? 'primary' : 'ghost'} className="w-full justify-start" onClick={generateCharacter} disabled={isGenerating}>
+                            👤 生成人设 (Character)
+                        </Button>
+                        <Button variant={currentStep === WorkflowStep.CHAPTER ? 'primary' : 'ghost'} className="w-full justify-start" onClick={generateChapter} disabled={isGenerating}>
+                            🚀 撰写正文 (Write)
+                        </Button>
+                    </div>
                 </div>
             </div>
 
-            {/* 主内容区：输出展示 */}
+            {/* 主内容区 */}
             <div className="flex-1 flex flex-col h-full overflow-hidden relative">
                 {/* 顶部工具栏 (移动端适配) */}
                 <div className="md:hidden p-4 border-b border-slate-700 bg-paper flex justify-between items-center">
                     <span className="font-bold text-primary">天工造文</span>
-                    <button className="text-slate-400">设置</button>
                 </div>
 
                 {/* 消息/内容列表区 */}
@@ -180,7 +289,6 @@ export default function App() {
                         <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-50">
                             <svg className="w-24 h-24 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
                             <p>请在左侧配置小说设定并开始创作...</p>
-                            <p className="text-sm mt-2 font-mono bg-slate-800 p-1 rounded px-2">提示：需启动 server/index.ts 后端服务</p>
                         </div>
                     )}
 
@@ -197,7 +305,7 @@ export default function App() {
                                     <span className={`text-xs font-bold uppercase tracking-wider ${
                                         msg.role === Role.USER ? 'text-primary' : 'text-secondary'
                                     }`}>
-                                        {msg.role === Role.USER ? 'USER (指令)' : 'AI AUTHOR (云端生成)'}
+                                        {msg.role === Role.USER ? 'USER' : 'AI AUTHOR'}
                                     </span>
                                     <span className="ml-auto text-xs text-slate-500">
                                         {new Date(msg.timestamp).toLocaleTimeString()}
@@ -210,7 +318,6 @@ export default function App() {
                         </div>
                     ))}
 
-                    {/* 实时生成流显示区 */}
                     {generatedContent && (
                         <div className="flex justify-start animate-pulse">
                             <div className="max-w-4xl w-full p-4 rounded-xl bg-paper border border-secondary/50 shadow-[0_0_15px_rgba(236,72,153,0.1)]">
@@ -231,7 +338,6 @@ export default function App() {
                 </div>
             </div>
 
-            {/* 日志组件 */}
             <LogViewer />
         </div>
     );

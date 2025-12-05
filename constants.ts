@@ -1,4 +1,5 @@
 
+
 import { NovelSettings } from "./types";
 
 /**
@@ -37,5 +38,12 @@ export const API_ENDPOINTS = {
     /** 内容生成接口：用于流式生成小说创意、大纲、正文等 */
     GENERATE: `${API_BASE_URL}/api/generate`,
     /** 配置池接口：用于获取后端的随机素材配置 */
-    CONFIG: `${API_BASE_URL}/api/config/pool`
+    CONFIG: `${API_BASE_URL}/api/config/pool`,
+    
+    // === 认证接口 ===
+    AUTH_LOGIN: `${API_BASE_URL}/api/auth/login`,
+    AUTH_REGISTER: `${API_BASE_URL}/api/auth/register`,
+    
+    // === 存档接口 ===
+    ARCHIVES: `${API_BASE_URL}/api/archives`
 };

@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useState } from 'react';
 import { NovelSettings } from '../types';
 import { Button } from './Button';
@@ -10,9 +11,11 @@ interface Props {
     onChange: (settings: NovelSettings) => void;
     onGenerateIdea: () => void;
     isGenerating: boolean;
+    // 新增：存档加载提示
+    loadedFromArchive?: string;
 }
 
-export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGenerateIdea, isGenerating }) => {
+export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGenerateIdea, isGenerating, loadedFromArchive }) => {
     
     // 本地状态存储从后端获取的素材池
     const [dataPool, setDataPool] = useState<any>(null);
@@ -67,7 +70,13 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
     };
 
     return (
-        <div className="space-y-4 p-4 bg-paper rounded-xl border border-slate-700 relative">
+        <div className="space-y-4 p-4 bg-paper rounded-xl border border-slate-700 relative transition-all duration-300">
+            {loadedFromArchive && (
+                <div className="absolute -top-3 left-4 bg-green-600 text-white text-xs px-2 py-0.5 rounded shadow-lg animate-fade-in">
+                    已加载存档: {loadedFromArchive}
+                </div>
+            )}
+            
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold text-primary flex items-center">
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>

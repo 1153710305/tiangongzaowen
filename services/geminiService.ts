@@ -1,7 +1,9 @@
 
+
 import { logger } from "./loggerService";
-import { NovelSettings, WorkflowStep } from "../types";
+import { NovelSettings, WorkflowStep, Archive, ChatMessage } from "../types";
 import { API_ENDPOINTS } from "../constants";
+import { authService } from "./authService";
 
 /**
  * 前端 API 服务
@@ -40,18 +42,25 @@ class ApiService {
         
         logger.info(`[Client] 请求生成: ${step}`, { contextLength: context.length });
 
+        const authHeaders = authService.getAuthHeader();
+
         try {
             const response = await fetch(API_ENDPOINTS.GENERATE, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                },
+                    ...authHeaders
+                } as any,
                 body: JSON.stringify({
                     settings,
                     step,
                     context
                 })
             });
+
+            if (response.status === 401) {
+                throw new Error("请先登录");
+            }
 
             if (!response.ok) {
                 const errJson = await response.json().catch(() => ({}));
@@ -85,8 +94,62 @@ class ApiService {
             throw error;
         }
     }
+
+    // === 存档相关 ===
+
+    /**
+     * 获取用户所有存档
+     */
+    public async getArchives(): Promise<Archive[]> {
+        const authHeaders = authService.getAuthHeader();
+        try {
+            const res = await fetch(API_ENDPOINTS.ARCHIVES, {
+                headers: { ...authHeaders } as any
+            });
+            if (!res.ok) throw new Error("获取存档失败");
+            return await res.json();
+        } catch (error) {
+            logger.error("Fetch archives error", error);
+            return [];
+        }
+    }
+
+    /**
+     * 保存/更新存档
+     */
+    public async saveArchive(title: string, settings: NovelSettings, history: ChatMessage[], id?: string): Promise<Archive> {
+        const authHeaders = authService.getAuthHeader();
+        try {
+            const res = await fetch(API_ENDPOINTS.ARCHIVES, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders } as any,
+                body: JSON.stringify({ id, title, settings, history })
+            });
+            if (!res.ok) throw new Error("保存存档失败");
+            return await res.json();
+        } catch (error) {
+            logger.error("Save archive error", error);
+            throw error;
+        }
+    }
+
+    /**
+     * 删除存档
+     */
+    public async deleteArchive(id: string): Promise<void> {
+        const authHeaders = authService.getAuthHeader();
+        try {
+            const res = await fetch(`${API_ENDPOINTS.ARCHIVES}/${id}`, {
+                method: 'DELETE',
+                headers: { ...authHeaders } as any
+            });
+            if (!res.ok) throw new Error("删除失败");
+        } catch (error) {
+            logger.error("Delete archive error", error);
+            throw error;
+        }
+    }
 }
 
 export const apiService = new ApiService();
-// 为了兼容性暂时保留导出名，实际已变为 REST 客户端
-export const geminiService = apiService; 
+export const geminiService = apiService;
