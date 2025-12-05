@@ -74,7 +74,7 @@ class AuthService {
     public logout() {
         localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(USER_KEY);
-        window.location.reload(); // 简单刷新清空状态
+        // 移除 window.location.reload() 以支持平滑的 SPA 路由切换
     }
 
     // 保存会话

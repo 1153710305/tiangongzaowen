@@ -3,6 +3,11 @@
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
 
+## 版本 v2.4.3 (UX Improvement)
+
+### 功能变更
+- **Auth Logic**: 修改 `authService.logout` 移除页面刷新，转而在 `App.tsx` 中手动重置状态（包括 `history`, `archives` 等）并设 `user` 为 null，以实现无缝返回登录页的 SPA 体验。
+
 ## 版本 v2.4.2 (Admin Archives)
 
 ### 功能变更

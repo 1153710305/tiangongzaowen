@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { NovelSettingsForm } from './components/NovelSettingsForm';
 import { Button } from './components/Button';
@@ -110,8 +111,7 @@ export default function App() {
             logger.error(`生成出错: ${description}`, error);
             addToHistory(Role.SYSTEM, `❌ 生成失败: ${error instanceof Error ? error.message : '请检查后端服务是否启动'}`);
             if (error instanceof Error && error.message.includes("登录")) {
-                authService.logout();
-                setUser(null);
+                handleLogout();
             }
         } finally {
             setIsGenerating(false);
@@ -187,6 +187,23 @@ export default function App() {
         loadArchives();
     };
 
+    // === 登出处理 ===
+    const handleLogout = () => {
+        // 1. 清除本地存储
+        authService.logout();
+        
+        // 2. 清除应用状态
+        setUser(null);
+        setHistory([]);
+        setArchives([]);
+        setSettings(DEFAULT_NOVEL_SETTINGS);
+        setCurrentArchiveId(undefined);
+        setCurrentArchiveTitle('新小说计划');
+        setGeneratedContent('');
+        
+        logger.info("用户已安全退出");
+    };
+
     if (isCheckingAuth) return null;
 
     if (!user) {
@@ -202,7 +219,7 @@ export default function App() {
                          <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">
                             天工造文
                         </h1>
-                        <button onClick={() => { authService.logout(); setUser(null); }} className="text-xs text-slate-500 hover:text-white">
+                        <button onClick={handleLogout} className="text-xs text-slate-500 hover:text-white transition-colors">
                             退出 ({user.username})
                         </button>
                     </div>
