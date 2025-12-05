@@ -19,6 +19,8 @@ export const ADMIN_HTML = `
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #1e293b; }
         ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        /* JSON 代码块样式 */
+        pre.code-block { font-family: 'Menlo', 'Monaco', 'Courier New', monospace; }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-200 font-sans h-screen overflow-hidden" x-data="adminApp()">
@@ -48,7 +50,7 @@ export const ADMIN_HTML = `
                 <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-pink-500">
                     SkyCraft Admin
                 </h1>
-                <p class="text-xs text-slate-500 mt-1">服务器监控面板 v1.2</p>
+                <p class="text-xs text-slate-500 mt-1">服务器监控面板 v2.0</p>
             </div>
             <nav class="flex-1 p-4 space-y-2">
                 <button @click="switchTab('dashboard')" 
@@ -68,6 +70,12 @@ export const ADMIN_HTML = `
                     class="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                     系统日志 (Logs)
+                </button>
+                <button @click="switchTab('api_tester')" 
+                    :class="{'bg-indigo-600/20 text-indigo-300': currentTab === 'api_tester', 'text-slate-400 hover:bg-slate-800': currentTab !== 'api_tester'}"
+                    class="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                    API 实验室 (Lab)
                 </button>
             </nav>
             <div class="p-4 border-t border-slate-800">
@@ -125,9 +133,14 @@ export const ADMIN_HTML = `
             <div x-show="currentTab === 'users'">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-2xl font-bold">用户管理列表</h2>
-                    <button @click="fetchUsers" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 rounded border border-slate-700 text-sm">
-                        刷新列表
-                    </button>
+                    <div class="flex gap-2">
+                        <button @click="showAddUserModal = true" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-white text-sm flex items-center">
+                            + 新增用户
+                        </button>
+                        <button @click="fetchUsers" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 rounded border border-slate-700 text-sm">
+                            刷新列表
+                        </button>
+                    </div>
                 </div>
 
                 <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
@@ -146,9 +159,12 @@ export const ADMIN_HTML = `
                                     <td class="p-4 font-mono text-xs text-slate-500" x-text="user.id"></td>
                                     <td class="p-4 font-medium text-white" x-text="user.username"></td>
                                     <td class="p-4 text-sm text-slate-400" x-text="formatDate(user.created_at)"></td>
-                                    <td class="p-4 text-right">
+                                    <td class="p-4 text-right flex justify-end gap-2">
+                                        <button @click="openResetPwd(user)" class="text-indigo-400 hover:text-indigo-300 text-sm bg-indigo-900/20 px-3 py-1 rounded hover:bg-indigo-900/40 border border-indigo-900/50 transition-all">
+                                            重置密码
+                                        </button>
                                         <button @click="deleteUser(user.id)" class="text-red-400 hover:text-red-300 text-sm bg-red-900/20 px-3 py-1 rounded hover:bg-red-900/40 border border-red-900/50 transition-all">
-                                            删除账号
+                                            删除
                                         </button>
                                     </td>
                                 </tr>
@@ -158,6 +174,32 @@ export const ADMIN_HTML = `
                             </tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- 弹窗：新增用户 -->
+            <div x-show="showAddUserModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" x-cloak>
+                <div class="bg-slate-800 p-6 rounded-lg shadow-xl w-96 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4">新增用户</h3>
+                    <input type="text" x-model="newUser.username" placeholder="用户名" class="w-full mb-3 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                    <input type="password" x-model="newUser.password" placeholder="密码 (至少6位)" class="w-full mb-4 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                    <div class="flex justify-end gap-2">
+                        <button @click="showAddUserModal = false" class="px-3 py-1 text-slate-400 hover:text-white">取消</button>
+                        <button @click="createUser" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded">创建</button>
+                    </div>
+                </div>
+            </div>
+
+             <!-- 弹窗：重置密码 -->
+             <div x-show="showResetPwdModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" x-cloak>
+                <div class="bg-slate-800 p-6 rounded-lg shadow-xl w-96 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-2">重置密码</h3>
+                    <p class="text-sm text-slate-400 mb-4">用户: <span x-text="resetPwd.username"></span></p>
+                    <input type="text" x-model="resetPwd.newPassword" placeholder="输入新密码" class="w-full mb-4 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm outline-none focus:border-indigo-500">
+                    <div class="flex justify-end gap-2">
+                        <button @click="showResetPwdModal = false" class="px-3 py-1 text-slate-400 hover:text-white">取消</button>
+                        <button @click="submitResetPwd" class="px-3 py-1 bg-red-600 hover:bg-red-500 text-white rounded">确认重置</button>
+                    </div>
                 </div>
             </div>
 
@@ -212,6 +254,91 @@ export const ADMIN_HTML = `
                 </div>
             </div>
 
+            <!-- API Tester 视图 (新增) -->
+            <div x-show="currentTab === 'api_tester'" class="h-full flex flex-col">
+                <div class="mb-4">
+                    <h2 class="text-2xl font-bold text-indigo-400">API 可视化实验室</h2>
+                    <p class="text-xs text-slate-500">直接从浏览器模拟请求，测试服务器接口连通性与性能。</p>
+                </div>
+
+                <div class="flex-1 flex gap-4 min-h-0">
+                    <!-- 左侧：请求配置 -->
+                    <div class="w-1/2 flex flex-col gap-4 bg-slate-800/50 rounded-xl p-4 border border-slate-700 overflow-y-auto">
+                        <!-- 预设接口列表 -->
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">快速选择接口范例</label>
+                            <select x-model="selectedApiEndpoint" @change="loadApiTemplate" class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-white">
+                                <option value="">-- 请选择 API --</option>
+                                <option value="login">POST /api/auth/login (登录)</option>
+                                <option value="register">POST /api/auth/register (注册)</option>
+                                <option value="generate">POST /api/generate (AI生成)</option>
+                                <option value="pool">GET /api/config/pool (获取配置池)</option>
+                                <option value="archives">GET /api/archives (获取存档列表)</option>
+                            </select>
+                        </div>
+
+                        <!-- 基础信息 -->
+                        <div class="flex gap-2">
+                            <div class="w-1/4">
+                                <label class="block text-xs text-slate-400 mb-1">Method</label>
+                                <select x-model="apiRequest.method" class="w-full bg-slate-900 border border-slate-600 rounded px-2 py-2 text-sm font-bold" :class="getMethodColor(apiRequest.method)">
+                                    <option value="GET">GET</option>
+                                    <option value="POST">POST</option>
+                                    <option value="PUT">PUT</option>
+                                    <option value="DELETE">DELETE</option>
+                                </select>
+                            </div>
+                            <div class="flex-1">
+                                <label class="block text-xs text-slate-400 mb-1">Endpoint URL</label>
+                                <input type="text" x-model="apiRequest.url" class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm font-mono text-white">
+                            </div>
+                        </div>
+
+                        <!-- Header 配置 -->
+                        <div>
+                            <div class="flex justify-between mb-1">
+                                <label class="text-xs text-slate-400">Headers (JSON)</label>
+                                <button @click="injectToken" class="text-xs text-indigo-400 hover:text-white underline">注入当前Admin Token</button>
+                            </div>
+                            <textarea x-model="apiRequest.headers" rows="3" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-xs font-mono text-slate-300 code-block"></textarea>
+                        </div>
+
+                        <!-- Body 配置 -->
+                        <div class="flex-1 flex flex-col min-h-0">
+                            <label class="block text-xs text-slate-400 mb-1">Request Body (JSON)</label>
+                            <textarea x-model="apiRequest.body" class="flex-1 w-full bg-slate-900 border border-slate-600 rounded p-2 text-xs font-mono text-slate-300 code-block resize-none"></textarea>
+                        </div>
+
+                        <button @click="sendApiRequest" :disabled="apiLoading" 
+                            class="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-bold py-3 rounded shadow-lg transition-all disabled:opacity-50 flex justify-center items-center gap-2">
+                            <span x-show="apiLoading" class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
+                            <span>发送请求 (Send Request)</span>
+                        </button>
+                    </div>
+
+                    <!-- 右侧：响应结果 -->
+                    <div class="w-1/2 flex flex-col bg-[#0d1117] rounded-xl border border-slate-700 overflow-hidden relative">
+                        <div class="bg-slate-950 p-2 border-b border-slate-800 flex justify-between items-center">
+                            <span class="text-xs font-bold text-slate-400">Response</span>
+                            <div class="flex gap-4 text-xs font-mono" x-show="apiResponse">
+                                <span :class="getStatusColor(apiResponse?.status)">Status: <span x-text="apiResponse?.status"></span></span>
+                                <span class="text-blue-400">Time: <span x-text="apiResponse?.time"></span>ms</span>
+                                <span class="text-pink-400" title="估算值: 字符数/4">Est. Tokens: ~<span x-text="apiResponse?.tokens"></span></span>
+                            </div>
+                        </div>
+                        <div class="flex-1 overflow-y-auto p-4">
+                             <pre x-show="apiResponse" class="text-xs font-mono text-green-400 break-all whitespace-pre-wrap code-block" x-text="apiResponse?.body"></pre>
+                             <div x-show="!apiResponse" class="h-full flex items-center justify-center text-slate-600 text-sm italic">
+                                 等待发送请求...
+                             </div>
+                        </div>
+                         <div x-show="apiResponse && apiResponse.model" class="absolute bottom-2 right-2 px-2 py-1 bg-slate-800/80 rounded text-[10px] text-slate-500 border border-slate-700">
+                            Model: <span x-text="apiResponse.model"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -230,11 +357,28 @@ export const ADMIN_HTML = `
                 users: [],
                 logs: [],
                 
+                // 新增用户状态
+                showAddUserModal: false,
+                newUser: { username: '', password: '' },
+
+                // 重置密码状态
+                showResetPwdModal: false,
+                resetPwd: { id: '', username: '', newPassword: '' },
+
+                // API Tester 状态
+                selectedApiEndpoint: '',
+                apiLoading: false,
+                apiRequest: {
+                    method: 'GET',
+                    url: '/api/config/pool',
+                    headers: '{\\n  "Content-Type": "application/json"\\n}',
+                    body: ''
+                },
+                apiResponse: null,
+                
                 // 日志筛选
                 logSearch: '',
                 logLevelFilter: '',
-
-                // 日志刷新逻辑
                 logInterval: null,
                 isAutoRefresh: false,
 
@@ -258,23 +402,13 @@ export const ADMIN_HTML = `
                     }
                 },
 
-                // === 路由/Tab 切换 ===
                 switchTab(tab) {
                     this.currentTab = tab;
-                    // 停止旧的定时器
-                    if (this.logInterval) {
-                        clearInterval(this.logInterval);
-                        this.logInterval = null;
-                        this.isAutoRefresh = false;
-                    }
+                    if (this.logInterval) { clearInterval(this.logInterval); this.logInterval = null; this.isAutoRefresh = false; }
                     
                     if (tab === 'dashboard') this.fetchStats();
                     if (tab === 'users') this.fetchUsers();
-                    if (tab === 'logs') {
-                        this.fetchLogs();
-                        // 默认开启日志自动刷新
-                        this.toggleAutoRefresh(); 
-                    }
+                    if (tab === 'logs') { this.fetchLogs(); this.toggleAutoRefresh(); }
                 },
 
                 // === 登录逻辑 ===
@@ -311,67 +445,156 @@ export const ADMIN_HTML = `
                     if (this.logInterval) clearInterval(this.logInterval);
                 },
 
-                // === 数据获取 ===
                 async authedFetch(url, options = {}) {
-                    const headers = {
-                        ...options.headers,
-                        'Authorization': 'Bearer ' + this.adminToken
-                    };
+                    const headers = { ...options.headers, 'Authorization': 'Bearer ' + this.adminToken };
                     const res = await fetch(url, { ...options, headers });
-                    if (res.status === 401) {
-                        this.logout();
-                        throw new Error('Unauthorized');
-                    }
+                    if (res.status === 401) { this.logout(); throw new Error('Unauthorized'); }
                     return res.json();
                 },
 
-                async fetchStats() {
-                    try { this.stats = await this.authedFetch('/admin/api/stats'); } catch (e) {}
-                },
-
-                async fetchUsers() {
-                    try { this.users = await this.authedFetch('/admin/api/users'); } catch (e) {}
-                },
-                
-                async fetchLogs() {
-                    try { 
-                        this.logs = await this.authedFetch('/admin/api/logs'); 
-                    } catch (e) {}
-                },
-
+                // === 用户管理 ===
+                async fetchStats() { try { this.stats = await this.authedFetch('/admin/api/stats'); } catch (e) {} },
+                async fetchUsers() { try { this.users = await this.authedFetch('/admin/api/users'); } catch (e) {} },
                 async deleteUser(id) {
                     if(!confirm('确定要删除该用户吗？所有存档将被永久清除！')) return;
+                    try { await this.authedFetch('/admin/api/users/' + id, { method: 'DELETE' }); this.fetchUsers(); } catch (e) { alert('删除失败'); }
+                },
+                async createUser() {
+                    if (!this.newUser.username || this.newUser.password.length < 6) return alert('用户名或密码格式错误');
                     try {
-                        await this.authedFetch('/admin/api/users/' + id, { method: 'DELETE' });
-                        this.fetchUsers();
-                    } catch (e) { alert('删除失败'); }
+                        const res = await fetch('/admin/api/users', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.adminToken },
+                            body: JSON.stringify(this.newUser)
+                        });
+                        if (res.ok) {
+                            alert('用户创建成功');
+                            this.showAddUserModal = false;
+                            this.newUser = { username: '', password: '' };
+                            this.fetchUsers();
+                        } else {
+                            const err = await res.json();
+                            alert('创建失败: ' + err.error);
+                        }
+                    } catch (e) { alert('请求失败'); }
+                },
+                openResetPwd(user) {
+                    this.resetPwd = { id: user.id, username: user.username, newPassword: '' };
+                    this.showResetPwdModal = true;
+                },
+                async submitResetPwd() {
+                    try {
+                         const res = await fetch('/admin/api/users/' + this.resetPwd.id + '/password', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.adminToken },
+                            body: JSON.stringify({ password: this.resetPwd.newPassword })
+                        });
+                        if (res.ok) {
+                            alert('密码重置成功');
+                            this.showResetPwdModal = false;
+                        } else {
+                            alert('重置失败');
+                        }
+                    } catch (e) { alert('请求失败'); }
                 },
 
-                // === 日志自动刷新 ===
+                // === 日志逻辑 ===
+                async fetchLogs() { try { this.logs = await this.authedFetch('/admin/api/logs'); } catch (e) {} },
                 toggleAutoRefresh() {
-                    if (this.isAutoRefresh) {
-                        clearInterval(this.logInterval);
-                        this.logInterval = null;
-                        this.isAutoRefresh = false;
-                    } else {
-                        this.isAutoRefresh = true;
-                        this.fetchLogs();
-                        this.logInterval = setInterval(() => {
-                            this.fetchLogs();
-                        }, 2000); // 2秒刷新一次
+                    if (this.isAutoRefresh) { clearInterval(this.logInterval); this.logInterval = null; this.isAutoRefresh = false; }
+                    else { this.isAutoRefresh = true; this.fetchLogs(); this.logInterval = setInterval(() => this.fetchLogs(), 2000); }
+                },
+
+                // === API Tester Logic ===
+                loadApiTemplate() {
+                    const t = this.selectedApiEndpoint;
+                    const defaultHeaders = '{\\n  "Content-Type": "application/json"\\n}';
+                    if (t === 'login') {
+                        this.apiRequest = { method: 'POST', url: '/api/auth/login', headers: defaultHeaders, body: '{\\n  "username": "admin",\\n  "password": "password"\\n}' };
+                    } else if (t === 'register') {
+                        this.apiRequest = { method: 'POST', url: '/api/auth/register', headers: defaultHeaders, body: '{\\n  "username": "newuser",\\n  "password": "password123"\\n}' };
+                    } else if (t === 'generate') {
+                        this.apiRequest = { method: 'POST', url: '/api/generate', headers: defaultHeaders, body: '{\\n  "step": "idea",\\n  "settings": {\\n    "genre": "都市",\\n    "trope": "系统",\\n    "protagonistType": "腹黑",\\n    "goldenFinger": "加点",\\n    "pacing": "fast",\\n    "targetAudience": "male",\\n    "tone": "爽文"\\n  }\\n}' };
+                    } else if (t === 'pool') {
+                        this.apiRequest = { method: 'GET', url: '/api/config/pool', headers: defaultHeaders, body: '' };
+                    } else if (t === 'archives') {
+                        this.apiRequest = { method: 'GET', url: '/api/archives', headers: defaultHeaders, body: '' };
                     }
                 },
-
-                // === 格式化辅助 ===
-                formatDate(isoStr) {
-                    if (!isoStr || isoStr === '无数据') return '无数据';
-                    return new Date(isoStr).toLocaleString('zh-CN');
+                injectToken() {
+                    const h = JSON.parse(this.apiRequest.headers || '{}');
+                    h['Authorization'] = 'Bearer ' + this.adminToken;
+                    this.apiRequest.headers = JSON.stringify(h, null, 2);
                 },
-                
-                formatTime(isoStr) {
-                    return isoStr.split('T')[1].split('.')[0];
+                async sendApiRequest() {
+                    this.apiLoading = true;
+                    this.apiResponse = null;
+                    const start = Date.now();
+                    try {
+                        const options = {
+                            method: this.apiRequest.method,
+                            headers: JSON.parse(this.apiRequest.headers || '{}')
+                        };
+                        if (['POST', 'PUT'].includes(this.apiRequest.method) && this.apiRequest.body) {
+                            options.body = this.apiRequest.body;
+                        }
+
+                        const res = await fetch(this.apiRequest.url, options);
+                        const end = Date.now();
+                        
+                        // 尝试解析JSON，如果是流式或文本则直接读取
+                        let bodyStr = '';
+                        let isJson = false;
+                        const contentType = res.headers.get('content-type');
+                        
+                        if (contentType && contentType.includes('application/json')) {
+                            const json = await res.json();
+                            bodyStr = JSON.stringify(json, null, 2);
+                            isJson = true;
+                        } else {
+                            bodyStr = await res.text();
+                        }
+
+                        // 估算 Token (简单算法：4 char = 1 token)
+                        const inputLen = (this.apiRequest.body || '').length + (this.apiRequest.url.length);
+                        const outputLen = bodyStr.length;
+                        const totalTokens = Math.ceil((inputLen + outputLen) / 4);
+
+                        this.apiResponse = {
+                            status: res.status,
+                            time: end - start,
+                            body: bodyStr,
+                            tokens: totalTokens,
+                            model: isJson ? 'Gemini 2.5 Flash (Estimated)' : 'System'
+                        };
+
+                    } catch (e) {
+                        this.apiResponse = {
+                            status: 'ERROR',
+                            time: Date.now() - start,
+                            body: e.message,
+                            tokens: 0,
+                            model: '-'
+                        };
+                    } finally {
+                        this.apiLoading = false;
+                    }
+                },
+                getMethodColor(m) {
+                    if (m === 'GET') return 'text-green-400';
+                    if (m === 'POST') return 'text-yellow-400';
+                    if (m === 'DELETE') return 'text-red-400';
+                    return 'text-white';
+                },
+                getStatusColor(s) {
+                    if (s >= 200 && s < 300) return 'text-green-400';
+                    if (s >= 400) return 'text-red-400';
+                    return 'text-yellow-400';
                 },
 
+                // === 格式化 ===
+                formatDate(isoStr) { if (!isoStr || isoStr === '无数据') return '无数据'; return new Date(isoStr).toLocaleString('zh-CN'); },
+                formatTime(isoStr) { return isoStr.split('T')[1].split('.')[0]; },
                 getLevelClass(level) {
                     switch(level) {
                         case 'INFO': return 'text-blue-400';

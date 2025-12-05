@@ -1,3 +1,4 @@
+
 import { Hono } from 'hono';
 import { jwt, sign } from 'hono/jwt';
 import { logger } from './logger.ts';
@@ -70,6 +71,43 @@ protectedApi.get('/users', (c) => {
     } catch (e: any) {
         logger.error("获取用户列表失败", { error: e.message });
         return c.json({ error: "获取用户列表失败" }, 500);
+    }
+});
+
+// 创建新用户 (Admin)
+protectedApi.post('/users', async (c) => {
+    try {
+        const { username, password } = await c.req.json();
+        if (!username || !password || password.length < 6) {
+            return c.json({ error: '参数无效' }, 400);
+        }
+        
+        const existing = db.getUserByUsername(username);
+        if (existing) return c.json({ error: '用户名已存在' }, 400);
+
+        const userId = crypto.randomUUID();
+        db.createUser(userId, username, password); // 注意：生产环境应Hash
+        logger.info(`管理员手动创建了用户: ${username}`);
+        return c.json({ success: true, userId });
+    } catch (e: any) {
+        logger.error("管理员创建用户失败", { error: e.message });
+        return c.json({ error: "创建失败" }, 500);
+    }
+});
+
+// 重置用户密码 (Admin)
+protectedApi.put('/users/:id/password', async (c) => {
+    const id = c.req.param('id');
+    try {
+        const { password } = await c.req.json();
+        if (!password || password.length < 6) return c.json({ error: '密码过短' }, 400);
+        
+        db.updateUserPassword(id, password); // 注意：生产环境应Hash
+        logger.warn(`管理员重置了用户 ${id} 的密码`);
+        return c.json({ success: true });
+    } catch (e: any) {
+        logger.error("重置密码失败", { error: e.message });
+        return c.json({ error: "重置失败" }, 500);
     }
 });
 

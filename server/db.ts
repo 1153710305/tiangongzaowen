@@ -53,6 +53,14 @@ export function getUserById(id: string): User | undefined {
     return stmt.get(id) as User | undefined;
 }
 
+/**
+ * 更新用户密码
+ */
+export function updateUserPassword(id: string, newPasswordHash: string): void {
+    const stmt = db.prepare('UPDATE users SET password_hash = ? WHERE id = ?');
+    stmt.run(newPasswordHash, id);
+}
+
 // === Archives ===
 
 export function createArchive(id: string, userId: string, title: string, content: string): Archive {
