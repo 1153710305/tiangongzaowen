@@ -160,6 +160,11 @@ export const ADMIN_HTML = `
                                     <td class="p-4 font-medium text-white" x-text="user.username"></td>
                                     <td class="p-4 text-sm text-slate-400" x-text="formatDate(user.created_at)"></td>
                                     <td class="p-4 text-right flex justify-end gap-2">
+                                        <!-- 新增：查看存档按钮 -->
+                                        <button @click="viewUserArchives(user)" class="text-blue-400 hover:text-blue-300 text-sm bg-blue-900/20 px-3 py-1 rounded hover:bg-blue-900/40 border border-blue-900/50 transition-all flex items-center gap-1" title="查看用户存档">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                                            存档
+                                        </button>
                                         <button @click="openResetPwd(user)" class="text-indigo-400 hover:text-indigo-300 text-sm bg-indigo-900/20 px-3 py-1 rounded hover:bg-indigo-900/40 border border-indigo-900/50 transition-all">
                                             重置密码
                                         </button>
@@ -199,6 +204,52 @@ export const ADMIN_HTML = `
                     <div class="flex justify-end gap-2">
                         <button @click="showResetPwdModal = false" class="px-3 py-1 text-slate-400 hover:text-white">取消</button>
                         <button @click="submitResetPwd" class="px-3 py-1 bg-red-600 hover:bg-red-500 text-white rounded">确认重置</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 弹窗：查看用户存档 (新增) -->
+            <div x-show="showArchivesModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" x-cloak>
+                <div class="bg-slate-800 p-6 rounded-lg shadow-xl w-full max-w-2xl border border-slate-700 flex flex-col max-h-[80vh]">
+                    <div class="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
+                        <h3 class="text-xl font-bold">📚 用户存档列表</h3>
+                        <span class="text-sm text-slate-400">用户: <span x-text="currentArchiveUser" class="text-indigo-400 font-bold"></span></span>
+                    </div>
+                    
+                    <div class="flex-1 overflow-y-auto min-h-0">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-slate-900 text-slate-400 sticky top-0">
+                                <tr>
+                                    <th class="p-3 rounded-tl-lg">书名/标题</th>
+                                    <th class="p-3">流派/设定</th>
+                                    <th class="p-3">创建时间</th>
+                                    <th class="p-3 rounded-tr-lg">最后更新</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-700">
+                                <template x-for="archive in currentUserArchives" :key="archive.id">
+                                    <tr class="hover:bg-slate-700/30">
+                                        <td class="p-3 font-medium text-white" x-text="archive.title || '无标题'"></td>
+                                        <td class="p-3 text-slate-400">
+                                            <div class="text-xs" x-show="archive.settings">
+                                                <div x-text="archive.settings?.genre" class="mb-1 text-indigo-300"></div>
+                                                <div x-text="archive.settings?.trope" class="opacity-70 truncate max-w-[150px]"></div>
+                                            </div>
+                                            <span x-show="!archive.settings" class="text-xs italic opacity-50">未配置</span>
+                                        </td>
+                                        <td class="p-3 text-slate-500 text-xs" x-text="formatDate(archive.created_at)"></td>
+                                        <td class="p-3 text-slate-500 text-xs" x-text="formatDate(archive.updated_at)"></td>
+                                    </tr>
+                                </template>
+                                <tr x-show="!currentUserArchives || currentUserArchives.length === 0">
+                                    <td colspan="4" class="p-8 text-center text-slate-500 italic">该用户暂无存档记录</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="flex justify-end pt-4 border-t border-slate-700 mt-2">
+                        <button @click="showArchivesModal = false" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded">关闭</button>
                     </div>
                 </div>
             </div>
@@ -365,6 +416,11 @@ export const ADMIN_HTML = `
                 showResetPwdModal: false,
                 resetPwd: { id: '', username: '', newPassword: '' },
 
+                // 存档管理状态 (新增)
+                showArchivesModal: false,
+                currentArchiveUser: '',
+                currentUserArchives: [],
+
                 // API Tester 状态
                 selectedApiEndpoint: '',
                 apiLoading: false,
@@ -515,6 +571,20 @@ export const ADMIN_HTML = `
                             alert('重置失败');
                         }
                     } catch (e) { alert('请求失败'); }
+                },
+                
+                // === 存档查看逻辑 (新增) ===
+                async viewUserArchives(user) {
+                    this.currentArchiveUser = user.username;
+                    this.currentUserArchives = [];
+                    this.showArchivesModal = true;
+                    try {
+                        const res = await this.authedFetch('/admin/api/users/' + user.id + '/archives');
+                        this.currentUserArchives = Array.isArray(res) ? res : [];
+                    } catch(e) {
+                        console.error(e);
+                        alert('获取存档失败');
+                    }
                 },
 
                 // === 日志逻辑 ===

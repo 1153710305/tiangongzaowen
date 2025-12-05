@@ -74,6 +74,42 @@ protectedApi.get('/users', (c) => {
     }
 });
 
+// 获取指定用户的存档列表 (Admin) - 新增接口
+protectedApi.get('/users/:id/archives', (c) => {
+    const id = c.req.param('id');
+    try {
+        const archives = db.getArchivesByUser(id);
+        // 解析 content JSON，以便前端直接展示 settings 等信息
+        const result = archives.map(a => {
+            try {
+                const content = JSON.parse(a.content);
+                // 解构 content 提取 settings，并将 content 字段移除以减小体积
+                // 我们不返回 history，因为通常太大了，列表页不需要
+                return { 
+                    id: a.id,
+                    title: a.title,
+                    settings: content.settings, 
+                    created_at: a.created_at, 
+                    updated_at: a.updated_at 
+                };
+            } catch (e) {
+                // 如果解析失败，返回基础信息
+                return { 
+                    id: a.id, 
+                    title: a.title, 
+                    created_at: a.created_at, 
+                    updated_at: a.updated_at,
+                    settings: null 
+                };
+            }
+        });
+        return c.json(result);
+    } catch (e: any) {
+        logger.error(`管理员获取用户存档失败: ${id}`, { error: e.message });
+        return c.json({ error: "获取存档列表失败" }, 500);
+    }
+});
+
 // 创建新用户 (Admin)
 protectedApi.post('/users', async (c) => {
     try {

@@ -3,6 +3,12 @@
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
 
+## 版本 v2.4.2 (Admin Archives)
+
+### 功能变更
+- **Admin Feature**: 在后台管理系统增加了查看用户存档的能力。
+- **API Extension**: 新增 `GET /admin/api/users/:id/archives` 接口，该接口返回轻量级的存档数据（解析了 settings，移除了 history）。
+
 ## 版本 v2.4.1 (Hotfix)
 
 ### 修复日志
