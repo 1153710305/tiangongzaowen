@@ -76,9 +76,21 @@ export function updateArchive(id: string, userId: string, title: string, content
     stmt.run(title, content, now, id, userId);
 }
 
+/**
+ * 获取某用户的所有存档（性能优化：按更新时间降序）
+ */
 export function getArchivesByUser(userId: string): Archive[] {
     const stmt = db.prepare('SELECT * FROM archives WHERE user_id = ? ORDER BY updated_at DESC');
     return stmt.all(userId) as Archive[];
+}
+
+/**
+ * [Performance] 获取单个存档的完整信息
+ * 这是一个主键查询，速度极快 (O(1))，适合详情页加载
+ */
+export function getArchiveById(id: string): Archive | undefined {
+    const stmt = db.prepare('SELECT * FROM archives WHERE id = ?');
+    return stmt.get(id) as Archive | undefined;
 }
 
 export function deleteArchive(id: string, userId: string): void {

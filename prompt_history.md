@@ -3,6 +3,20 @@
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
 
+## 版本 v2.5.0 (Admin Deep View)
+
+### 架构变更
+- **DB Optimization**: 为了响应“数据库表设计性能优先”的要求，我们保持了 `archives` 表的 Document Store (JSON) 结构，但在查询层面进行了拆分。
+    - 列表查询 `getArchivesByUser`: 仅返回元数据，不解析庞大的 Content JSON。
+    - 详情查询 `getArchiveById`: 仅在管理员点击详情时触发，加载并解析完整 JSON。
+- **Admin UI**: 引入了更复杂的 Alpine.js 状态管理 (`detailTab`, `detailData`) 来处理全屏模态框的渲染逻辑。
+
+## 版本 v2.4.4 (One-Liner Idea)
+
+### 功能变更
+- **Idea Generation**: `PROMPT_BUILDERS.IDEA` 逻辑升级。
+- **Decoupling**: 新增了对可选参数 `context` 的处理。如果传入 `context`，则进入“灵感扩充模式”，忽略具体的流派/梗设置，专注于发散用户的核心句子；否则保持原有的“结构化生成模式”。
+
 ## 版本 v2.4.3 (UX Improvement)
 
 ### 功能变更

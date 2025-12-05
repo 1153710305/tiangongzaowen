@@ -30,8 +30,32 @@ export const SYSTEM_INSTRUCTION = `
  * 接收参数并返回格式化后的 Prompt
  */
 export const PROMPT_BUILDERS = {
-    // 创意脑暴
-    IDEA: (settings: NovelSettings) => `
+    // 创意脑暴 (支持结构化生成 和 一句话灵感生成)
+    IDEA: (settings: NovelSettings, context?: string) => {
+        // 模式 B: 基于一句话灵感 (Context-based)
+        if (context && context.trim().length > 0) {
+            return `
+请基于用户提供的一个核心灵感（脑洞），进行专业网文扩充，生成3个具有"爆款潜质"的具体开篇方案。
+
+**核心灵感**：
+"${context}"
+
+**辅助要求**：
+- **受众**：${settings.targetAudience === 'male' ? '男频（热血、升级、征服）' : '女频（情感、脑洞、复仇）'}
+- **建议基调**：${settings.tone} (请在生成时融入此基调)
+
+**生成任务**：
+请发散思维，将这个简单的灵感扩充为3个截然不同的故事方向（例如：一个是系统流，一个是重生流，一个是诡异流，或者其他适合该灵感的方向）。
+
+**格式要求**：
+1. 每个方案包含：【书名】、【一句话简介】（吸引点击）、【核心爽点】、【开篇冲突】、【金手指设定】。
+2. 必须要符合当前网文市场的快节奏需求。
+请以 JSON 格式或清晰的 Markdown 列表返回。
+`;
+        }
+
+        // 模式 A: 基于结构化配置 (Parametric)
+        return `
 请根据以下设定，构思3个具有"爆款潜质"的小说开篇创意（脑洞）：
 - **流派**：${settings.genre}
 - **核心梗**：${settings.trope}
@@ -45,7 +69,8 @@ export const PROMPT_BUILDERS = {
 2. 必须要符合当前网文市场的快节奏需求。
 3. 创意之间要有差异化。
 请以 JSON 格式或清晰的 Markdown 列表返回。
-`,
+`;
+    },
 
     // 大纲生成
     OUTLINE: (settings: NovelSettings, context: string) => `

@@ -1,3 +1,4 @@
+
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { jwt } from 'hono/jwt';
@@ -164,7 +165,8 @@ app.post('/api/generate', async (c) => {
         let prompt = '';
         try {
             switch (step) {
-                case WorkflowStep.IDEA: prompt = PROMPT_BUILDERS.IDEA(settings); break;
+                // IDEA 步骤现在支持传入 context (一句话灵感)
+                case WorkflowStep.IDEA: prompt = PROMPT_BUILDERS.IDEA(settings, context); break;
                 case WorkflowStep.OUTLINE: prompt = PROMPT_BUILDERS.OUTLINE(settings, context || ''); break;
                 case WorkflowStep.CHARACTER: prompt = PROMPT_BUILDERS.CHARACTER(settings); break;
                 case WorkflowStep.CHAPTER: prompt = PROMPT_BUILDERS.CHAPTER(settings, context || ''); break;

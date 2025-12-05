@@ -21,6 +21,11 @@ export const ADMIN_HTML = `
         ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
         /* JSON 代码块样式 */
         pre.code-block { font-family: 'Menlo', 'Monaco', 'Courier New', monospace; }
+        /* Markdown 样式模拟 */
+        .prose-preview h1 { font-size: 1.25em; font-weight: bold; margin-bottom: 0.5em; color: #e2e8f0; }
+        .prose-preview h2 { font-size: 1.1em; font-weight: bold; margin-bottom: 0.4em; color: #cbd5e1; }
+        .prose-preview p { margin-bottom: 0.8em; line-height: 1.6; }
+        .prose-preview ul { list-style-type: disc; padding-left: 1.2em; margin-bottom: 0.8em; }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-200 font-sans h-screen overflow-hidden" x-data="adminApp()">
@@ -50,7 +55,7 @@ export const ADMIN_HTML = `
                 <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-pink-500">
                     SkyCraft Admin
                 </h1>
-                <p class="text-xs text-slate-500 mt-1">服务器监控面板 v2.0</p>
+                <p class="text-xs text-slate-500 mt-1">服务器监控面板 v2.4</p>
             </div>
             <nav class="flex-1 p-4 space-y-2">
                 <button @click="switchTab('dashboard')" 
@@ -160,7 +165,7 @@ export const ADMIN_HTML = `
                                     <td class="p-4 font-medium text-white" x-text="user.username"></td>
                                     <td class="p-4 text-sm text-slate-400" x-text="formatDate(user.created_at)"></td>
                                     <td class="p-4 text-right flex justify-end gap-2">
-                                        <!-- 新增：查看存档按钮 -->
+                                        <!-- 查看存档列表按钮 -->
                                         <button @click="viewUserArchives(user)" class="text-blue-400 hover:text-blue-300 text-sm bg-blue-900/20 px-3 py-1 rounded hover:bg-blue-900/40 border border-blue-900/50 transition-all flex items-center gap-1" title="查看用户存档">
                                             <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
                                             存档
@@ -208,7 +213,7 @@ export const ADMIN_HTML = `
                 </div>
             </div>
             
-            <!-- 弹窗：查看用户存档 (新增) -->
+            <!-- 弹窗：用户存档列表 -->
             <div x-show="showArchivesModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" x-cloak>
                 <div class="bg-slate-800 p-6 rounded-lg shadow-xl w-full max-w-2xl border border-slate-700 flex flex-col max-h-[80vh]">
                     <div class="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
@@ -223,7 +228,7 @@ export const ADMIN_HTML = `
                                     <th class="p-3 rounded-tl-lg">书名/标题</th>
                                     <th class="p-3">流派/设定</th>
                                     <th class="p-3">创建时间</th>
-                                    <th class="p-3 rounded-tr-lg">最后更新</th>
+                                    <th class="p-3 rounded-tr-lg">操作</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-700">
@@ -238,7 +243,11 @@ export const ADMIN_HTML = `
                                             <span x-show="!archive.settings" class="text-xs italic opacity-50">未配置</span>
                                         </td>
                                         <td class="p-3 text-slate-500 text-xs" x-text="formatDate(archive.created_at)"></td>
-                                        <td class="p-3 text-slate-500 text-xs" x-text="formatDate(archive.updated_at)"></td>
+                                        <td class="p-3">
+                                            <button @click="viewArchiveDetail(archive.id)" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded">
+                                                详情
+                                            </button>
+                                        </td>
                                     </tr>
                                 </template>
                                 <tr x-show="!currentUserArchives || currentUserArchives.length === 0">
@@ -250,6 +259,99 @@ export const ADMIN_HTML = `
                     
                     <div class="flex justify-end pt-4 border-t border-slate-700 mt-2">
                         <button @click="showArchivesModal = false" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded">关闭</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 弹窗：存档详情查看器 (新增) -->
+            <div x-show="showDetailModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm" x-cloak>
+                <div class="bg-slate-900 p-0 rounded-xl shadow-2xl w-full max-w-4xl border border-slate-700 flex flex-col h-[85vh]">
+                    <!-- Header -->
+                    <div class="p-4 border-b border-slate-700 bg-slate-800 rounded-t-xl flex justify-between items-center">
+                        <div>
+                            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                                <span class="text-indigo-400">📖</span> 
+                                <span x-text="detailData?.title || '加载中...'"></span>
+                            </h3>
+                            <div class="text-xs text-slate-400 mt-1" x-text="detailData ? 'ID: ' + detailData.id : ''"></div>
+                        </div>
+                        <button @click="showDetailModal = false" class="text-slate-400 hover:text-white">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+
+                    <!-- Loading State -->
+                    <div x-show="detailLoading" class="flex-1 flex items-center justify-center text-indigo-400">
+                        <svg class="animate-spin h-8 w-8 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span class="ml-2">正在从数据库加载完整内容...</span>
+                    </div>
+
+                    <!-- Content -->
+                    <div x-show="!detailLoading && detailData" class="flex-1 flex overflow-hidden">
+                        <!-- Left Sidebar: Tabs -->
+                        <div class="w-48 bg-slate-950 border-r border-slate-800 p-2 space-y-1">
+                            <button @click="detailTab = 'settings'" :class="detailTab === 'settings' ? 'bg-indigo-900/50 text-indigo-200' : 'text-slate-400 hover:bg-slate-800'" class="w-full text-left px-3 py-2 rounded text-sm font-medium transition-colors">
+                                ⚙️ 参数设定
+                            </button>
+                            <button @click="detailTab = 'content'" :class="detailTab === 'content' ? 'bg-indigo-900/50 text-indigo-200' : 'text-slate-400 hover:bg-slate-800'" class="w-full text-left px-3 py-2 rounded text-sm font-medium transition-colors">
+                                📝 生成内容流
+                            </button>
+                            <div class="pt-4 px-3">
+                                <p class="text-[10px] text-slate-500 uppercase tracking-widest mb-2">元数据</p>
+                                <div class="text-xs text-slate-600 space-y-2">
+                                    <div>创建: <span x-text="formatDate(detailData?.created_at).split(' ')[0]"></span></div>
+                                    <div>更新: <span x-text="formatDate(detailData?.updated_at).split(' ')[0]"></span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Main Content Area -->
+                        <div class="flex-1 overflow-y-auto p-6 bg-[#0f172a]">
+                            
+                            <!-- Settings View -->
+                            <div x-show="detailTab === 'settings'" class="space-y-6">
+                                <h4 class="text-lg font-bold border-b border-slate-700 pb-2 mb-4">小说核心参数</h4>
+                                <template x-if="detailData?.settings">
+                                    <div class="grid grid-cols-1 gap-4">
+                                        <template x-for="(val, key) in detailData.settings">
+                                            <div class="bg-slate-800 p-3 rounded border border-slate-700">
+                                                <div class="text-xs text-slate-400 uppercase mb-1" x-text="key"></div>
+                                                <div class="text-sm text-white" x-text="val"></div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                                <template x-if="!detailData?.settings">
+                                    <div class="text-slate-500 italic">无参数设定数据</div>
+                                </template>
+                            </div>
+
+                            <!-- History/Content View -->
+                            <div x-show="detailTab === 'content'" class="space-y-4">
+                                <h4 class="text-lg font-bold border-b border-slate-700 pb-2 mb-4 flex justify-between">
+                                    <span>创作历史流 (Timeline)</span>
+                                    <span class="text-xs font-normal text-slate-400 bg-slate-800 px-2 py-1 rounded" x-text="(detailData?.history?.length || 0) + ' 条记录'"></span>
+                                </h4>
+                                
+                                <template x-for="msg in (detailData?.history || [])" :key="msg.id">
+                                    <div class="flex flex-col gap-1 mb-6">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <span :class="msg.role === 'user' ? 'bg-indigo-600' : (msg.role === 'model' ? 'bg-pink-600' : 'bg-slate-600')" class="text-[10px] text-white px-2 py-0.5 rounded uppercase font-bold" x-text="msg.role === 'user' ? '指令 (User)' : (msg.role === 'model' ? '生成内容 (AI)' : '系统')"></span>
+                                            <span class="text-xs text-slate-500" x-text="formatTime(msg.timestamp)"></span>
+                                        </div>
+                                        <div :class="msg.role === 'user' ? 'bg-indigo-900/20 border-indigo-500/30' : 'bg-slate-800 border-slate-700'" class="p-4 rounded-lg border text-sm text-slate-300 whitespace-pre-wrap prose-preview" x-text="msg.content">
+                                        </div>
+                                    </div>
+                                </template>
+                                
+                                <div x-show="!detailData?.history || detailData.history.length === 0" class="text-center py-10 text-slate-500">
+                                    暂无生成内容...
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -325,6 +427,7 @@ export const ADMIN_HTML = `
                                 <option value="generate">POST /api/generate (AI生成)</option>
                                 <option value="pool">GET /api/config/pool (获取配置池)</option>
                                 <option value="archives">GET /api/archives (获取存档列表)</option>
+                                <option value="archive_detail">GET /admin/api/archives/{ID} (获取存档详情)</option>
                             </select>
                         </div>
 
@@ -416,10 +519,16 @@ export const ADMIN_HTML = `
                 showResetPwdModal: false,
                 resetPwd: { id: '', username: '', newPassword: '' },
 
-                // 存档管理状态 (新增)
+                // 存档列表状态
                 showArchivesModal: false,
                 currentArchiveUser: '',
                 currentUserArchives: [],
+
+                // 存档详情状态 (新增)
+                showDetailModal: false,
+                detailLoading: false,
+                detailData: null,
+                detailTab: 'settings',
 
                 // API Tester 状态
                 selectedApiEndpoint: '',
@@ -514,7 +623,6 @@ export const ADMIN_HTML = `
                 async fetchStats() { 
                     try { 
                         const res = await this.authedFetch('/admin/api/stats'); 
-                        // 确保 stats 对象结构完整
                         this.stats = res || { totalUsers: 0, totalArchives: 0, lastActiveTime: '' }; 
                     } catch (e) {
                         this.stats = { totalUsers: 0, totalArchives: 0, lastActiveTime: '' };
@@ -523,7 +631,6 @@ export const ADMIN_HTML = `
                 async fetchUsers() { 
                     try { 
                         const res = await this.authedFetch('/admin/api/users'); 
-                        // 确保 users 始终是数组
                         this.users = Array.isArray(res) ? res : []; 
                     } catch (e) { 
                         this.users = []; 
@@ -534,7 +641,6 @@ export const ADMIN_HTML = `
                     try { await this.authedFetch('/admin/api/users/' + id, { method: 'DELETE' }); this.fetchUsers(); } catch (e) { alert('删除失败'); }
                 },
                 async createUser() {
-                    // 修复：确保 password 不为 undefined 导致的 .length 错误
                     if (!this.newUser.username || (this.newUser.password || '').length < 6) return alert('用户名或密码格式错误');
                     try {
                         const res = await fetch('/admin/api/users', {
@@ -573,7 +679,7 @@ export const ADMIN_HTML = `
                     } catch (e) { alert('请求失败'); }
                 },
                 
-                // === 存档查看逻辑 (新增) ===
+                // === 存档查看逻辑 ===
                 async viewUserArchives(user) {
                     this.currentArchiveUser = user.username;
                     this.currentUserArchives = [];
@@ -586,12 +692,28 @@ export const ADMIN_HTML = `
                         alert('获取存档失败');
                     }
                 },
+                
+                // 新增：加载存档详情
+                async viewArchiveDetail(id) {
+                    this.showDetailModal = true;
+                    this.detailLoading = true;
+                    this.detailData = null;
+                    this.detailTab = 'settings';
+                    try {
+                        const res = await this.authedFetch('/admin/api/archives/' + id);
+                        this.detailData = res;
+                    } catch(e) {
+                        alert('加载详情失败');
+                        this.showDetailModal = false;
+                    } finally {
+                        this.detailLoading = false;
+                    }
+                },
 
                 // === 日志逻辑 ===
                 async fetchLogs() { 
                     try { 
                         const res = await this.authedFetch('/admin/api/logs'); 
-                        // 确保 logs 始终是数组
                         this.logs = Array.isArray(res) ? res : []; 
                     } catch (e) { 
                         this.logs = []; 
@@ -616,6 +738,8 @@ export const ADMIN_HTML = `
                         this.apiRequest = { method: 'GET', url: '/api/config/pool', headers: defaultHeaders, body: '' };
                     } else if (t === 'archives') {
                         this.apiRequest = { method: 'GET', url: '/api/archives', headers: defaultHeaders, body: '' };
+                    } else if (t === 'archive_detail') {
+                        this.apiRequest = { method: 'GET', url: '/admin/api/archives/REPLACE_WITH_ID', headers: defaultHeaders, body: '' };
                     }
                 },
                 injectToken() {
@@ -639,7 +763,6 @@ export const ADMIN_HTML = `
                         const res = await fetch(this.apiRequest.url, options);
                         const end = Date.now();
                         
-                        // 尝试解析JSON，如果是流式或文本则直接读取
                         let bodyStr = '';
                         let isJson = false;
                         const contentType = res.headers.get('content-type');
@@ -652,8 +775,6 @@ export const ADMIN_HTML = `
                             bodyStr = await res.text();
                         }
 
-                        // 估算 Token (简单算法：4 char = 1 token)
-                        // 修复：确保 url 和 body 不为 undefined 导致 .length 报错
                         const inputLen = (this.apiRequest.body || '').length + (this.apiRequest.url || '').length;
                         const outputLen = (bodyStr || '').length;
                         const totalTokens = Math.ceil((inputLen + outputLen) / 4);
@@ -691,9 +812,11 @@ export const ADMIN_HTML = `
                 },
 
                 // === 格式化 ===
-                formatDate(isoStr) { if (!isoStr || isoStr === '无数据') return '无数据'; return new Date(isoStr).toLocaleString('zh-CN'); },
-                // 修复：增加对 isoStr 空值的检查，防止 split 报错
-                formatTime(isoStr) { if (!isoStr) return ''; try { return isoStr.split('T')[1].split('.')[0]; } catch(e) { return isoStr; } },
+                formatDate(isoStr) { if (!isoStr || isoStr === '无数据') return '无数据'; try { return new Date(isoStr).toLocaleString('zh-CN'); } catch(e) { return isoStr; } },
+                formatTime(isoStr) { if (!isoStr) return ''; try { 
+                    if (typeof isoStr === 'number') return new Date(isoStr).toLocaleTimeString(); // 处理 timestamp number
+                    return isoStr.includes('T') ? isoStr.split('T')[1].split('.')[0] : isoStr; 
+                } catch(e) { return isoStr; } },
                 getLevelClass(level) {
                     switch(level) {
                         case 'INFO': return 'text-blue-400';
@@ -707,4 +830,4 @@ export const ADMIN_HTML = `
         }
     </script>
 </body>
-</html>`;
+</html>

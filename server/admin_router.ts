@@ -110,6 +110,37 @@ protectedApi.get('/users/:id/archives', (c) => {
     }
 });
 
+// 获取单个存档详情 (Admin) - 新增接口
+protectedApi.get('/archives/:id', (c) => {
+    const id = c.req.param('id');
+    try {
+        const archive = db.getArchiveById(id);
+        if (!archive) {
+            return c.json({ error: "存档不存在" }, 404);
+        }
+
+        try {
+            // 解析完整 JSON 内容，包含 history
+            const content = JSON.parse(archive.content);
+            return c.json({
+                id: archive.id,
+                user_id: archive.user_id,
+                title: archive.title,
+                created_at: archive.created_at,
+                updated_at: archive.updated_at,
+                settings: content.settings,
+                history: content.history
+            });
+        } catch (e) {
+            logger.error(`解析存档JSON失败: ${id}`);
+            return c.json({ error: "存档数据损坏" }, 500);
+        }
+    } catch (e: any) {
+        logger.error(`获取存档详情失败: ${id}`, { error: e.message });
+        return c.json({ error: "获取详情失败" }, 500);
+    }
+});
+
 // 创建新用户 (Admin)
 protectedApi.post('/users', async (c) => {
     try {

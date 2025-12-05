@@ -84,7 +84,7 @@ export default function App() {
         setCurrentStep(step);
         setGeneratedContent(''); // 清空当前展示区
         
-        addToHistory(Role.USER, `开始任务：${description}`);
+        addToHistory(Role.USER, `开始任务：${description}${context && step === WorkflowStep.IDEA ? ` (灵感: ${context})` : ''}`);
         logger.info(`启动任务: ${description} [${step}]`);
 
         try {
@@ -170,7 +170,14 @@ export default function App() {
     };
 
     // === 生成操作入口 ===
-    const generateIdea = () => handleGeneration(WorkflowStep.IDEA, "生成创意脑洞");
+    
+    // 修改：支持接收自定义 Context (用于一句话脑洞)
+    const generateIdea = (customContext?: string) => {
+        const desc = customContext ? "基于灵感发散脑洞" : "基于配置生成创意脑洞";
+        // 如果有 customContext，将其作为 context 参数传递给 handleGeneration
+        handleGeneration(WorkflowStep.IDEA, desc, customContext);
+    };
+
     const generateOutline = () => {
         const context = history.filter(h => h.role === Role.MODEL).slice(-1)[0]?.content || "用户未提供具体创意";
         handleGeneration(WorkflowStep.OUTLINE, "生成黄金三章大纲", context);
