@@ -1,95 +1,92 @@
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+
 import { logger } from "./loggerService";
-import { SYSTEM_INSTRUCTION } from "../constants";
+import { NovelSettings, WorkflowStep } from "../types";
+import { API_ENDPOINTS } from "../constants";
 
-// 确保在环境变量中设置了 API_KEY
-// 注意：在实际前端项目中，API_KEY 暴露在前端有风险。
-// 建议的做法是通过 Next.js API Routes 或后端代理转发。
-// 本演示项目假定是一个本地工具或受控环境。
-const API_KEY = process.env.API_KEY || '';
-
-if (!API_KEY) {
-    logger.warn("未检测到 API_KEY，请确保在构建环境或运行时配置了 process.env.API_KEY");
-}
-
-class GeminiService {
-    private ai: GoogleGenAI;
-    private modelId: string = 'gemini-2.5-flash'; // 默认使用 Flash 模型，速度快成本低
-
-    constructor() {
-        this.ai = new GoogleGenAI({ apiKey: API_KEY });
-    }
-
+/**
+ * 前端 API 服务
+ * 负责与后端服务器通信，处理流式响应解码
+ */
+class ApiService {
+    
     /**
-     * 切换模型
-     * @param modelId 模型ID (gemini-2.5-flash 或 gemini-3-pro-preview)
+     * 获取后端配置的素材池
      */
-    public setModel(modelId: string) {
-        this.modelId = modelId;
-        logger.info(`模型已切换为: ${modelId}`);
-    }
-
-    /**
-     * 生成内容（流式）
-     * @param prompt 用户提示词
-     * @param onChunk 接收数据块的回调函数
-     */
-    public async generateStream(prompt: string, onChunk: (text: string) => void): Promise<string> {
-        logger.info("开始流式生成", { model: this.modelId, promptPreview: prompt.substring(0, 50) + "..." });
-        
+    public async fetchConfigPool(): Promise<any> {
         try {
-            const responseStream = await this.ai.models.generateContentStream({
-                model: this.modelId,
-                contents: [
-                    { role: 'user', parts: [{ text: prompt }] }
-                ],
-                config: {
-                    systemInstruction: SYSTEM_INSTRUCTION,
-                }
+            const res = await fetch(API_ENDPOINTS.CONFIG);
+            if (!res.ok) throw new Error("无法连接至服务器获取配置");
+            return await res.json();
+        } catch (error) {
+            logger.error("配置加载失败", error);
+            // 返回 null 让组件使用兜底策略或显示错误
+            return null;
+        }
+    }
+
+    /**
+     * 请求生成内容（流式）
+     * @param settings 小说设定
+     * @param step 当前工作流步骤
+     * @param context 上下文（如之前的大纲或创意）
+     * @param onChunk 接收数据块的回调
+     */
+    public async generateStream(
+        settings: NovelSettings, 
+        step: WorkflowStep, 
+        context: string = '', 
+        onChunk: (text: string) => void
+    ): Promise<string> {
+        
+        logger.info(`[Client] 请求生成: ${step}`, { contextLength: context.length });
+
+        try {
+            const response = await fetch(API_ENDPOINTS.GENERATE, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    settings,
+                    step,
+                    context
+                })
             });
 
+            if (!response.ok) {
+                const errJson = await response.json().catch(() => ({}));
+                throw new Error(errJson.error || `HTTP error! status: ${response.status}`);
+            }
+
+            if (!response.body) throw new Error("Response body is empty");
+
+            // 处理流式响应
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
             let fullText = '';
-            for await (const chunk of responseStream) {
-                const text = chunk.text;
-                if (text) {
-                    fullText += text;
-                    onChunk(text);
+            let done = false;
+
+            while (!done) {
+                const { value, done: doneReading } = await reader.read();
+                done = doneReading;
+                
+                if (value) {
+                    const chunkValue = decoder.decode(value, { stream: true });
+                    fullText += chunkValue;
+                    onChunk(chunkValue);
                 }
             }
-            logger.info("流式生成完成", { length: fullText.length });
+
+            logger.info("流式传输完成", { totalLength: fullText.length });
             return fullText;
-        } catch (error: any) {
-            logger.error("流式生成失败", error);
-            throw error;
-        }
-    }
 
-    /**
-     * 生成内容（非流式/常规）
-     * @param prompt 用户提示词
-     */
-    public async generateNormal(prompt: string): Promise<string> {
-        logger.info("开始常规生成", { model: this.modelId, promptPreview: prompt.substring(0, 50) + "..." });
-
-        try {
-            const response: GenerateContentResponse = await this.ai.models.generateContent({
-                model: this.modelId,
-                contents: [
-                    { role: 'user', parts: [{ text: prompt }] }
-                ],
-                config: {
-                    systemInstruction: SYSTEM_INSTRUCTION,
-                }
-            });
-            
-            const text = response.text || '';
-            logger.info("常规生成完成", { length: text.length });
-            return text;
         } catch (error: any) {
-            logger.error("常规生成失败", error);
+            logger.error("生成请求失败", error);
             throw error;
         }
     }
 }
 
-export const geminiService = new GeminiService();
+export const apiService = new ApiService();
+// 为了兼容性暂时保留导出名，实际已变为 REST 客户端
+export const geminiService = apiService; 

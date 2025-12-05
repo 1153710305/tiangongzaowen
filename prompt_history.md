@@ -1,16 +1,22 @@
+
 # 提示词历史记录 (Prompt History)
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
 
+## 版本 v2.0 (Backend Separation)
+
+### 架构变更
+提示词逻辑已完全迁移至服务端 (`server/prompts.ts`)。前端不再通过 API 发送 raw prompt，而是发送意图 (Intent) 和参数。
+
+### Prompt 优化
+- **结构化输出**: 在 System Instruction 中强化了 Markdown 格式要求，确保流式输出在前端渲染时不乱码。
+- **Context 注入**: 大纲和正文生成步骤增加了 Context 参数，允许将上一步的生成结果无损传入下一步。
+
 ## 版本 v1.1 (Random Feature Added)
 
 ### 核心变更
-新增 `RANDOM_DATA_POOL` 数据池，用于客户端侧的随机组合生成，而非依赖 LLM 每次生成设定。这提高了响应速度并保证了“梗”的质量（全部来自预选的爆款词库）。
-
-### 数据池逻辑
-- **Genres**: 规则怪谈、神豪、年代文等。
-- **Tropes**: 偷听心声、上交国家、多子多福等。
-- **Protagonists**: 表面咸鱼、杀伐果断、极致利己等。
+新增 `RANDOM_DATA_POOL` 数据池，用于客户端侧的随机组合生成。
+*(注：v2.0 中该数据池已迁移至 `server/data.ts`)*
 
 ## 版本 v1.0 (Initial)
 

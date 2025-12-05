@@ -1,8 +1,9 @@
-import React from 'react';
+
+import React, { useEffect, useState } from 'react';
 import { NovelSettings } from '../types';
 import { Button } from './Button';
-import { RANDOM_DATA_POOL } from '../constants';
 import { logger } from '../services/loggerService';
+import { apiService } from '../services/geminiService';
 
 interface Props {
     settings: NovelSettings;
@@ -13,6 +14,25 @@ interface Props {
 
 export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGenerateIdea, isGenerating }) => {
     
+    // 本地状态存储从后端获取的素材池
+    const [dataPool, setDataPool] = useState<any>(null);
+    const [isLoadingPool, setIsLoadingPool] = useState(true);
+
+    // 初始化时加载后端配置
+    useEffect(() => {
+        const loadPool = async () => {
+            const pool = await apiService.fetchConfigPool();
+            if (pool) {
+                setDataPool(pool);
+                logger.info("已加载后端爆款素材库");
+            } else {
+                logger.warn("使用本地兜底素材库（无法连接后端）");
+            }
+            setIsLoadingPool(false);
+        };
+        loadPool();
+    }, []);
+
     // 处理单个字段变更
     const handleChange = (key: keyof NovelSettings, value: string) => {
         onChange({ ...settings, [key]: value });
@@ -20,17 +40,23 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
 
     // 随机获取数组中的一个元素
     const getRandomItem = (arr: string[]) => {
+        if (!arr || arr.length === 0) return "暂无数据";
         return arr[Math.floor(Math.random() * arr.length)];
     };
 
     // 生成随机爆款配置
     const handleRandomize = () => {
+        if (!dataPool) {
+            logger.warn("素材库未加载，无法随机");
+            return;
+        }
+
         const newSettings: NovelSettings = {
-            genre: getRandomItem(RANDOM_DATA_POOL.genres),
-            trope: getRandomItem(RANDOM_DATA_POOL.tropes),
-            protagonistType: getRandomItem(RANDOM_DATA_POOL.protagonistTypes),
-            goldenFinger: getRandomItem(RANDOM_DATA_POOL.goldenFingers),
-            tone: getRandomItem(RANDOM_DATA_POOL.tones),
+            genre: getRandomItem(dataPool.genres),
+            trope: getRandomItem(dataPool.tropes),
+            protagonistType: getRandomItem(dataPool.protagonistTypes),
+            goldenFinger: getRandomItem(dataPool.goldenFingers),
+            tone: getRandomItem(dataPool.tones),
             // 随机受众和节奏
             targetAudience: Math.random() > 0.5 ? 'male' : 'female',
             pacing: Math.random() > 0.3 ? 'fast' : (Math.random() > 0.5 ? 'normal' : 'slow')
@@ -50,12 +76,19 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                 {/* 随机生成按钮 */}
                 <button 
                     onClick={handleRandomize}
-                    disabled={isGenerating}
+                    disabled={isGenerating || isLoadingPool}
                     className="text-xs flex items-center bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white px-3 py-1.5 rounded-full transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="点击随机生成一套爆款配置"
+                    title={isLoadingPool ? "正在连接素材库..." : "点击从服务器获取随机爆款配置"}
                 >
-                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
-                    一键随机爆款
+                    {isLoadingPool ? (
+                         <svg className="animate-spin h-4 w-4 mr-1 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    ) : (
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                    )}
+                    {isLoadingPool ? '加载中...' : '一键随机爆款'}
                 </button>
             </div>
             
@@ -146,7 +179,7 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                     ✨ 基于配置生成创意脑洞 (Idea)
                 </Button>
                 <p className="text-xs text-center text-slate-500 mt-2">
-                    觉得配置不满意？点击右上角"随机"按钮重试，或手动修改上方输入框。
+                    觉得配置不满意？点击右上角"随机"按钮重试，数据由云端实时更新。
                 </p>
             </div>
         </div>

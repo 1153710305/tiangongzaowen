@@ -1,62 +1,91 @@
-# 天工造文 (SkyCraft Novel AI)
 
-基于 Google Gemini API 构建的专业级 AI 小说生成器。专为中国网文市场设计，能够生成符合番茄、起点等平台风格的"爆款"网文内容。
+# 天工造文 (SkyCraft Novel AI) - Server Edition
 
-## 核心特性
+专业的 AI 爆款小说生成器系统。本项目采用前后端分离架构，旨在提供高性能、低延迟、可扩展的创作体验。
 
-*   **爆款逻辑引擎**: 内置资深网文主编的思维逻辑，注重黄金三章、爽点节奏、情绪价值。
-*   **Gemini 驱动**: 使用最新的 `gemini-2.5-flash` 和 `gemini-3-pro` 模型，支持超长上下文和逻辑推理。
-*   **双模式设定**: 
-    *   **手动模式**: 专家级微调，由作者亲自指定流派、金手指。
-    *   **随机模式**: 一键生成当前市场最火的“爆款组合”（如规则怪谈+偷听心声），激发灵感。
-*   **流式生成**: 实时看到文字生成过程，提供流畅的创作体验。
-*   **结构化工作流**:
-    1.  **创意脑暴**: 自动生成符合潮流的开篇脑洞。
-    2.  **大纲生成**: 自动规划前15章细纲，埋钩子。
-    3.  **人设完善**: 打造立体的主角与反派。
-    4.  **正文撰写**: 自动扩写章节内容。
-*   **极致UI体验**: 赛博朋克风格深色模式，沉浸式写作环境。
-*   **健壮性**: 内置完整日志系统，方便排查 API 问题。
+## 🌟 核心升级 (v2.0)
 
-## 技术栈
+*   **前后端分离**: 前端 (React) 专注于 UI 交互，后端 (Node.js/Hono) 负责逻辑推理与 Prompt 封装。
+*   **Prompt 资产保护**: 所有的核心 Prompt、角色设定、系统指令均存储在服务端，前端不可见。
+*   **动态素材池**: 爆款“梗”和“人设”数据由服务端统一管理，无需更新前端即可热更素材。
+*   **高性能流式响应**: 基于 Hono 框架实现极低延迟的 Token 流式传输。
 
-*   **Runtime**: React 18+
-*   **Language**: TypeScript
-*   **Styling**: Tailwind CSS
-*   **AI SDK**: @google/genai (Gemini SDK)
-*   **Build**: ESM Module System
+## 🛠 技术架构
 
-## 快速开始
+### 客户端 (Client)
+*   React 18 + Tailwind CSS
+*   纯展示层，通过 REST API 与后端通信。
+*   支持 Markdown 实时渲染。
 
-1.  **安装依赖**:
-    ```bash
-    npm install
-    ```
+### 服务端 (Server)
+*   **Runtime**: Node.js
+*   **Framework**: Hono (超高性能 Web 框架)
+*   **AI SDK**: @google/genai
+*   **Directory**: `server/`
 
-2.  **配置 API KEY**:
-    本项目需要 Google Gemini API Key。
-    请在启动前设置环境变量 `API_KEY` 或在 `services/geminiService.ts` 中暂时硬编码进行测试（注意不要提交 Key）。
+## 🚀 安装与部署
 
-3.  **启动开发服务器**:
-    ```bash
-    npm start
-    ```
+### 1. 环境准备
+确保已安装 Node.js (v18+) 和 npm。
 
-## 目录结构
+### 2. 启动服务端 (Backend)
 
-*   `services/`: 核心服务层（API调用、Prompt管理、日志）。
-*   `components/`: UI 组件。
-*   `types.ts`: 全局类型定义。
-*   `constants.ts`: 提示词模板、系统常量及爆款素材池。
+服务端代码位于 `server/` 目录下。
 
-## 提示词管理
+```bash
+# 进入项目根目录
+# 安装服务端依赖
+npm install @hono/node-server hono @google/genai
 
-所有的 AI 提示词（Prompt）都统一管理在 `constants.ts` 文件中，方便非开发人员（如策划、编辑）进行调整和优化。
+# 配置环境变量
+export API_KEY="your_google_gemini_api_key"
 
-## 注意事项
+# 启动服务器 (使用 tsx 或 node 直接运行编译后的 js)
+npx tsx server/index.ts
+```
 
-*   本项目默认使用流式传输（Streaming）以提高响应速度。
-*   请确保网络环境可以访问 Google API。
+*服务器默认运行在 `http://localhost:3000`*
+
+### 3. 启动客户端 (Frontend)
+
+```bash
+# 安装依赖
+npm install
+
+# 启动 React 开发服务器
+npm start
+```
+
+## 📂 目录结构说明
+
+```
+.
+├── server/                 # [后端] 核心逻辑层
+│   ├── index.ts            # 服务入口 (API 路由)
+│   ├── prompts.ts          # 提示词仓库 (Prompt Engineering)
+│   └── data.ts             # 静态数据源 (爆款素材池)
+├── components/             # [前端] UI 组件
+├── services/               # [前端] API 通信服务
+└── constants.ts            # [前端] 基础常量
+```
+
+## 📝 开发指南
+
+### 修改提示词 (Prompt Engineering)
+直接修改 `server/prompts.ts` 文件。
+该文件包含 `SYSTEM_INSTRUCTION` 和各个步骤的 `PROMPT_BUILDERS`。修改后重启后端服务即可生效。
+
+### 更新爆款素材 (Data Pool)
+修改 `server/data.ts` 文件。
+此处的 `RANDOM_DATA_POOL` 控制着前端“随机生成”按钮的数据源。
+
+### 切换模型
+在 `server/index.ts` 中修改 `modelId` 变量（例如切换为 `gemini-3-pro-preview`）。
+
+## ⚠️ 注意事项
+
+*   **跨域 (CORS)**: 后端默认开启了 CORS 允许所有来源 (`*`)，生产环境请在 `server/index.ts` 中限制域名。
+*   **流式兼容性**: 确保网络环境支持 `Transfer-Encoding: chunked`。
 
 ---
-*Created by AI Senior Engineer & Gold Level Author*
+*Created by AI Senior Engineer*
