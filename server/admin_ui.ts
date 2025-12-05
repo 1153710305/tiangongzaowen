@@ -169,7 +169,7 @@ export const ADMIN_HTML = `
                                     </td>
                                 </tr>
                             </template>
-                            <tr x-show="users.length === 0">
+                            <tr x-show="!users || users.length === 0">
                                 <td colspan="4" class="p-8 text-center text-slate-500">暂无用户数据</td>
                             </tr>
                         </tbody>
@@ -383,6 +383,8 @@ export const ADMIN_HTML = `
                 isAutoRefresh: false,
 
                 get filteredLogs() {
+                    // 安全检查：防止 this.logs 为 undefined
+                    if (!this.logs || !Array.isArray(this.logs)) return [];
                     return this.logs.filter(log => {
                         const matchesLevel = this.logLevelFilter ? log.level === this.logLevelFilter : true;
                         const matchesSearch = this.logSearch ? 
@@ -453,14 +455,31 @@ export const ADMIN_HTML = `
                 },
 
                 // === 用户管理 ===
-                async fetchStats() { try { this.stats = await this.authedFetch('/admin/api/stats'); } catch (e) {} },
-                async fetchUsers() { try { this.users = await this.authedFetch('/admin/api/users'); } catch (e) {} },
+                async fetchStats() { 
+                    try { 
+                        const res = await this.authedFetch('/admin/api/stats'); 
+                        // 确保 stats 对象结构完整
+                        this.stats = res || { totalUsers: 0, totalArchives: 0, lastActiveTime: '' }; 
+                    } catch (e) {
+                        this.stats = { totalUsers: 0, totalArchives: 0, lastActiveTime: '' };
+                    } 
+                },
+                async fetchUsers() { 
+                    try { 
+                        const res = await this.authedFetch('/admin/api/users'); 
+                        // 确保 users 始终是数组
+                        this.users = Array.isArray(res) ? res : []; 
+                    } catch (e) { 
+                        this.users = []; 
+                    } 
+                },
                 async deleteUser(id) {
                     if(!confirm('确定要删除该用户吗？所有存档将被永久清除！')) return;
                     try { await this.authedFetch('/admin/api/users/' + id, { method: 'DELETE' }); this.fetchUsers(); } catch (e) { alert('删除失败'); }
                 },
                 async createUser() {
-                    if (!this.newUser.username || this.newUser.password.length < 6) return alert('用户名或密码格式错误');
+                    // 修复：确保 password 不为 undefined 导致的 .length 错误
+                    if (!this.newUser.username || (this.newUser.password || '').length < 6) return alert('用户名或密码格式错误');
                     try {
                         const res = await fetch('/admin/api/users', {
                             method: 'POST',
@@ -499,7 +518,15 @@ export const ADMIN_HTML = `
                 },
 
                 // === 日志逻辑 ===
-                async fetchLogs() { try { this.logs = await this.authedFetch('/admin/api/logs'); } catch (e) {} },
+                async fetchLogs() { 
+                    try { 
+                        const res = await this.authedFetch('/admin/api/logs'); 
+                        // 确保 logs 始终是数组
+                        this.logs = Array.isArray(res) ? res : []; 
+                    } catch (e) { 
+                        this.logs = []; 
+                    } 
+                },
                 toggleAutoRefresh() {
                     if (this.isAutoRefresh) { clearInterval(this.logInterval); this.logInterval = null; this.isAutoRefresh = false; }
                     else { this.isAutoRefresh = true; this.fetchLogs(); this.logInterval = setInterval(() => this.fetchLogs(), 2000); }
@@ -556,8 +583,9 @@ export const ADMIN_HTML = `
                         }
 
                         // 估算 Token (简单算法：4 char = 1 token)
-                        const inputLen = (this.apiRequest.body || '').length + (this.apiRequest.url.length);
-                        const outputLen = bodyStr.length;
+                        // 修复：确保 url 和 body 不为 undefined 导致 .length 报错
+                        const inputLen = (this.apiRequest.body || '').length + (this.apiRequest.url || '').length;
+                        const outputLen = (bodyStr || '').length;
                         const totalTokens = Math.ceil((inputLen + outputLen) / 4);
 
                         this.apiResponse = {
@@ -594,7 +622,8 @@ export const ADMIN_HTML = `
 
                 // === 格式化 ===
                 formatDate(isoStr) { if (!isoStr || isoStr === '无数据') return '无数据'; return new Date(isoStr).toLocaleString('zh-CN'); },
-                formatTime(isoStr) { return isoStr.split('T')[1].split('.')[0]; },
+                // 修复：增加对 isoStr 空值的检查，防止 split 报错
+                formatTime(isoStr) { if (!isoStr) return ''; try { return isoStr.split('T')[1].split('.')[0]; } catch(e) { return isoStr; } },
                 getLevelClass(level) {
                     switch(level) {
                         case 'INFO': return 'text-blue-400';

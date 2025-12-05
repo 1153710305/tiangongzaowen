@@ -16,7 +16,11 @@ try {
     logger.info("数据库初始化成功");
 } catch (e: any) {
     logger.error("数据库初始化失败", { error: e.message });
-    process.exit(1);
+    // 使用 process.exit(1) 而不是 casting，确保 Node 环境下正常退出
+    // 修复 TS 报错: Property 'exit' does not exist on type 'Process'
+    if (typeof process !== 'undefined') {
+        (process as any).exit(1);
+    }
 }
 
 const app = new Hono();
@@ -89,7 +93,7 @@ app.get('/api/config/pool', (c) => c.json(RANDOM_DATA_POOL));
 app.post('/api/auth/register', async (c) => {
     try {
         const { username, password } = await c.req.json();
-        if (!username || !password || password.length < 6) {
+        if (!username || !password || String(password).length < 6) {
             return c.json({ error: '用户名或密码无效 (密码至少6位)' }, 400);
         }
         
