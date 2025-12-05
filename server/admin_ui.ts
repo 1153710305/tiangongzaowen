@@ -48,7 +48,7 @@ export const ADMIN_HTML = `
                 <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-pink-500">
                     SkyCraft Admin
                 </h1>
-                <p class="text-xs text-slate-500 mt-1">服务器监控面板 v1.1</p>
+                <p class="text-xs text-slate-500 mt-1">服务器监控面板 v1.2</p>
             </div>
             <nav class="flex-1 p-4 space-y-2">
                 <button @click="switchTab('dashboard')" 
@@ -180,21 +180,34 @@ export const ADMIN_HTML = `
                     </div>
                 </div>
 
-                <div class="bg-[#0d1117] rounded-xl border border-slate-700 p-4 font-mono text-xs h-[calc(100vh-160px)] overflow-y-auto">
-                    <template x-for="log in logs" :key="log.id">
+                <!-- 筛选栏 -->
+                <div class="flex gap-4 mb-4">
+                    <input type="text" x-model="logSearch" placeholder="搜索日志内容..." 
+                        class="bg-slate-800 border border-slate-700 rounded px-3 py-1 text-sm outline-none focus:border-indigo-500 flex-1">
+                    <select x-model="logLevelFilter" class="bg-slate-800 border border-slate-700 rounded px-3 py-1 text-sm outline-none focus:border-indigo-500">
+                        <option value="">所有级别</option>
+                        <option value="INFO">INFO</option>
+                        <option value="WARN">WARN</option>
+                        <option value="ERROR">ERROR</option>
+                        <option value="DEBUG">DEBUG</option>
+                    </select>
+                </div>
+
+                <div class="bg-[#0d1117] rounded-xl border border-slate-700 p-4 font-mono text-xs h-[calc(100vh-220px)] overflow-y-auto">
+                    <template x-for="log in filteredLogs" :key="log.id">
                         <div class="mb-2 pb-2 border-b border-slate-800/50 last:border-0 hover:bg-slate-800/30 p-1 rounded">
                             <div class="flex gap-2 mb-1">
-                                <span class="text-slate-500" x-text="formatTime(log.timestamp)"></span>
-                                <span :class="getLevelClass(log.level)" x-text="log.level" class="font-bold"></span>
+                                <span class="text-slate-500 shrink-0" x-text="formatTime(log.timestamp)"></span>
+                                <span :class="getLevelClass(log.level)" x-text="log.level" class="font-bold shrink-0 w-12 text-center"></span>
                                 <span class="text-slate-300 flex-1 break-all" x-text="log.message"></span>
                             </div>
                             <div x-show="log.meta" class="ml-24 mt-1">
-                                <pre class="text-slate-500 overflow-x-auto bg-black/20 p-1 rounded" x-text="JSON.stringify(log.meta, null, 2)"></pre>
+                                <pre class="text-slate-500 overflow-x-auto bg-black/20 p-2 rounded border border-slate-800" x-text="JSON.stringify(log.meta, null, 2)"></pre>
                             </div>
                         </div>
                     </template>
-                    <div x-show="logs.length === 0" class="text-center text-slate-600 py-10 italic">
-                        暂无日志记录...
+                    <div x-show="filteredLogs.length === 0" class="text-center text-slate-600 py-10 italic">
+                        暂无匹配的日志记录...
                     </div>
                 </div>
             </div>
@@ -217,9 +230,24 @@ export const ADMIN_HTML = `
                 users: [],
                 logs: [],
                 
+                // 日志筛选
+                logSearch: '',
+                logLevelFilter: '',
+
                 // 日志刷新逻辑
                 logInterval: null,
                 isAutoRefresh: false,
+
+                get filteredLogs() {
+                    return this.logs.filter(log => {
+                        const matchesLevel = this.logLevelFilter ? log.level === this.logLevelFilter : true;
+                        const matchesSearch = this.logSearch ? 
+                            (log.message.toLowerCase().includes(this.logSearch.toLowerCase()) || 
+                             (log.meta && JSON.stringify(log.meta).toLowerCase().includes(this.logSearch.toLowerCase()))) 
+                            : true;
+                        return matchesLevel && matchesSearch;
+                    });
+                },
 
                 init() {
                     const token = localStorage.getItem('skycraft_admin_token');
@@ -349,6 +377,7 @@ export const ADMIN_HTML = `
                         case 'INFO': return 'text-blue-400';
                         case 'WARN': return 'text-yellow-400';
                         case 'ERROR': return 'text-red-500';
+                        case 'DEBUG': return 'text-gray-400';
                         default: return 'text-slate-400';
                     }
                 }
@@ -357,4 +386,3 @@ export const ADMIN_HTML = `
     </script>
 </body>
 </html>
-`;

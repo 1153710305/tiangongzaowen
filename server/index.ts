@@ -1,4 +1,3 @@
-
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { jwt } from 'hono/jwt';
@@ -7,8 +6,8 @@ import { GoogleGenAI } from '@google/genai';
 import { SYSTEM_INSTRUCTION, PROMPT_BUILDERS } from './prompts.ts';
 import { RANDOM_DATA_POOL } from './data.ts';
 import { NovelSettings, WorkflowStep } from './types.ts';
-import { ADMIN_HTML } from './admin_ui.ts';
 import { logger } from './logger.ts'; // 引入日志模块
+import { adminRouter } from './admin_router.ts'; // 引入解耦后的后台路由
 import * as db from './db.ts';
 
 // 初始化数据库
@@ -49,7 +48,7 @@ app.use('*', async (c, next) => {
     const logMsg = `${method} ${url} - ${status} (${ms}ms)`;
     if (status >= 500) {
         logger.error(logMsg);
-    } else if (status >= 400) {
+    } else if (status >= 400 && status !== 401) { // 401 属于正常鉴权失败，降级为 info 或 warn
         logger.warn(logMsg);
     } else {
         logger.info(logMsg);
@@ -58,6 +57,11 @@ app.use('*', async (c, next) => {
 
 // 2. 全局错误捕获
 app.onError((err, c) => {
+    // 专门处理 JWT 鉴权失败的错误
+    if (err.message.includes('Unauthorized')) {
+        return c.json({ error: 'Unauthorized', message: '未授权访问，请重新登录' }, 401);
+    }
+
     logger.error(`全局未捕获异常: ${err.message}`, { stack: err.stack });
     return c.json({ error: '服务器内部错误', details: err.message }, 500);
 });
@@ -65,14 +69,15 @@ app.onError((err, c) => {
 // API Key & JWT Secret
 const API_KEY = process.env.API_KEY;
 const JWT_SECRET = process.env.JWT_SECRET || 'skycraft_secret_key_change_me';
-// 后台管理员密码，默认 admin123，生产环境请修改 ENV
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'; 
 
 if (!API_KEY) {
     logger.error("❌ 严重错误: API_KEY 未设置");
 }
 
 const ai = new GoogleGenAI({ apiKey: API_KEY || '' });
+
+// === 挂载后台管理路由 (功能解耦) ===
+app.route('/admin', adminRouter);
 
 // === 公开路由 ===
 
@@ -129,72 +134,6 @@ app.post('/api/auth/login', async (c) => {
         return c.json({ error: e.message }, 500);
     }
 });
-
-// === Admin 路由组 (独立后台) ===
-
-// 1. 渲染后台 HTML 页面
-app.get('/admin', (c) => {
-    return c.html(ADMIN_HTML);
-});
-
-// 2. 后台登录接口
-app.post('/admin/api/login', async (c) => {
-    const { password } = await c.req.json();
-    if (password === ADMIN_PASSWORD) {
-        logger.warn("管理员登录后台成功");
-        // 签发管理员 Token，有效期 1 小时
-        const token = await sign({ role: 'admin', exp: Math.floor(Date.now() / 1000) + 3600 }, JWT_SECRET);
-        return c.json({ token });
-    }
-    logger.warn("管理员登录失败：密码错误");
-    return c.json({ error: '管理员密码错误' }, 401);
-});
-
-// 3. 后台数据接口 (需要 Admin Token)
-const adminApp = new Hono();
-adminApp.use('/*', jwt({ secret: JWT_SECRET }));
-
-// 校验是否是 admin 角色
-adminApp.use('/*', async (c, next) => {
-    const payload = c.get('jwtPayload');
-    if (payload.role !== 'admin') {
-        logger.warn(`非管理员尝试访问后台API`, { user: payload });
-        return c.json({ error: '无权限访问' }, 403);
-    }
-    await next();
-});
-
-adminApp.get('/stats', (c) => {
-    const stats = db.getSystemStats();
-    return c.json(stats);
-});
-
-adminApp.get('/users', (c) => {
-    const users = db.getAllUsers();
-    // 隐藏密码hash
-    const safeUsers = users.map(u => ({ id: u.id, username: u.username, created_at: u.created_at }));
-    return c.json(safeUsers);
-});
-
-adminApp.delete('/users/:id', (c) => {
-    const id = c.req.param('id');
-    try {
-        db.deleteUserFull(id);
-        logger.warn(`管理员删除了用户: ${id}`);
-        return c.json({ success: true });
-    } catch (e: any) {
-        logger.error(`删除用户失败: ${id}`, { error: e.message });
-        return c.json({ error: '删除失败' }, 500);
-    }
-});
-
-// 获取服务器实时日志
-adminApp.get('/logs', (c) => {
-    const logs = logger.getRecentLogs();
-    return c.json(logs);
-});
-
-app.route('/admin/api', adminApp);
 
 // === 普通用户受保护路由 ===
 
