@@ -1,11 +1,11 @@
 
-# 天工造文 (SkyCraft Novel AI) - 企业级前后端分离版 (v2.1 Auth+DB)
+# 天工造文 (SkyCraft Novel AI) - 企业级前后端分离版 (v2.2 Logger & Monitoring)
 
-> **架构理念**: 响应速度优先 (SQLite WAL + Hono + Streaming) | 数据安全优先 (服务端 Prompt 管理 + JWT 鉴权)
+> **架构理念**: 响应速度优先 (SQLite WAL + Hono + Streaming) | 稳定性优先 (Server Logger + Robust Error Handling)
 
-本项目是一个专业的 AI 爆款网文生成系统，已从原型升级为可部署的前后端分离架构，并支持多用户登录和云端存档。
+本项目是一个专业的 AI 爆款网文生成系统，已从原型升级为可部署的前后端分离架构，并支持多用户登录、云端存档和全链路监控。
 
-**新增：集成轻量级后台管理系统，无需额外部署。**
+**新增：服务端实时日志系统与增强型后台面板。**
 
 ---
 
@@ -25,10 +25,11 @@
 
 ### 1. 服务端 (Backend) - `server/`
 *   **核心框架**: **Hono**。极速 Web 标准框架，TTFB (首字节时间) 极低。
-*   **数据库**: **SQLite (better-sqlite3)**。基于 C++ 的高性能进程内数据库，开启 **WAL 模式** 后，并发读写性能极佳，且无网络延迟，非常适合存档系统。
-*   **鉴权**: **JWT (JSON Web Token)**。无状态认证，服务端无需查找 Session，验证速度极快。
+*   **数据库**: **SQLite (better-sqlite3)**。基于 C++ 的高性能进程内数据库，开启 **WAL 模式** 后，并发读写性能极佳。
+*   **日志系统 (v2.2)**: 自研内存环形缓冲日志 (`server/logger.ts`)。不依赖繁重的外部日志库，同时支持控制台输出和后台界面实时 Websocket 风格轮询。
+*   **鉴权**: **JWT**。无状态认证，服务端无需查找 Session。
 *   **管理后台**: **SSR + Alpine.js**。服务器直接返回 HTML 页面，无需额外的 Build 步骤，轻量高效。
-*   **AI 交互**: Gemini API 流式响应。
+*   **AI 交互**: Gemini API 流式响应，增加流中断错误捕获。
 
 ### 2. 客户端 (Frontend) - 根目录
 *   **UI 框架**: React 18 + Tailwind CSS。
@@ -50,8 +51,9 @@ skycraft-server/
     ├── index.ts       (入口)
     ├── db.ts          (数据库层)
     ├── data.ts        (素材池)
+    ├── logger.ts      (日志系统-新增)
     ├── prompts.ts     (提示词)
-    ├── admin_ui.ts    (后台模板-新增)
+    ├── admin_ui.ts    (后台模板)
     └── types.ts       (类型定义)
 ```
 
@@ -78,7 +80,7 @@ npm install --save-dev @types/better-sqlite3 @types/node
 export API_KEY="your_google_api_key_here"
 export JWT_SECRET="your_secure_random_string" 
 export PORT=3000
-# 新增：后台管理员密码 (如果不设置，默认为 admin123)
+# 后台管理员密码 (如果不设置，默认为 admin123)
 export ADMIN_PASSWORD="your_admin_password"
 ```
 
@@ -93,12 +95,13 @@ npx tsx server/index.ts
 
 ## 🛡 后台管理系统 (Admin Dashboard)
 
-系统内置了一个单页应用后台，用于简单的服务器维护。
+系统内置了一个功能强大的单页后台，用于服务器维护和问题排查。
 
 *   **访问地址**: `http://你的服务器IP:3000/admin`
 *   **功能**:
-    *   **概览**: 查看总用户数、总存档数、系统运行状态。
+    *   **系统概览**: 查看总用户数、总存档数、系统运行状态。
     *   **用户管理**: 查看所有注册用户，强制删除违规用户（连带删除其存档）。
+    *   **实时日志 (新增)**: 查看服务端最近 200 条运行日志（包括 HTTP 请求、API 错误、AI 生成耗时等），支持自动刷新，无需 SSH 登录服务器即可排查问题。
 *   **技术**: 使用 Alpine.js 和 Tailwind CSS CDN 构建，代码嵌入在 `server/admin_ui.ts` 中，开箱即用。
 
 ---

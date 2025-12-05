@@ -24,6 +24,14 @@ export enum WorkflowStep {
     REVIEW = 'review' // 审稿
 }
 
+// 日志级别
+export enum LogLevel {
+    INFO = 'INFO',
+    WARN = 'WARN',
+    ERROR = 'ERROR',
+    DEBUG = 'DEBUG'
+}
+
 // === 数据库模型 ===
 
 export interface User {

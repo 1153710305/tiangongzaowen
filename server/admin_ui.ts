@@ -43,25 +43,31 @@ export const ADMIN_HTML = `
     <!-- 主界面 -->
     <div x-show="isAuthenticated" class="flex h-full" x-cloak>
         <!-- 侧边栏 -->
-        <div class="w-64 bg-slate-950 border-r border-slate-800 flex flex-col">
+        <div class="w-64 bg-slate-950 border-r border-slate-800 flex flex-col flex-shrink-0">
             <div class="p-6 border-b border-slate-800">
                 <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-pink-500">
                     SkyCraft Admin
                 </h1>
-                <p class="text-xs text-slate-500 mt-1">服务器监控面板 v1.0</p>
+                <p class="text-xs text-slate-500 mt-1">服务器监控面板 v1.1</p>
             </div>
             <nav class="flex-1 p-4 space-y-2">
-                <button @click="currentTab = 'dashboard'; fetchStats()" 
+                <button @click="switchTab('dashboard')" 
                     :class="{'bg-indigo-600/20 text-indigo-300': currentTab === 'dashboard', 'text-slate-400 hover:bg-slate-800': currentTab !== 'dashboard'}"
                     class="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
                     概览 (Dashboard)
                 </button>
-                <button @click="currentTab = 'users'; fetchUsers()" 
+                <button @click="switchTab('users')" 
                     :class="{'bg-indigo-600/20 text-indigo-300': currentTab === 'users', 'text-slate-400 hover:bg-slate-800': currentTab !== 'users'}"
                     class="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                     用户管理 (Users)
+                </button>
+                <button @click="switchTab('logs')" 
+                    :class="{'bg-indigo-600/20 text-indigo-300': currentTab === 'logs', 'text-slate-400 hover:bg-slate-800': currentTab !== 'logs'}"
+                    class="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    系统日志 (Logs)
                 </button>
             </nav>
             <div class="p-4 border-t border-slate-800">
@@ -155,6 +161,44 @@ export const ADMIN_HTML = `
                 </div>
             </div>
 
+            <!-- 日志视图 -->
+            <div x-show="currentTab === 'logs'">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold flex items-center gap-2">
+                        系统运行日志
+                        <span class="text-xs font-normal px-2 py-0.5 bg-slate-800 rounded text-slate-400" x-show="isAutoRefresh">实时刷新中...</span>
+                    </h2>
+                    <div class="flex gap-2">
+                         <button @click="toggleAutoRefresh" 
+                            :class="isAutoRefresh ? 'bg-green-600/20 text-green-400 border-green-600/50' : 'bg-slate-800 text-slate-400 border-slate-700'"
+                            class="px-3 py-1 rounded border text-sm transition-colors">
+                            {{ isAutoRefresh ? '暂停刷新' : '开启自动刷新' }}
+                        </button>
+                        <button @click="fetchLogs" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 rounded border border-slate-700 text-sm">
+                            手动刷新
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-[#0d1117] rounded-xl border border-slate-700 p-4 font-mono text-xs h-[calc(100vh-160px)] overflow-y-auto">
+                    <template x-for="log in logs" :key="log.id">
+                        <div class="mb-2 pb-2 border-b border-slate-800/50 last:border-0 hover:bg-slate-800/30 p-1 rounded">
+                            <div class="flex gap-2 mb-1">
+                                <span class="text-slate-500" x-text="formatTime(log.timestamp)"></span>
+                                <span :class="getLevelClass(log.level)" x-text="log.level" class="font-bold"></span>
+                                <span class="text-slate-300 flex-1 break-all" x-text="log.message"></span>
+                            </div>
+                            <div x-show="log.meta" class="ml-24 mt-1">
+                                <pre class="text-slate-500 overflow-x-auto bg-black/20 p-1 rounded" x-text="JSON.stringify(log.meta, null, 2)"></pre>
+                            </div>
+                        </div>
+                    </template>
+                    <div x-show="logs.length === 0" class="text-center text-slate-600 py-10 italic">
+                        暂无日志记录...
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -167,11 +211,17 @@ export const ADMIN_HTML = `
                 isLoading: false,
                 loginError: '',
                 currentTab: 'dashboard',
+                
+                // 数据状态
                 stats: { totalUsers: 0, totalArchives: 0, lastActiveTime: '' },
                 users: [],
+                logs: [],
+                
+                // 日志刷新逻辑
+                logInterval: null,
+                isAutoRefresh: false,
 
                 init() {
-                    // 检查本地存储的 Token
                     const token = localStorage.getItem('skycraft_admin_token');
                     if (token) {
                         this.adminToken = token;
@@ -180,6 +230,26 @@ export const ADMIN_HTML = `
                     }
                 },
 
+                // === 路由/Tab 切换 ===
+                switchTab(tab) {
+                    this.currentTab = tab;
+                    // 停止旧的定时器
+                    if (this.logInterval) {
+                        clearInterval(this.logInterval);
+                        this.logInterval = null;
+                        this.isAutoRefresh = false;
+                    }
+                    
+                    if (tab === 'dashboard') this.fetchStats();
+                    if (tab === 'users') this.fetchUsers();
+                    if (tab === 'logs') {
+                        this.fetchLogs();
+                        // 默认开启日志自动刷新
+                        this.toggleAutoRefresh(); 
+                    }
+                },
+
+                // === 登录逻辑 ===
                 async login() {
                     this.isLoading = true;
                     this.loginError = '';
@@ -210,8 +280,10 @@ export const ADMIN_HTML = `
                     this.isAuthenticated = false;
                     this.adminToken = '';
                     localStorage.removeItem('skycraft_admin_token');
+                    if (this.logInterval) clearInterval(this.logInterval);
                 },
 
+                // === 数据获取 ===
                 async authedFetch(url, options = {}) {
                     const headers = {
                         ...options.headers,
@@ -226,28 +298,59 @@ export const ADMIN_HTML = `
                 },
 
                 async fetchStats() {
-                    try {
-                        this.stats = await this.authedFetch('/admin/api/stats');
-                    } catch (e) { console.error(e); }
+                    try { this.stats = await this.authedFetch('/admin/api/stats'); } catch (e) {}
                 },
 
                 async fetchUsers() {
-                    try {
-                        this.users = await this.authedFetch('/admin/api/users');
-                    } catch (e) { console.error(e); }
+                    try { this.users = await this.authedFetch('/admin/api/users'); } catch (e) {}
+                },
+                
+                async fetchLogs() {
+                    try { 
+                        this.logs = await this.authedFetch('/admin/api/logs'); 
+                    } catch (e) {}
                 },
 
                 async deleteUser(id) {
                     if(!confirm('确定要删除该用户吗？所有存档将被永久清除！')) return;
                     try {
                         await this.authedFetch('/admin/api/users/' + id, { method: 'DELETE' });
-                        this.fetchUsers(); // 刷新列表
+                        this.fetchUsers();
                     } catch (e) { alert('删除失败'); }
                 },
 
+                // === 日志自动刷新 ===
+                toggleAutoRefresh() {
+                    if (this.isAutoRefresh) {
+                        clearInterval(this.logInterval);
+                        this.logInterval = null;
+                        this.isAutoRefresh = false;
+                    } else {
+                        this.isAutoRefresh = true;
+                        this.fetchLogs();
+                        this.logInterval = setInterval(() => {
+                            this.fetchLogs();
+                        }, 2000); // 2秒刷新一次
+                    }
+                },
+
+                // === 格式化辅助 ===
                 formatDate(isoStr) {
                     if (!isoStr || isoStr === '无数据') return '无数据';
                     return new Date(isoStr).toLocaleString('zh-CN');
+                },
+                
+                formatTime(isoStr) {
+                    return isoStr.split('T')[1].split('.')[0];
+                },
+
+                getLevelClass(level) {
+                    switch(level) {
+                        case 'INFO': return 'text-blue-400';
+                        case 'WARN': return 'text-yellow-400';
+                        case 'ERROR': return 'text-red-500';
+                        default: return 'text-slate-400';
+                    }
                 }
             }
         }
