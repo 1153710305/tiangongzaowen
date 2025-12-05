@@ -3,6 +3,12 @@
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
 
+## 版本 v2.4.1 (Hotfix)
+
+### 修复日志
+- **Bug Fix**: 修复了 `POST /api/archives` 接口在创建新存档时仅返回 ID，导致前端列表项缺少 Title 和 History 数据，进而引发渲染崩溃的问题。
+- **优化**: 现在创建存档接口会返回完整的 Archive 对象（解包后的 JSON），前端在 `loadArchive` 时也增加了对 `history` 和 `settings` 的空值兜底保护。
+
 ## 版本 v2.4 (Admin Pro - User & API Lab)
 
 ### 架构变更

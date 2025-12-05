@@ -1,5 +1,3 @@
-
-
 import React, { useState, useRef, useEffect } from 'react';
 import { NovelSettingsForm } from './components/NovelSettingsForm';
 import { Button } from './components/Button';
@@ -132,6 +130,8 @@ export default function App() {
                 logger.info("新存档已创建");
             } else {
                 logger.info("存档已更新");
+                // 手动更新本地列表状态，确保标题修改等立即生效
+                setArchives(prev => prev.map(a => a.id === id ? { ...a, title, settings, history: historySnapshot } : a));
             }
         } catch (e) {
             logger.error("保存失败", e);
@@ -144,8 +144,9 @@ export default function App() {
     const loadArchive = (archive: Archive) => {
         setCurrentArchiveId(archive.id);
         setCurrentArchiveTitle(archive.title);
-        setSettings(archive.settings);
-        setHistory(archive.history);
+        // 增加兜底逻辑，防止脏数据导致 undefined 错误
+        setSettings(archive.settings || DEFAULT_NOVEL_SETTINGS);
+        setHistory(archive.history || []);
         setGeneratedContent('');
         logger.info(`加载存档: ${archive.title}`);
     };

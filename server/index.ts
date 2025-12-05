@@ -244,9 +244,19 @@ app.post('/api/archives', async (c) => {
             return c.json({ success: true, id });
         } else {
             const newId = crypto.randomUUID();
-            db.createArchive(newId, payload.id, title, contentStr);
+            // 创建存档并获取完整的数据库记录对象
+            const archive = db.createArchive(newId, payload.id, title, contentStr);
             logger.info(`用户 ${payload.username} 创建了新存档: ${newId}`);
-            return c.json({ success: true, id: newId });
+            
+            // 返回解包后的完整对象，修复前端列表显示空白的问题
+            // 必须解构 ...archive 以包含 title, user_id, created_at 等字段
+            // 并手动附带 settings 和 history，因为 archive.content 被设为 undefined
+            return c.json({ 
+                ...archive, 
+                settings, 
+                history, 
+                content: undefined 
+            });
         }
     } catch (e: any) {
         logger.error(`保存存档失败`, { error: e.message });

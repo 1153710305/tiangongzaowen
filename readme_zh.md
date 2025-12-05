@@ -148,4 +148,10 @@ npx tsx server/index.ts
 
 ---
 
+## 📝 版本历史 (Changelog)
+
+**v2.4.1 (Hotfix)**
+*   修复了新建存档后，左侧列表出现空白行的问题。
+*   修复了点击新存档导致页面报错 (undefined reading 'length') 的 Bug。
+
 *Powered by Google Gemini & Hono & SQLite*
