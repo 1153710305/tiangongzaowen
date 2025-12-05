@@ -1,16 +1,17 @@
 
-
 import React, { useState, useRef, useEffect } from 'react';
 import { NovelSettingsForm } from './components/NovelSettingsForm';
 import { Button } from './components/Button';
 import { LogViewer } from './components/LogViewer';
-import { AuthForm } from './components/AuthForm'; // New
+import { AuthForm } from './components/AuthForm';
+import { AdminDashboard } from './components/AdminDashboard'; // New
 import { 
     NovelSettings, 
     WorkflowStep, 
     ChatMessage, 
     Role, 
     User,
+    UserRole, // New
     Archive 
 } from './types';
 import { 
@@ -25,6 +26,7 @@ export default function App() {
     // === 用户与认证 ===
     const [user, setUser] = useState<User | null>(null);
     const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+    const [showAdmin, setShowAdmin] = useState(false); // Admin Modal State
 
     // === 状态管理 ===
     const [settings, setSettings] = useState<NovelSettings>(DEFAULT_NOVEL_SETTINGS);
@@ -201,11 +203,23 @@ export default function App() {
                          <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">
                             天工造文
                         </h1>
-                        <button onClick={() => { authService.logout(); setUser(null); }} className="text-xs text-slate-500 hover:text-white">
-                            退出 ({user.username})
-                        </button>
+                        <div className="flex items-center gap-2">
+                            {/* Admin Entry */}
+                            {user.role === UserRole.ADMIN && (
+                                <button 
+                                    onClick={() => setShowAdmin(true)} 
+                                    className="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-0.5 rounded"
+                                    title="进入服务器管理后台"
+                                >
+                                    ADMIN
+                                </button>
+                            )}
+                            <button onClick={() => { authService.logout(); setUser(null); }} className="text-xs text-slate-500 hover:text-white">
+                                退出
+                            </button>
+                        </div>
                     </div>
-                    <p className="text-slate-500 text-xs">V2.0 企业版 (SQLite + JWT)</p>
+                    <p className="text-slate-500 text-xs">V2.1 Admin + DB + JWT</p>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-6">
@@ -281,6 +295,9 @@ export default function App() {
                 {/* 顶部工具栏 (移动端适配) */}
                 <div className="md:hidden p-4 border-b border-slate-700 bg-paper flex justify-between items-center">
                     <span className="font-bold text-primary">天工造文</span>
+                    {user.role === UserRole.ADMIN && (
+                        <button onClick={() => setShowAdmin(true)} className="text-xs text-red-500">ADMIN</button>
+                    )}
                 </div>
 
                 {/* 消息/内容列表区 */}
@@ -339,6 +356,9 @@ export default function App() {
             </div>
 
             <LogViewer />
+
+            {/* Admin Dashboard Modal */}
+            {showAdmin && <AdminDashboard onClose={() => setShowAdmin(false)} />}
         </div>
     );
 }

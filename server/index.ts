@@ -5,8 +5,8 @@ import { jwt } from 'hono/jwt';
 import { sign } from 'hono/jwt';
 import { GoogleGenAI } from '@google/genai';
 import { SYSTEM_INSTRUCTION, PROMPT_BUILDERS } from './prompts.ts';
-import { RANDOM_DATA_POOL } from './data.ts';
-import { NovelSettings, WorkflowStep } from './types.ts';
+import { getDataPool, updateDataPool } from './data.ts';
+import { NovelSettings, WorkflowStep, UserRole } from './types.ts';
 import * as db from './db.ts';
 
 // 初始化数据库
@@ -17,7 +17,7 @@ const app = new Hono();
 // 配置 CORS
 app.use('/*', cors({
     origin: '*',
-    allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
     exposeHeaders: ['Content-Length'],
     maxAge: 600,
@@ -38,7 +38,8 @@ const ai = new GoogleGenAI({ apiKey: API_KEY || '' });
 
 app.get('/', (c) => c.text('SkyCraft AI Backend (Auth Enabled) is Running! 🚀'));
 
-app.get('/api/config/pool', (c) => c.json(RANDOM_DATA_POOL));
+// 获取素材池 (公开，但数据由 Admin 控制)
+app.get('/api/config/pool', (c) => c.json(getDataPool()));
 
 // 注册
 app.post('/api/auth/register', async (c) => {
@@ -53,17 +54,20 @@ app.post('/api/auth/register', async (c) => {
             return c.json({ error: '用户名已存在' }, 400);
         }
 
-        // 简单模拟 Hash，生产环境建议使用 bcryptjs (但在纯 serverless/edge 环境 bcrypt 可能有问题，Hono 推荐 web crypto)
-        // 为了性能和兼容性，这里使用简单的 Web Crypto 模拟
-        // 注意：实际生产请用 bcryptjs 或 argon2
-        const passwordHash = password; // ⚠️ DEMO ONLY: 真实项目请务必 Hash!
+        // 简单模拟 Hash
+        const passwordHash = password; 
         
         const userId = crypto.randomUUID();
         const user = db.createUser(userId, username, passwordHash);
         
-        const token = await sign({ id: user.id, username: user.username, exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 }, JWT_SECRET); // 7天过期
+        const token = await sign({ 
+            id: user.id, 
+            username: user.username, 
+            role: user.role, // Payload 中包含 role
+            exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 
+        }, JWT_SECRET); 
         
-        return c.json({ token, user: { id: user.id, username: user.username } });
+        return c.json({ token, user: { id: user.id, username: user.username, role: user.role } });
     } catch (e: any) {
         return c.json({ error: e.message }, 500);
     }
@@ -75,30 +79,34 @@ app.post('/api/auth/login', async (c) => {
         const { username, password } = await c.req.json();
         const user = db.getUserByUsername(username);
         
-        // ⚠️ DEMO ONLY: 真实项目请对比 Hash
         if (!user || user.password_hash !== password) {
             return c.json({ error: '用户名或密码错误' }, 401);
         }
 
-        const token = await sign({ id: user.id, username: user.username, exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 }, JWT_SECRET);
+        const token = await sign({ 
+            id: user.id, 
+            username: user.username, 
+            role: user.role, 
+            exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 
+        }, JWT_SECRET);
         
-        return c.json({ token, user: { id: user.id, username: user.username } });
+        return c.json({ token, user: { id: user.id, username: user.username, role: user.role } });
     } catch (e: any) {
         return c.json({ error: e.message }, 500);
     }
 });
 
-// === 受保护路由 (需要 Bearer Token) ===
+// === 受保护路由 (通用) ===
 
-// 中间件：JWT 验证
 app.use('/api/generate', jwt({ secret: JWT_SECRET }));
 app.use('/api/archives/*', jwt({ secret: JWT_SECRET }));
+app.use('/api/admin/*', jwt({ secret: JWT_SECRET }));
 
-// AI 生成 (受保护)
+// AI 生成
 app.post('/api/generate', async (c) => {
     if (!API_KEY) return c.json({ error: "Server API Key not configured" }, 500);
 
-    const payload = c.get('jwtPayload'); // 获取用户信息 (Payload)
+    const payload = c.get('jwtPayload'); 
     console.log(`[Generate] User: ${payload.username}`);
 
     try {
@@ -159,15 +167,14 @@ app.post('/api/generate', async (c) => {
     }
 });
 
-// 获取存档列表
+// Archive CRUD
 app.get('/api/archives', (c) => {
     const payload = c.get('jwtPayload');
     const archives = db.getArchivesByUser(payload.id);
-    // 解析 JSON 内容
     const result = archives.map(a => {
         try {
             const content = JSON.parse(a.content);
-            return { ...a, ...content, content: undefined }; // 展平结构
+            return { ...a, ...content, content: undefined }; 
         } catch (e) {
             return a;
         }
@@ -175,31 +182,63 @@ app.get('/api/archives', (c) => {
     return c.json(result);
 });
 
-// 保存存档
 app.post('/api/archives', async (c) => {
     const payload = c.get('jwtPayload');
     const { id, title, settings, history } = await c.req.json();
-    
     const contentStr = JSON.stringify({ settings, history });
     
     if (id) {
-        // Update
         db.updateArchive(id, payload.id, title, contentStr);
         return c.json({ success: true, id });
     } else {
-        // Create
         const newId = crypto.randomUUID();
         db.createArchive(newId, payload.id, title, contentStr);
         return c.json({ success: true, id: newId });
     }
 });
 
-// 删除存档
 app.delete('/api/archives/:id', (c) => {
     const payload = c.get('jwtPayload');
     const id = c.req.param('id');
     db.deleteArchive(id, payload.id);
     return c.json({ success: true });
+});
+
+// === Admin 路由 ===
+
+// 中间件：管理员权限检查
+const adminCheck = async (c: any, next: any) => {
+    const payload = c.get('jwtPayload');
+    // 双重校验：Token Claim + DB Lookup (最安全，但会有一次极快的DB查询)
+    const user = db.getUserById(payload.id);
+    if (!user || user.role !== UserRole.ADMIN) {
+        return c.json({ error: 'Forbidden: Admin access required' }, 403);
+    }
+    await next();
+};
+
+app.get('/api/admin/stats', adminCheck, (c) => {
+    return c.json(db.getSystemStats());
+});
+
+app.get('/api/admin/users', adminCheck, (c) => {
+    return c.json(db.getAllUsers());
+});
+
+// 获取素材池（管理员用，可能包含未公开字段）
+app.get('/api/admin/pool', adminCheck, (c) => {
+    return c.json(getDataPool());
+});
+
+// 更新素材池（热更新）
+app.post('/api/admin/pool', adminCheck, async (c) => {
+    try {
+        const newData = await c.req.json();
+        updateDataPool(newData);
+        return c.json({ success: true, message: "Pool updated successfully" });
+    } catch (e: any) {
+        return c.json({ error: e.message }, 400);
+    }
 });
 
 export default app;

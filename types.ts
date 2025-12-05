@@ -6,6 +6,12 @@ export enum Role {
     SYSTEM = 'system'
 }
 
+// 用户角色枚举
+export enum UserRole {
+    USER = 'user',
+    ADMIN = 'admin'
+}
+
 // 小说核心配置接口
 export interface NovelSettings {
     genre: string; // 流派：如玄幻、都市、言情
@@ -60,6 +66,7 @@ export enum WorkflowStep {
 export interface User {
     id: string;
     username: string;
+    role: UserRole; // 新增权限字段
 }
 
 export interface AuthResponse {
@@ -75,4 +82,13 @@ export interface Archive {
     history: ChatMessage[];
     createdAt: string; // ISO String
     updatedAt: string; // ISO String
+}
+
+// === 管理后台接口 ===
+
+export interface SystemStats {
+    userCount: number;
+    archiveCount: number;
+    dbSizeMB: number;
+    uptimeSeconds: number;
 }

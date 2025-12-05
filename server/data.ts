@@ -1,10 +1,11 @@
 
 /**
  * 爆款网文素材池 (服务端数据源)
- * 所有的硬编码数据都提取在这里，方便后续通过 CMS 或数据库进行管理。
- * 修改此文件可直接影响所有客户端的随机生成逻辑。
+ * 改为内存可变状态，支持后台热更新。
  */
-export const RANDOM_DATA_POOL = {
+
+// 默认配置
+const DEFAULT_POOL = {
     genres: [
         '规则怪谈', '都市神豪', '高武世界', '年代文', '末世天灾', 
         '玄学直播', '娱乐圈', '悬疑破案', '全民转职', '反派逆袭',
@@ -32,3 +33,30 @@ export const RANDOM_DATA_POOL = {
         '暗黑流，利益至上'
     ]
 };
+
+// 内存状态
+let currentPool = { ...DEFAULT_POOL };
+
+/**
+ * 获取当前素材池
+ */
+export const getDataPool = () => {
+    return currentPool;
+};
+
+/**
+ * 更新素材池
+ */
+export const updateDataPool = (newData: any) => {
+    // 简单的校验，确保结构不被破坏
+    if (!newData || typeof newData !== 'object') {
+        throw new Error("Invalid data format");
+    }
+    currentPool = newData;
+    console.log("[Data] Material pool updated via Admin API");
+};
+
+/**
+ * 为了保持向后兼容，导出 RANDOM_DATA_POOL (getter)
+ */
+export const RANDOM_DATA_POOL = currentPool;

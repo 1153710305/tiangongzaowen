@@ -24,12 +24,19 @@ export enum WorkflowStep {
     REVIEW = 'review' // 审稿
 }
 
+// 用户角色枚举
+export enum UserRole {
+    USER = 'user',
+    ADMIN = 'admin'
+}
+
 // === 数据库模型 ===
 
 export interface User {
     id: string;
     username: string;
     password_hash: string;
+    role: UserRole; // 新增 role 字段
     created_at: string;
 }
 
@@ -40,4 +47,11 @@ export interface Archive {
     content: string; // JSON string of { settings, history }
     created_at: string;
     updated_at: string;
+}
+
+export interface SystemStats {
+    userCount: number;
+    archiveCount: number;
+    dbSizeMB: number;
+    uptimeSeconds: number;
 }
