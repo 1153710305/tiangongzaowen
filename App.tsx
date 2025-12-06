@@ -80,13 +80,39 @@ export default function App() {
 
     // === 核心业务逻辑 ===
 
-    const addToHistory = (role: Role, content: string) => {
+    const addToHistory = (role: Role, content: string, isError: boolean = false) => {
         setHistory(prev => [...prev, {
             id: Date.now().toString(),
             role,
             content,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            isError
         }]);
+    };
+
+    /**
+     * 智能提取 JSON
+     * 解决 LLM 可能返回 Markdown 标记或其他前言后语的问题
+     */
+    const extractJsonArray = (text: string): any[] | null => {
+        try {
+            // 1. 尝试直接解析
+            return JSON.parse(text);
+        } catch (e) {
+            // 2. 尝试提取 [ ... ] 部分
+            const start = text.indexOf('[');
+            const end = text.lastIndexOf(']');
+            if (start !== -1 && end !== -1 && end > start) {
+                const jsonStr = text.substring(start, end + 1);
+                try {
+                    const result = JSON.parse(jsonStr);
+                    if (Array.isArray(result)) return result;
+                } catch (err) {
+                    console.warn("JSON提取失败", err);
+                }
+            }
+            return null;
+        }
     };
 
     /**
@@ -119,22 +145,16 @@ export default function App() {
 
             // 如果是创意生成步骤，尝试解析 JSON 并生成 Draft Cards
             if (step === WorkflowStep.IDEA || step === WorkflowStep.ANALYSIS_IDEA) {
-                try {
-                    // 清理可能存在的 Markdown 标记
-                    const cleanJson = finalContent.replace(/```json/g, '').replace(/```/g, '').trim();
-                    const parsed = JSON.parse(cleanJson);
-                    if (Array.isArray(parsed)) {
-                        setDraftCards(parsed);
-                        logger.info("成功解析脑洞卡片", { count: parsed.length });
-                        addToHistory(Role.SYSTEM, "✅ 脑洞生成完毕，已自动整理为卡片格式，请在下方查看并保存心仪的创意。");
-                    } else {
-                        addToHistory(Role.MODEL, finalContent);
-                    }
-                } catch (e) {
-                    logger.warn("JSON解析失败，回退到文本展示");
+                const parsed = extractJsonArray(finalContent);
+                if (parsed && parsed.length > 0) {
+                    setDraftCards(parsed);
+                    logger.info("成功解析脑洞卡片", { count: parsed.length });
+                    addToHistory(Role.SYSTEM, `✅ 脑洞生成完毕！共生成 ${parsed.length} 个创意，已自动整理为卡片格式，请在下方查看并保存心仪的方案。`);
+                } else {
+                    logger.warn("未识别到有效的 JSON 数组，回退到文本展示");
                     addToHistory(Role.MODEL, finalContent);
                 }
-                setGeneratedContent(''); // 清空流式展示区，转为展示卡片或History
+                setGeneratedContent(''); // 清空流式展示区
             } else {
                 addToHistory(Role.MODEL, finalContent);
                 setGeneratedContent(''); 
@@ -142,7 +162,7 @@ export default function App() {
             
             logger.info(`任务完成: ${description}`);
             
-            // 自动保存存档 (如果不是创意步骤，或者创意解析失败)
+            // 自动保存存档 (如果不是创意步骤，或者创意解析失败导致作为纯文本存入历史)
             if (currentArchiveId && (step !== WorkflowStep.IDEA && step !== WorkflowStep.ANALYSIS_IDEA)) {
                 saveArchive(currentArchiveId, currentArchiveTitle, [...history, {
                     id: Date.now().toString(), role: Role.MODEL, content: finalContent, timestamp: Date.now()
@@ -150,8 +170,10 @@ export default function App() {
             }
         } catch (error) {
             logger.error(`生成出错: ${description}`, error);
-            addToHistory(Role.SYSTEM, `❌ 生成失败: ${error instanceof Error ? error.message : '请检查后端服务是否启动'}`);
-            if (error instanceof Error && error.message.includes("登录")) {
+            const errorMsg = error instanceof Error ? error.message : '未知错误';
+            addToHistory(Role.SYSTEM, `❌ 生成失败: ${errorMsg}。如果您看到 "fetch failed"，请检查后端服务器网络连接。`, true);
+            
+            if (errorMsg.includes("登录") || errorMsg.includes("Unauthorized")) {
                 handleLogout();
             }
         } finally {
@@ -194,7 +216,9 @@ export default function App() {
             if (!id) {
                 setCurrentArchiveId(res.id);
                 setArchives(prev => [res, ...prev]);
-                setArchives(prev => prev.map(a => a.id === id ? { ...a, title, settings, history: historySnapshot } : a));
+                // 确保新存档在列表中显示正确信息
+                const newArchive = { ...res, title, settings, history: historySnapshot };
+                setArchives(prev => prev.map(a => a.id === res.id ? newArchive : a));
                 logger.info("新存档已创建");
             } else {
                 logger.info("存档已更新");
@@ -292,7 +316,7 @@ export default function App() {
                             退出 ({user.username})
                         </button>
                     </div>
-                    <p className="text-slate-500 text-xs">V2.6 脑洞卡片版</p>
+                    <p className="text-slate-500 text-xs">V2.6.1 脑洞卡片加强版</p>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-6">
@@ -432,12 +456,12 @@ export default function App() {
                                 msg.role === Role.USER 
                                     ? 'bg-primary/20 border border-primary/30 ml-12' 
                                     : msg.role === Role.SYSTEM
-                                        ? 'bg-green-900/20 border border-green-500/30' // 系统消息变绿
+                                        ? `bg-green-900/20 border ${msg.isError ? 'border-red-500/30' : 'border-green-500/30'}` 
                                         : 'bg-paper border border-slate-700 mr-12'
                             }`}>
                                 <div className="flex items-center mb-2 pb-2 border-b border-slate-600/50">
                                     <span className={`text-xs font-bold uppercase tracking-wider ${
-                                        msg.role === Role.USER ? 'text-primary' : (msg.role === Role.SYSTEM ? 'text-green-400' : 'text-secondary')
+                                        msg.role === Role.USER ? 'text-primary' : (msg.role === Role.SYSTEM ? (msg.isError ? 'text-red-400' : 'text-green-400') : 'text-secondary')
                                     }`}>
                                         {msg.role === Role.USER ? 'USER' : (msg.role === Role.SYSTEM ? 'SYSTEM' : 'AI AUTHOR')}
                                     </span>
@@ -445,7 +469,7 @@ export default function App() {
                                         {new Date(msg.timestamp).toLocaleTimeString()}
                                     </span>
                                 </div>
-                                <div className="prose prose-invert prose-slate max-w-none">
+                                <div className={`prose prose-invert prose-slate max-w-none ${msg.isError ? 'text-red-300' : ''}`}>
                                     <ReactMarkdown>{msg.content}</ReactMarkdown>
                                 </div>
                             </div>

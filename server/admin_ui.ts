@@ -839,4 +839,4 @@ export const ADMIN_HTML = `
         }
     </script>
 </body>
-</html>
+</html>`;
