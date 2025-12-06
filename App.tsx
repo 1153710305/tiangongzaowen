@@ -10,7 +10,8 @@ import {
     ChatMessage, 
     Role, 
     User,
-    Archive 
+    Archive,
+    ReferenceNovel 
 } from './types';
 import { 
     DEFAULT_NOVEL_SETTINGS 
@@ -77,14 +78,19 @@ export default function App() {
 
     /**
      * 统一生成处理函数
+     * 支持 context (灵感) 和 references (参考小说)
      */
-    const handleGeneration = async (step: WorkflowStep, description: string, context?: string) => {
+    const handleGeneration = async (step: WorkflowStep, description: string, context?: string, references?: ReferenceNovel[]) => {
         if (isGenerating) return;
         setIsGenerating(true);
         setCurrentStep(step);
         setGeneratedContent(''); // 清空当前展示区
         
-        addToHistory(Role.USER, `开始任务：${description}${context && step === WorkflowStep.IDEA ? ` (灵感: ${context})` : ''}`);
+        let logMsg = `开始任务：${description}`;
+        if (context && step === WorkflowStep.IDEA) logMsg += ` (灵感: ${context})`;
+        if (references && step === WorkflowStep.ANALYSIS_IDEA) logMsg += ` (参考: ${references.map(r=>r.title).join(',')})`;
+
+        addToHistory(Role.USER, logMsg);
         logger.info(`启动任务: ${description} [${step}]`);
 
         try {
@@ -92,6 +98,7 @@ export default function App() {
                 settings, 
                 step, 
                 context || '', 
+                references, // 传递参考小说列表
                 (chunk) => {
                     setGeneratedContent(prev => prev + chunk);
                 }
@@ -127,6 +134,7 @@ export default function App() {
                 // 新建成功，更新ID和列表
                 setCurrentArchiveId(res.id);
                 setArchives(prev => [res, ...prev]);
+                setArchives(prev => prev.map(a => a.id === id ? { ...a, title, settings, history: historySnapshot } : a));
                 logger.info("新存档已创建");
             } else {
                 logger.info("存档已更新");
@@ -171,11 +179,19 @@ export default function App() {
 
     // === 生成操作入口 ===
     
-    // 修改：支持接收自定义 Context (用于一句话脑洞)
-    const generateIdea = (customContext?: string) => {
-        const desc = customContext ? "基于灵感发散脑洞" : "基于配置生成创意脑洞";
-        // 如果有 customContext，将其作为 context 参数传递给 handleGeneration
-        handleGeneration(WorkflowStep.IDEA, desc, customContext);
+    /**
+     * 修改：统一处理创意生成
+     * @param customContext 一句话灵感内容
+     * @param references 爆款分析模式的参考小说列表
+     */
+    const generateIdea = (customContext?: string, references?: ReferenceNovel[]) => {
+        if (references && references.length > 0) {
+             handleGeneration(WorkflowStep.ANALYSIS_IDEA, "分析爆款并生成创意", undefined, references);
+        } else if (customContext) {
+            handleGeneration(WorkflowStep.IDEA, "基于灵感发散脑洞", customContext);
+        } else {
+            handleGeneration(WorkflowStep.IDEA, "基于参数生成创意脑洞");
+        }
     };
 
     const generateOutline = () => {
@@ -230,7 +246,7 @@ export default function App() {
                             退出 ({user.username})
                         </button>
                     </div>
-                    <p className="text-slate-500 text-xs">V2.0 企业版 (SQLite + JWT)</p>
+                    <p className="text-slate-500 text-xs">V2.5.1 仿写版</p>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-6">

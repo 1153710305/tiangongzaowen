@@ -6,7 +6,7 @@ import { sign } from 'hono/jwt';
 import { GoogleGenAI } from '@google/genai';
 import { SYSTEM_INSTRUCTION, PROMPT_BUILDERS } from './prompts.ts';
 import { RANDOM_DATA_POOL } from './data.ts';
-import { NovelSettings, WorkflowStep } from './types.ts';
+import { NovelSettings, WorkflowStep, ReferenceNovel } from './types.ts';
 import { logger } from './logger.ts'; // 引入日志模块
 import { adminRouter } from './admin_router.ts'; // 引入解耦后的后台路由
 import * as db from './db.ts';
@@ -154,10 +154,11 @@ app.post('/api/generate', async (c) => {
 
     try {
         const body = await c.req.json();
-        const { settings, step, context } = body as { 
+        const { settings, step, context, references } = body as { 
             settings: NovelSettings, 
             step: WorkflowStep,
-            context?: string 
+            context?: string,
+            references?: ReferenceNovel[] // 新增参数
         };
 
         if (!settings || !step) return c.json({ error: "Missing parameters" }, 400);
@@ -165,8 +166,17 @@ app.post('/api/generate', async (c) => {
         let prompt = '';
         try {
             switch (step) {
-                // IDEA 步骤现在支持传入 context (一句话灵感)
-                case WorkflowStep.IDEA: prompt = PROMPT_BUILDERS.IDEA(settings, context); break;
+                // IDEA 步骤支持传入 context (一句话灵感)
+                case WorkflowStep.IDEA: 
+                    prompt = PROMPT_BUILDERS.IDEA(settings, context); 
+                    break;
+                // 新增：分析仿写模式
+                case WorkflowStep.ANALYSIS_IDEA:
+                    if (!references || references.length === 0) {
+                        return c.json({ error: "分析模式需要提供参考小说" }, 400);
+                    }
+                    prompt = PROMPT_BUILDERS.ANALYSIS_IDEA(settings, references);
+                    break;
                 case WorkflowStep.OUTLINE: prompt = PROMPT_BUILDERS.OUTLINE(settings, context || ''); break;
                 case WorkflowStep.CHARACTER: prompt = PROMPT_BUILDERS.CHARACTER(settings); break;
                 case WorkflowStep.CHAPTER: prompt = PROMPT_BUILDERS.CHAPTER(settings, context || ''); break;
@@ -179,7 +189,7 @@ app.post('/api/generate', async (c) => {
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
-                temperature: 0.8,
+                temperature: 0.85, // 稍微提高创造性
                 topP: 0.95,
                 topK: 40,
             }

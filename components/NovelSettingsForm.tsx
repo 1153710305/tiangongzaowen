@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { NovelSettings } from '../types';
+import { NovelSettings, ReferenceNovel } from '../types';
 import { Button } from './Button';
 import { logger } from '../services/loggerService';
 import { apiService } from '../services/geminiService';
@@ -8,14 +8,14 @@ import { apiService } from '../services/geminiService';
 interface Props {
     settings: NovelSettings;
     onChange: (settings: NovelSettings) => void;
-    // 修改：允许传递可选的自定义Context
-    onGenerateIdea: (customContext?: string) => void;
+    // 修改：允许传递可选的自定义Context (idea模式) 或 Reference (analysis模式)
+    onGenerateIdea: (customContext?: string, references?: ReferenceNovel[]) => void;
     isGenerating: boolean;
     // 新增：存档加载提示
     loadedFromArchive?: string;
 }
 
-type InputMode = 'config' | 'oneliner';
+type InputMode = 'config' | 'oneliner' | 'analysis';
 
 export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGenerateIdea, isGenerating, loadedFromArchive }) => {
     
@@ -23,9 +23,14 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
     const [dataPool, setDataPool] = useState<any>(null);
     const [isLoadingPool, setIsLoadingPool] = useState(true);
     
-    // 新增：输入模式切换 和 自定义灵感输入
+    // 输入模式切换
     const [inputMode, setInputMode] = useState<InputMode>('config');
+    // 一句话脑洞状态
     const [oneLinerInput, setOneLinerInput] = useState('');
+    // 仿写模式状态：参考小说列表
+    const [references, setReferences] = useState<ReferenceNovel[]>([
+        { title: '', intro: '', url: '' }
+    ]);
 
     // 初始化时加载后端配置
     useEffect(() => {
@@ -83,9 +88,30 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                 return;
             }
             onGenerateIdea(oneLinerInput);
+        } else if (inputMode === 'analysis') {
+            // 校验参考小说
+            const validRefs = references.filter(r => r.title.trim() && r.intro.trim());
+            if (validRefs.length === 0) {
+                alert("请至少输入一个参考小说的标题和简介");
+                return;
+            }
+            onGenerateIdea(undefined, validRefs);
         } else {
             onGenerateIdea();
         }
+    };
+
+    // 参考小说管理
+    const addReference = () => {
+        setReferences([...references, { title: '', intro: '', url: '' }]);
+    };
+    const removeReference = (index: number) => {
+        setReferences(references.filter((_, i) => i !== index));
+    };
+    const updateReference = (index: number, field: keyof ReferenceNovel, value: string) => {
+        const newRefs = [...references];
+        newRefs[index] = { ...newRefs[index], [field]: value };
+        setReferences(newRefs);
     };
 
     return (
@@ -131,7 +157,7 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                         inputMode === 'config' ? 'bg-primary text-white shadow' : 'text-slate-400 hover:text-slate-200'
                     }`}
                 >
-                    参数配置模式
+                    参数配置
                 </button>
                 <button 
                     onClick={() => setInputMode('oneliner')}
@@ -139,12 +165,20 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                         inputMode === 'oneliner' ? 'bg-primary text-white shadow' : 'text-slate-400 hover:text-slate-200'
                     }`}
                 >
-                    一句话脑洞模式
+                    脑洞发散
+                </button>
+                <button 
+                    onClick={() => setInputMode('analysis')}
+                    className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
+                        inputMode === 'analysis' ? 'bg-primary text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                >
+                    爆款仿写
                 </button>
             </div>
             
-            {/* 内容区 */}
-            {inputMode === 'config' ? (
+            {/* 1. 参数配置模式 */}
+            {inputMode === 'config' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
                     <div>
                         <label className="block text-sm font-medium text-slate-400 mb-1">流派 (Genre)</label>
@@ -221,7 +255,10 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                         </select>
                     </div>
                 </div>
-            ) : (
+            )}
+
+            {/* 2. 一句话脑洞模式 */}
+            {inputMode === 'oneliner' && (
                 <div className="animate-fade-in space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-slate-400 mb-2">你的核心脑洞/灵感 (Idea)</label>
@@ -259,6 +296,79 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                 </div>
             )}
 
+            {/* 3. 爆款仿写模式 */}
+            {inputMode === 'analysis' && (
+                <div className="animate-fade-in space-y-4">
+                    <div className="bg-blue-900/20 p-3 rounded text-xs text-blue-200 mb-4 border border-blue-800">
+                        在此模式下，您可以输入 1-3 本您认为“爆火”的同类小说信息。AI 将深度拆解它们的成功基因（如爽点节奏、人设反差），并结合您的受众偏好生成全新的创意。
+                    </div>
+                    
+                    <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                        {references.map((ref, index) => (
+                            <div key={index} className="bg-black/20 p-3 rounded border border-slate-700 relative group">
+                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => removeReference(index)} className="text-slate-500 hover:text-red-400">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                    </button>
+                                </div>
+                                <div className="space-y-2">
+                                    <input 
+                                        type="text" 
+                                        value={ref.title}
+                                        onChange={(e) => updateReference(index, 'title', e.target.value)}
+                                        placeholder={`参考小说 ${index + 1} 书名`}
+                                        className="w-full bg-transparent border-b border-slate-600 text-sm py-1 focus:border-primary outline-none"
+                                    />
+                                    <input 
+                                        type="text" 
+                                        value={ref.url}
+                                        onChange={(e) => updateReference(index, 'url', e.target.value)}
+                                        placeholder="小说地址 URL (可选)"
+                                        className="w-full bg-transparent border-b border-slate-600 text-xs py-1 text-slate-400 focus:border-primary outline-none"
+                                    />
+                                    <textarea 
+                                        value={ref.intro}
+                                        onChange={(e) => updateReference(index, 'intro', e.target.value)}
+                                        placeholder="请粘贴小说的简介文案或第一章核心情节 (AI将基于此内容进行拆解)"
+                                        className="w-full bg-dark/50 rounded p-2 text-xs text-slate-300 outline-none h-16 resize-none focus:ring-1 focus:ring-primary"
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {references.length < 3 && (
+                        <button onClick={addReference} className="w-full py-2 border border-dashed border-slate-600 rounded text-slate-400 hover:text-white hover:border-slate-400 text-sm transition-colors">
+                            + 添加参考案例
+                        </button>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-700/50">
+                         <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">您的目标受众</label>
+                            <select 
+                                value={settings.targetAudience} 
+                                onChange={(e) => handleChange('targetAudience', e.target.value as any)}
+                                className="w-full bg-dark border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-300 outline-none focus:border-primary"
+                            >
+                                <option value="male">男频</option>
+                                <option value="female">女频</option>
+                            </select>
+                        </div>
+                        <div>
+                             <label className="block text-xs font-medium text-slate-500 mb-1">您的期望基调</label>
+                             <input 
+                                type="text" 
+                                value={settings.tone} 
+                                onChange={(e) => handleChange('tone', e.target.value)}
+                                className="w-full bg-dark border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-300 outline-none focus:border-primary"
+                                placeholder="例如：更热血一点"
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="pt-4 border-t border-slate-700">
                 <Button 
                     onClick={handleGenerateClick} 
@@ -266,7 +376,9 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                     className="w-full"
                     variant="secondary"
                 >
-                    {inputMode === 'config' ? '✨ 基于参数生成创意脑洞' : '🚀 基于灵感发散生成脑洞'}
+                    {inputMode === 'config' && '✨ 基于参数生成创意脑洞'}
+                    {inputMode === 'oneliner' && '🚀 基于灵感发散生成脑洞'}
+                    {inputMode === 'analysis' && '🔬 分析爆款基因并生成新创意'}
                 </Button>
                 {inputMode === 'config' && (
                     <p className="text-xs text-center text-slate-500 mt-2">

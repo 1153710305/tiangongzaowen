@@ -1,5 +1,5 @@
 
-import { NovelSettings } from "./types.ts";
+import { NovelSettings, ReferenceNovel } from "./types.ts";
 
 /**
  * AI 角色设定 (System Instruction)
@@ -69,6 +69,36 @@ export const PROMPT_BUILDERS = {
 2. 必须要符合当前网文市场的快节奏需求。
 3. 创意之间要有差异化。
 请以 JSON 格式或清晰的 Markdown 列表返回。
+`;
+    },
+
+    // 新增：爆款分析与仿写
+    ANALYSIS_IDEA: (settings: NovelSettings, references: ReferenceNovel[]) => {
+        const refsText = references.map((r, i) => `
+**案例 ${i + 1}**:
+- 书名：${r.title}
+- 简介/核心内容：${r.intro}
+`).join('\n');
+
+        return `
+请作为一名市场嗅觉敏锐的网文主编，对用户提供的以下几部"爆款小说"进行深度拆解分析，并基于此生成新的创意。
+
+**参考案例**：
+${refsText}
+
+**任务一：深度分析（Why it works?）**
+请简要分析这些参考小说为什么会火？
+- 它们共同的**核心爽点**是什么？
+- 它们满足了读者的什么**核心欲望**？
+- 它们的**开篇钩子**是如何设计的？
+
+**任务二：创意裂变（Generate New Ideas）**
+基于上述分析的"爆火基因"，结合当前设定（受众：${settings.targetAudience === 'male' ? '男频' : '女频'}，基调：${settings.tone}），**创作3个全新的小说开篇脑洞**。
+
+要求：
+1. **不要照抄**参考案例，而是学习其"逻辑"和"节奏"，换一个题材或背景进行创新（例如：如果参考的是都市神豪，你可以尝试写成高武神豪或末世资源流）。
+2. 每个新创意需包含：【书名】、【一句话简介】、【核心爽点分析】（解释为什么这个设定能火）、【黄金三章走向】。
+3. 必须符合当前网文平台的调性。
 `;
     },
 

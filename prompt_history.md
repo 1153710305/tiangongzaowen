@@ -3,6 +3,15 @@
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
 
+## 版本 v2.5.1 (Analysis Mode)
+
+### 功能变更
+- **New Workflow Step**: 引入 `ANALYSIS_IDEA`。
+- **Prompt Logic**: 
+    - 接收 `references` 数组（Title, Intro）。
+    - 指令 AI 扮演市场分析师，先完成 "Why it works?" 的逻辑拆解，再进行 "Generate New Ideas" 的创意裂变。
+    - 强制要求保留“爆火基因”（如爽点节奏），但更换题材背景，避免直接抄袭。
+
 ## 版本 v2.5.0 (Admin Deep View)
 
 ### 架构变更

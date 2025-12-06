@@ -17,6 +17,13 @@ export interface NovelSettings {
     tone: string; // 基调：轻松、热血、虐心
 }
 
+// === 新增：参考小说接口 (用于仿写模式) ===
+export interface ReferenceNovel {
+    title: string;
+    intro: string;
+    url?: string; // 可选，仅作记录
+}
+
 // 聊天/生成记录接口
 export interface ChatMessage {
     id: string;
@@ -48,7 +55,8 @@ export type GenerationMode = 'stream' | 'normal';
 
 // 步骤枚举
 export enum WorkflowStep {
-    IDEA = 'idea', // 创意/脑暴
+    IDEA = 'idea', // 创意/脑暴 (参数模式/一句话模式)
+    ANALYSIS_IDEA = 'analysis_idea', // 新增：爆款分析仿写模式
     OUTLINE = 'outline', // 大纲
     CHARACTER = 'character', // 人设
     CHAPTER = 'chapter', // 正文

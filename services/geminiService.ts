@@ -1,7 +1,6 @@
 
-
 import { logger } from "./loggerService";
-import { NovelSettings, WorkflowStep, Archive, ChatMessage } from "../types";
+import { NovelSettings, WorkflowStep, Archive, ChatMessage, ReferenceNovel } from "../types";
 import { API_ENDPOINTS } from "../constants";
 import { authService } from "./authService";
 
@@ -31,12 +30,14 @@ class ApiService {
      * @param settings 小说设定
      * @param step 当前工作流步骤
      * @param context 上下文（如之前的大纲或创意）
+     * @param references 参考小说列表 (分析模式用)
      * @param onChunk 接收数据块的回调
      */
     public async generateStream(
         settings: NovelSettings, 
         step: WorkflowStep, 
         context: string = '', 
+        references: ReferenceNovel[] | undefined,
         onChunk: (text: string) => void
     ): Promise<string> {
         
@@ -54,7 +55,8 @@ class ApiService {
                 body: JSON.stringify({
                     settings,
                     step,
-                    context
+                    context,
+                    references // 传递可选参数
                 })
             });
 

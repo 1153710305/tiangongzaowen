@@ -55,7 +55,7 @@ export const ADMIN_HTML = `
                 <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-pink-500">
                     SkyCraft Admin
                 </h1>
-                <p class="text-xs text-slate-500 mt-1">服务器监控面板 v2.4</p>
+                <p class="text-xs text-slate-500 mt-1">服务器监控面板 v2.5</p>
             </div>
             <nav class="flex-1 p-4 space-y-2">
                 <button @click="switchTab('dashboard')" 
@@ -424,7 +424,8 @@ export const ADMIN_HTML = `
                                 <option value="">-- 请选择 API --</option>
                                 <option value="login">POST /api/auth/login (登录)</option>
                                 <option value="register">POST /api/auth/register (注册)</option>
-                                <option value="generate">POST /api/generate (AI生成)</option>
+                                <option value="generate">POST /api/generate (Idea: 参数模式)</option>
+                                <option value="generate_analysis">POST /api/generate (Idea: 爆款分析模式) [NEW]</option>
                                 <option value="pool">GET /api/config/pool (获取配置池)</option>
                                 <option value="archives">GET /api/archives (获取存档列表)</option>
                                 <option value="archive_detail">GET /admin/api/archives/{ID} (获取存档详情)</option>
@@ -734,6 +735,14 @@ export const ADMIN_HTML = `
                         this.apiRequest = { method: 'POST', url: '/api/auth/register', headers: defaultHeaders, body: '{\\n  "username": "newuser",\\n  "password": "password123"\\n}' };
                     } else if (t === 'generate') {
                         this.apiRequest = { method: 'POST', url: '/api/generate', headers: defaultHeaders, body: '{\\n  "step": "idea",\\n  "settings": {\\n    "genre": "都市",\\n    "trope": "系统",\\n    "protagonistType": "腹黑",\\n    "goldenFinger": "加点",\\n    "pacing": "fast",\\n    "targetAudience": "male",\\n    "tone": "爽文"\\n  }\\n}' };
+                    } else if (t === 'generate_analysis') {
+                        // 新增测试模板
+                        this.apiRequest = { 
+                            method: 'POST', 
+                            url: '/api/generate', 
+                            headers: defaultHeaders, 
+                            body: '{\\n  "step": "analysis_idea",\\n  "settings": {\\n    "targetAudience": "male",\\n    "tone": "热血"\\n  },\\n  "references": [\\n    {\\n      "title": "参考书名A",\\n      "intro": "这是一个关于重生回到过去炒股的故事..."\\n    }\\n  ]\\n}' 
+                        };
                     } else if (t === 'pool') {
                         this.apiRequest = { method: 'GET', url: '/api/config/pool', headers: defaultHeaders, body: '' };
                     } else if (t === 'archives') {

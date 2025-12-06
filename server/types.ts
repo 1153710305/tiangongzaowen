@@ -15,9 +15,17 @@ export interface NovelSettings {
     tone: string; // 基调
 }
 
+// 新增：参考小说接口
+export interface ReferenceNovel {
+    title: string;
+    intro: string;
+    url?: string;
+}
+
 // 步骤枚举
 export enum WorkflowStep {
     IDEA = 'idea', // 创意
+    ANALYSIS_IDEA = 'analysis_idea', // 新增：爆款分析仿写
     OUTLINE = 'outline', // 大纲
     CHARACTER = 'character', // 人设
     CHAPTER = 'chapter', // 正文
