@@ -45,5 +45,8 @@ export const API_ENDPOINTS = {
     AUTH_REGISTER: `${API_BASE_URL}/api/auth/register`,
     
     // === 存档接口 ===
-    ARCHIVES: `${API_BASE_URL}/api/archives`
+    ARCHIVES: `${API_BASE_URL}/api/archives`,
+    
+    // === 脑洞卡片接口 (新增) ===
+    CARDS: `${API_BASE_URL}/api/cards`
 };

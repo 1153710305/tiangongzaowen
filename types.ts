@@ -17,11 +17,23 @@ export interface NovelSettings {
     tone: string; // 基调：轻松、热血、虐心
 }
 
-// === 新增：参考小说接口 (用于仿写模式) ===
+// 参考小说接口 (用于仿写模式)
 export interface ReferenceNovel {
     title: string;
     intro: string;
     url?: string; // 可选，仅作记录
+}
+
+// === 新增：脑洞卡片接口 ===
+export interface IdeaCard {
+    id: string; // UUID
+    userId: string;
+    title: string;
+    intro: string; // 简介
+    highlight: string; // 爽点
+    explosive_point: string; // 爆点
+    golden_finger: string; // 金手指
+    created_at: string;
 }
 
 // 聊天/生成记录接口
@@ -62,8 +74,6 @@ export enum WorkflowStep {
     CHAPTER = 'chapter', // 正文
     REVIEW = 'review' // 审稿/润色
 }
-
-// === 新增：认证与存档相关接口 ===
 
 export interface User {
     id: string;

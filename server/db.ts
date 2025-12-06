@@ -1,6 +1,6 @@
 
 import Database from 'better-sqlite3';
-import { User, Archive } from './types.ts';
+import { User, Archive, DbIdeaCard, IdeaCardData } from './types.ts';
 import fs from 'fs';
 import path from 'path';
 
@@ -30,6 +30,18 @@ export function initDB() {
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
         CREATE INDEX IF NOT EXISTS idx_archives_user ON archives(user_id);
+
+        -- 新增：脑洞卡片表
+        -- 性能优化：content 存储为 JSON 字符串，避免字段过多导致扩展困难
+        CREATE TABLE IF NOT EXISTS idea_cards (
+            id TEXT PRIMARY KEY,
+            user_id TEXT,
+            title TEXT, 
+            content TEXT, 
+            created_at TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_idea_cards_user ON idea_cards(user_id);
     `);
     console.log(`[DB] Database initialized at ${DB_PATH} (WAL mode: ON)`);
 }
@@ -98,7 +110,37 @@ export function deleteArchive(id: string, userId: string): void {
     stmt.run(id, userId);
 }
 
-// === Admin Functions (新增后台管理功能) ===
+// === Idea Cards (新增) ===
+
+/**
+ * 创建脑洞卡片
+ */
+export function createIdeaCard(id: string, userId: string, data: IdeaCardData): DbIdeaCard {
+    const stmt = db.prepare('INSERT INTO idea_cards (id, user_id, title, content, created_at) VALUES (?, ?, ?, ?, ?)');
+    const now = new Date().toISOString();
+    const contentStr = JSON.stringify(data);
+    stmt.run(id, userId, data.title, contentStr, now);
+    return { id, user_id: userId, title: data.title, content: contentStr, created_at: now };
+}
+
+/**
+ * 获取用户所有脑洞卡片
+ */
+export function getIdeaCardsByUser(userId: string): DbIdeaCard[] {
+    const stmt = db.prepare('SELECT * FROM idea_cards WHERE user_id = ? ORDER BY created_at DESC');
+    return stmt.all(userId) as DbIdeaCard[];
+}
+
+/**
+ * 删除脑洞卡片
+ */
+export function deleteIdeaCard(id: string, userId: string): void {
+    const stmt = db.prepare('DELETE FROM idea_cards WHERE id = ? AND user_id = ?');
+    stmt.run(id, userId);
+}
+
+
+// === Admin Functions ===
 
 /**
  * 获取系统统计信息
@@ -106,11 +148,13 @@ export function deleteArchive(id: string, userId: string): void {
 export function getSystemStats() {
     const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
     const archiveCount = db.prepare('SELECT COUNT(*) as count FROM archives').get() as { count: number };
+    const cardCount = db.prepare('SELECT COUNT(*) as count FROM idea_cards').get() as { count: number }; // 新增统计
     const lastActive = db.prepare('SELECT updated_at FROM archives ORDER BY updated_at DESC LIMIT 1').get() as { updated_at: string } | undefined;
 
     return {
         totalUsers: userCount.count,
         totalArchives: archiveCount.count,
+        totalCards: cardCount.count,
         lastActiveTime: lastActive?.updated_at || '无数据'
     };
 }
@@ -123,14 +167,16 @@ export function getAllUsers(): User[] {
 }
 
 /**
- * 删除用户及其所有存档
+ * 删除用户及其所有数据 (级联删除 archives 和 idea_cards)
  */
 export function deleteUserFull(userId: string) {
     const deleteArchives = db.prepare('DELETE FROM archives WHERE user_id = ?');
+    const deleteCards = db.prepare('DELETE FROM idea_cards WHERE user_id = ?');
     const deleteUser = db.prepare('DELETE FROM users WHERE id = ?');
     
     const transaction = db.transaction(() => {
         deleteArchives.run(userId);
+        deleteCards.run(userId);
         deleteUser.run(userId);
     });
     

@@ -15,11 +15,20 @@ export interface NovelSettings {
     tone: string; // 基调
 }
 
-// 新增：参考小说接口
+// 参考小说接口
 export interface ReferenceNovel {
     title: string;
     intro: string;
     url?: string;
+}
+
+// === 新增：脑洞卡片数据结构 (对应数据库 JSONContent) ===
+export interface IdeaCardData {
+    title: string;
+    intro: string;
+    highlight: string;
+    explosive_point: string;
+    golden_finger: string;
 }
 
 // 步骤枚举
@@ -56,4 +65,13 @@ export interface Archive {
     content: string; // JSON string of { settings, history }
     created_at: string;
     updated_at: string;
+}
+
+// 新增：脑洞卡片 DB 模型
+export interface DbIdeaCard {
+    id: string;
+    user_id: string;
+    title: string;
+    content: string; // JSON string of IdeaCardData
+    created_at: string;
 }

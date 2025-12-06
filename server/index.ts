@@ -18,7 +18,6 @@ try {
 } catch (e: any) {
     logger.error("数据库初始化失败", { error: e.message });
     // 使用 process.exit(1) 而不是 casting，确保 Node 环境下正常退出
-    // 修复 TS 报错: Property 'exit' does not exist on type 'Process'
     if (typeof process !== 'undefined') {
         (process as any).exit(1);
     }
@@ -144,6 +143,7 @@ app.post('/api/auth/login', async (c) => {
 
 app.use('/api/generate', jwt({ secret: JWT_SECRET }));
 app.use('/api/archives/*', jwt({ secret: JWT_SECRET }));
+app.use('/api/cards/*', jwt({ secret: JWT_SECRET })); // 新增
 
 // AI 生成 (受保护)
 app.post('/api/generate', async (c) => {
@@ -158,7 +158,7 @@ app.post('/api/generate', async (c) => {
             settings: NovelSettings, 
             step: WorkflowStep,
             context?: string,
-            references?: ReferenceNovel[] // 新增参数
+            references?: ReferenceNovel[] 
         };
 
         if (!settings || !step) return c.json({ error: "Missing parameters" }, 400);
@@ -170,7 +170,7 @@ app.post('/api/generate', async (c) => {
                 case WorkflowStep.IDEA: 
                     prompt = PROMPT_BUILDERS.IDEA(settings, context); 
                     break;
-                // 新增：分析仿写模式
+                // 分析仿写模式
                 case WorkflowStep.ANALYSIS_IDEA:
                     if (!references || references.length === 0) {
                         return c.json({ error: "分析模式需要提供参考小说" }, 400);
@@ -189,9 +189,12 @@ app.post('/api/generate', async (c) => {
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
-                temperature: 0.85, // 稍微提高创造性
+                temperature: 0.85, 
                 topP: 0.95,
                 topK: 40,
+                // 注意：我们这里不强制 responseMimeType: 'application/json'，
+                // 因为流式传输 JSON 很容易被前端解析器搞挂。
+                // 我们让模型输出纯文本 JSON 字符串，前端流式接收文本，最后再 parse。
             }
         });
 
@@ -256,13 +259,9 @@ app.post('/api/archives', async (c) => {
             return c.json({ success: true, id });
         } else {
             const newId = crypto.randomUUID();
-            // 创建存档并获取完整的数据库记录对象
             const archive = db.createArchive(newId, payload.id, title, contentStr);
             logger.info(`用户 ${payload.username} 创建了新存档: ${newId}`);
             
-            // 返回解包后的完整对象，修复前端列表显示空白的问题
-            // 必须解构 ...archive 以包含 title, user_id, created_at 等字段
-            // 并手动附带 settings 和 history，因为 archive.content 被设为 undefined
             return c.json({ 
                 ...archive, 
                 settings, 
@@ -286,6 +285,68 @@ app.delete('/api/archives/:id', (c) => {
         return c.json({ success: true });
     } catch (e: any) {
         logger.error(`删除存档失败`, { error: e.message });
+        return c.json({ error: '删除失败' }, 500);
+    }
+});
+
+// === 脑洞卡片接口 (新增) ===
+
+// 获取脑洞卡片
+app.get('/api/cards', (c) => {
+    const payload = c.get('jwtPayload');
+    try {
+        const cards = db.getIdeaCardsByUser(payload.id);
+        const result = cards.map(c => {
+            try {
+                const content = JSON.parse(c.content);
+                // 展平 JSON 结构
+                return { 
+                    id: c.id, 
+                    userId: c.user_id, 
+                    title: c.title, 
+                    created_at: c.created_at,
+                    ...content 
+                };
+            } catch(e) { return c; }
+        });
+        return c.json(result);
+    } catch (e: any) {
+        logger.error("获取脑洞卡片失败", { error: e.message });
+        return c.json({ error: "获取失败" }, 500);
+    }
+});
+
+// 保存脑洞卡片
+app.post('/api/cards', async (c) => {
+    const payload = c.get('jwtPayload');
+    try {
+        const data = await c.req.json();
+        // data 包含 title, intro, highlight, explosive_point, golden_finger
+        const id = crypto.randomUUID();
+        const card = db.createIdeaCard(id, payload.id, data);
+        logger.info(`用户 ${payload.username} 保存了脑洞卡片: ${data.title}`);
+        
+        return c.json({ 
+            id: card.id, 
+            userId: card.user_id, 
+            title: card.title, 
+            created_at: card.created_at,
+            ...data
+        });
+    } catch (e: any) {
+        logger.error("保存脑洞卡片失败", { error: e.message });
+        return c.json({ error: "保存失败" }, 500);
+    }
+});
+
+// 删除脑洞卡片
+app.delete('/api/cards/:id', (c) => {
+    const payload = c.get('jwtPayload');
+    const id = c.req.param('id');
+    try {
+        db.deleteIdeaCard(id, payload.id);
+        return c.json({ success: true });
+    } catch (e: any) {
         return c.json({ error: '删除失败' }, 500);
     }
 });

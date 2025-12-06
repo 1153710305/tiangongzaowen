@@ -8,20 +8,18 @@ import { NovelSettings, ReferenceNovel } from "./types.ts";
 export const SYSTEM_INSTRUCTION = `
 你是一位拥有10年经验的资深网文主编，同时也是一位在番茄/起点平台拥有多部百万收藏作品的"大神"级作家。
 你的专长是：
-1. **捕捉热点**：深知当前中国网文市场的流行趋势（如规则怪谈、年代文、神豪、反派偷听心声等）。
-2. **黄金三章**：极其擅长开篇设计，懂得如何在第一章抛出钩子（Hook），第三章推向第一个高潮。
-3. **情绪价值**：你写的小说核心是为了提供"情绪价值"（爽、甜、虐、惊）。
-4. **节奏把控**：拒绝水文，强调"期待感-压抑-爆发"的循环。
+1. **捕捉热点**：深知当前中国网文市场的流行趋势。
+2. **黄金三章**：极其擅长开篇设计。
+3. **情绪价值**：提供爽、甜、虐、惊的情绪体验。
+4. **结构化思维**：能够将复杂的创意拆解为标准化的卡片。
 
 在生成内容时，请遵循以下原则：
-- **格式**：使用Markdown格式，结构清晰。
-- **语言**：通俗易懂，极具画面感，少用形容词堆砌，多用动词和对话。
-- **受众**：针对手机阅读习惯，段落不宜过长，金句频出。
+- **格式**：若被要求返回 JSON，必须保证 JSON 格式的严格正确性（无 Markdown 标记）。
+- **语言**：通俗易懂，极具画面感。
 - **核心**：必须突出"金手指"的作用，让读者感到"爽"。
 
 严禁：
 - 说教式的文字。
-- 过于文青、晦涩的描写。
 - 逻辑硬伤。
 `;
 
@@ -30,79 +28,78 @@ export const SYSTEM_INSTRUCTION = `
  * 接收参数并返回格式化后的 Prompt
  */
 export const PROMPT_BUILDERS = {
-    // 创意脑暴 (支持结构化生成 和 一句话灵感生成)
+    // 创意脑暴 (JSON 结构化版)
     IDEA: (settings: NovelSettings, context?: string) => {
-        // 模式 B: 基于一句话灵感 (Context-based)
+        const baseReq = `
+请生成 3 个具有"爆款潜质"的小说开篇创意。
+必须严格按照 JSON 数组格式返回，不要包含任何 Markdown 代码块标记（如 \`\`\`json），直接返回 JSON 字符串。
+数组中每个对象必须包含以下字段：
+- title: 书名 (String)
+- intro: 一句话简介，吸引点击 (String)
+- highlight: 核心爽点 (String)
+- explosive_point: 开篇爆点/冲突 (String)
+- golden_finger: 金手指设定 (String)
+`;
+
         if (context && context.trim().length > 0) {
             return `
-请基于用户提供的一个核心灵感（脑洞），进行专业网文扩充，生成3个具有"爆款潜质"的具体开篇方案。
+${baseReq}
 
 **核心灵感**：
 "${context}"
 
 **辅助要求**：
-- **受众**：${settings.targetAudience === 'male' ? '男频（热血、升级、征服）' : '女频（情感、脑洞、复仇）'}
-- **建议基调**：${settings.tone} (请在生成时融入此基调)
+- **受众**：${settings.targetAudience === 'male' ? '男频' : '女频'}
+- **建议基调**：${settings.tone}
 
-**生成任务**：
-请发散思维，将这个简单的灵感扩充为3个截然不同的故事方向（例如：一个是系统流，一个是重生流，一个是诡异流，或者其他适合该灵感的方向）。
-
-**格式要求**：
-1. 每个方案包含：【书名】、【一句话简介】（吸引点击）、【核心爽点】、【开篇冲突】、【金手指设定】。
-2. 必须要符合当前网文市场的快节奏需求。
-请以 JSON 格式或清晰的 Markdown 列表返回。
+请基于灵感进行裂变，生成 3 个截然不同的方向。
 `;
         }
 
-        // 模式 A: 基于结构化配置 (Parametric)
         return `
-请根据以下设定，构思3个具有"爆款潜质"的小说开篇创意（脑洞）：
+${baseReq}
+
+**设定要求**：
 - **流派**：${settings.genre}
 - **核心梗**：${settings.trope}
 - **主角类型**：${settings.protagonistType}
 - **金手指**：${settings.goldenFinger}
-- **受众**：${settings.targetAudience === 'male' ? '男频（热血、升级、征服）' : '女频（情感、脑洞、复仇）'}
+- **受众**：${settings.targetAudience === 'male' ? '男频' : '女频'}
 - **基调**：${settings.tone}
-
-要求：
-1. 每个创意包含：【书名】、【一句话简介】（吸引点击）、【核心爽点】、【开篇冲突】。
-2. 必须要符合当前网文市场的快节奏需求。
-3. 创意之间要有差异化。
-请以 JSON 格式或清晰的 Markdown 列表返回。
 `;
     },
 
-    // 新增：爆款分析与仿写
+    // 爆款分析与仿写 (JSON 结构化版)
     ANALYSIS_IDEA: (settings: NovelSettings, references: ReferenceNovel[]) => {
         const refsText = references.map((r, i) => `
-**案例 ${i + 1}**:
-- 书名：${r.title}
-- 简介/核心内容：${r.intro}
+案例 ${i + 1}:
+书名：${r.title}
+简介：${r.intro}
 `).join('\n');
 
         return `
-请作为一名市场嗅觉敏锐的网文主编，对用户提供的以下几部"爆款小说"进行深度拆解分析，并基于此生成新的创意。
+请作为一名市场嗅觉敏锐的网文主编，对提供的爆款小说进行深度拆解，并基于其"爆火基因"生成 3 个全新的创意。
 
 **参考案例**：
 ${refsText}
 
-**任务一：深度分析（Why it works?）**
-请简要分析这些参考小说为什么会火？
-- 它们共同的**核心爽点**是什么？
-- 它们满足了读者的什么**核心欲望**？
-- 它们的**开篇钩子**是如何设计的？
+**任务要求**：
+1. 分析参考案例的核心爽点和欲望机制。
+2. 结合设定（受众：${settings.targetAudience === 'male' ? '男频' : '女频'}，基调：${settings.tone}）进行创意裂变。
+3. **不要照抄**，要换题材或背景。
 
-**任务二：创意裂变（Generate New Ideas）**
-基于上述分析的"爆火基因"，结合当前设定（受众：${settings.targetAudience === 'male' ? '男频' : '女频'}，基调：${settings.tone}），**创作3个全新的小说开篇脑洞**。
-
-要求：
-1. **不要照抄**参考案例，而是学习其"逻辑"和"节奏"，换一个题材或背景进行创新（例如：如果参考的是都市神豪，你可以尝试写成高武神豪或末世资源流）。
-2. 每个新创意需包含：【书名】、【一句话简介】、【核心爽点分析】（解释为什么这个设定能火）、【黄金三章走向】。
-3. 必须符合当前网文平台的调性。
+**返回格式**：
+必须严格按照 JSON 数组格式返回，不要包含任何 Markdown 代码块标记，直接返回 JSON 字符串。
+数组中每个对象包含：
+- title: 书名 (String)
+- intro: 一句话简介 (String)
+- highlight: 核心爽点/爆火基因分析 (String)
+- explosive_point: 黄金三章走向/爆点 (String)
+- golden_finger: 金手指/特殊能力 (String)
 `;
     },
 
-    // 大纲生成
+    // 大纲生成 (保持 Markdown)
     OUTLINE: (settings: NovelSettings, context: string) => `
 基于创意/上下文：
 "${context}"
@@ -117,7 +114,7 @@ ${refsText}
 4. 每一章都要注明【本章爽点】和【结尾钩子】（如何吸引读者点开下一章）。
 `,
 
-    // 人设生成
+    // 人设生成 (保持 Markdown)
     CHARACTER: (settings: NovelSettings) => `
 请为这部小说设计核心人物小传（主角 + 1个核心配角 + 1个反派）。
 设定参考：${JSON.stringify(settings)}
@@ -131,7 +128,7 @@ ${refsText}
 - **金手指/能力详情**（仅限主角）：详细说明能力的限制和升级路线。
 `,
 
-    // 正文写作
+    // 正文写作 (保持 Markdown)
     CHAPTER: (settings: NovelSettings, context: string) => `
 请撰写正文。
 **上下文/大纲**：${context}

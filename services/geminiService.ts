@@ -1,6 +1,6 @@
 
 import { logger } from "./loggerService";
-import { NovelSettings, WorkflowStep, Archive, ChatMessage, ReferenceNovel } from "../types";
+import { NovelSettings, WorkflowStep, Archive, ChatMessage, ReferenceNovel, IdeaCard } from "../types";
 import { API_ENDPOINTS } from "../constants";
 import { authService } from "./authService";
 
@@ -148,6 +148,58 @@ class ApiService {
             if (!res.ok) throw new Error("删除失败");
         } catch (error) {
             logger.error("Delete archive error", error);
+            throw error;
+        }
+    }
+
+    // === 脑洞卡片相关 (新增) ===
+
+    /**
+     * 获取用户脑洞卡片
+     */
+    public async getIdeaCards(): Promise<IdeaCard[]> {
+        const authHeaders = authService.getAuthHeader();
+        try {
+            const res = await fetch(API_ENDPOINTS.CARDS, { headers: { ...authHeaders } as any });
+            if (!res.ok) throw new Error("获取卡片失败");
+            return await res.json();
+        } catch (error) {
+            logger.error("Fetch cards error", error);
+            return [];
+        }
+    }
+
+    /**
+     * 保存脑洞卡片
+     */
+    public async saveIdeaCard(cardData: Omit<IdeaCard, 'id' | 'userId' | 'created_at'>): Promise<IdeaCard> {
+        const authHeaders = authService.getAuthHeader();
+        try {
+            const res = await fetch(API_ENDPOINTS.CARDS, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders } as any,
+                body: JSON.stringify(cardData)
+            });
+            if (!res.ok) throw new Error("保存卡片失败");
+            return await res.json();
+        } catch (error) {
+            logger.error("Save card error", error);
+            throw error;
+        }
+    }
+
+    /**
+     * 删除脑洞卡片
+     */
+    public async deleteIdeaCard(id: string): Promise<void> {
+        const authHeaders = authService.getAuthHeader();
+        try {
+            const res = await fetch(`${API_ENDPOINTS.CARDS}/${id}`, {
+                method: 'DELETE',
+                headers: { ...authHeaders } as any
+            });
+            if (!res.ok) throw new Error("删除失败");
+        } catch (error) {
             throw error;
         }
     }
