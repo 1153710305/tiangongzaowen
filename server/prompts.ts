@@ -84,12 +84,27 @@ ${refsText}
 设定参考：${JSON.stringify(settings)}
 `,
 
-    // 正文写作
-    CHAPTER: (settings: NovelSettings, context: string) => `
-请撰写正文。
-**上下文/大纲**：${context}
-**文风要求**：${settings.pacing === 'fast' ? '极爽、快节奏、短句为主' : '铺垫细腻、氛围感强'}
-字数：2000字左右。
+    // 正文写作 (Updated for Reference System)
+    CHAPTER: (settings: NovelSettings, context: string, references?: string) => `
+请作为一名网文大神撰写/续写正文。
+
+**基本设定**：
+- 风格：${settings.pacing === 'fast' ? '快节奏、爽点密集' : '铺垫细腻、氛围感强'} (${settings.tone})
+- 受众：${settings.targetAudience}
+
+${references ? `
+**⚠️ 必须参考以下素材资料**：
+${references}
+` : ''}
+
+**当前正文/上文**：
+"${context}"
+
+**写作要求**：
+1. 承接上文，保持人设一致。
+2. 画面感强，多用动词。
+3. 如果提供了参考资料（如思维导图设定、前文摘要），请务必在文中体现相关细节。
+4. 输出长度：2000字左右。
 `,
 
     // 思维导图节点扩展 (New)

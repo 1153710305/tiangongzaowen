@@ -1,4 +1,14 @@
 
+// === 布局定义 ===
+export type LayoutType = 'right' | 'down' | 'timeline' | 'list';
+
+export const LAYOUTS: { id: LayoutType; name: string }[] = [
+    { id: 'right', name: '➡️ 逻辑结构图 (默认)' },
+    { id: 'down', name: '⬇️ 组织结构图' },
+    { id: 'timeline', name: '⏱️ 时间轴视图' },
+    { id: 'list', name: '📝 目录列表' },
+];
+
 // === 主题定义 ===
 export interface ThemeConfig {
     id: string;
@@ -75,6 +85,37 @@ export const THEMES: Record<string, ThemeConfig> = {
             text: 'text-green-800',
             input: 'text-green-900',
             dragTarget: 'ring-2 ring-yellow-500 bg-green-50'
+        }
+    },
+    retro: {
+        id: 'retro',
+        name: '📜 复古羊皮',
+        bgContainer: 'bg-[#fdf6e3]',
+        bgGridColor: '#eee8d5',
+        lineColor: 'border-stone-400',
+        node: {
+            root: 'bg-[#cb4b16] text-[#fdf6e3] shadow-lg border-none',
+            base: 'bg-[#eee8d5] border-[#b58900] text-[#586e75] shadow-sm font-serif',
+            selected: 'ring-2 ring-[#d33682] bg-[#fdf6e3]',
+            text: 'text-[#586e75]',
+            input: 'text-[#657b83]',
+            dragTarget: 'ring-2 ring-[#859900] bg-[#fdf6e3]'
+        }
+    },
+    cyberpunk: {
+        id: 'cyberpunk',
+        name: '🤖 赛博霓虹',
+        bgContainer: 'bg-black',
+        bgGridColor: '#333',
+        lineColor: 'border-none bg-gradient-to-b from-cyan-500 to-purple-500 w-[2px]', 
+        // 注意：Cyberpunk 的线条比较特殊，这里还是用 class 控制，我们在 Renderer 里特殊处理一下线宽
+        node: {
+            root: 'bg-black border border-cyan-400 text-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.8)]',
+            base: 'bg-black border border-purple-500 text-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.4)]',
+            selected: 'ring-2 ring-yellow-400 bg-gray-900 text-yellow-300',
+            text: 'text-purple-300',
+            input: 'text-cyan-300',
+            dragTarget: 'ring-2 ring-green-400 bg-gray-900'
         }
     }
 };

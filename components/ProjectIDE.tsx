@@ -4,6 +4,7 @@ import { Project, ProjectStructure, Chapter, MindMap } from '../types';
 import { apiService } from '../services/geminiService';
 import { logger } from '../services/loggerService';
 import { MindMapEditor } from './MindMapEditor';
+import { ChapterEditor } from './ChapterEditor';
 import { DEFAULT_NOVEL_SETTINGS } from '../constants';
 
 interface Props {
@@ -47,12 +48,20 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
 
     const handleFileClick = async (type: FileType, id: string, title: string) => {
         // 如果是 MindMap，需要单独获取详细数据 (包含大 JSON)
+        // 如果是 Chapter，现在也需要获取 Content (数据库分离了)
         if (type === 'mindmap') {
             try {
                 const detail = await apiService.getMindMapDetail(project.id, id);
                 setActiveFile({ type, id, title, data: detail });
             } catch (e) {
                 logger.error("加载导图详情失败", e);
+            }
+        } else if (type === 'chapter') {
+             try {
+                const detail = await apiService.getChapterDetail(project.id, id);
+                setActiveFile({ type, id, title, data: detail });
+            } catch (e) {
+                logger.error("加载章节详情失败", e);
             }
         } else {
             setActiveFile({ type, id, title });
@@ -63,10 +72,20 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
         try {
             const newMap = await apiService.createMindMap(project.id);
             await loadStructure();
-            // 自动打开新建的
             setActiveFile({ type: 'mindmap', id: newMap.id, title: newMap.title, data: newMap });
         } catch (e) {
             alert('创建失败');
+        }
+    };
+    
+    const handleCreateChapter = async () => {
+        try {
+            const order = structure.chapters.length + 1;
+            const newChap = await apiService.createChapter(project.id, `第${order}章`, order);
+            await loadStructure();
+            setActiveFile({ type: 'chapter', id: newChap.id, title: newChap.title, data: newChap });
+        } catch (e) {
+            alert('创建章节失败');
         }
     };
 
@@ -78,25 +97,37 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
         if (activeFile?.id === id) setActiveFile(null);
     };
 
+    const handleDeleteChapter = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!confirm('确定删除此章节吗？')) return;
+        await apiService.deleteChapter(project.id, id);
+        await loadStructure();
+        if (activeFile?.id === id) setActiveFile(null);
+    };
+
     const handleSaveMindMap = async (mapId: string, title: string, dataStr: string) => {
         try {
             await apiService.updateMindMap(project.id, mapId, title, dataStr);
-            // 自动保存成功不弹窗，只记录日志
             logger.info(`思维导图已保存: ${title}`);
-            
-            // 为了保持侧边栏标题同步，可以重新加载结构，但要注意避免无限刷新
-            // 这里简单重新获取列表即可，通常很快
             const newStruct = await apiService.getProjectStructure(project.id);
             setStructure(newStruct);
-
-            // 更新当前 activeFile 标题
-            if (activeFile?.id === mapId) {
-                setActiveFile(prev => prev ? { ...prev, title } : null);
-            }
+            if (activeFile?.id === mapId) setActiveFile(prev => prev ? { ...prev, title } : null);
         } catch (e) {
             logger.error("保存失败", e);
-            alert("保存失败，请检查网络连接");
-            throw e; // 抛出异常让子组件感知
+            alert("保存失败");
+        }
+    };
+    
+    const handleSaveChapter = async (chapId: string, title: string, content: string) => {
+        try {
+            await apiService.updateChapter(project.id, chapId, title, content);
+            logger.info(`章节已保存: ${title}`);
+            // Update list title
+            const newStruct = await apiService.getProjectStructure(project.id);
+            setStructure(newStruct);
+            if (activeFile?.id === chapId) setActiveFile(prev => prev ? { ...prev, title, data: { ...prev.data, title, content } } : null);
+        } catch (e) {
+            logger.error("保存章节失败", e);
         }
     };
 
@@ -112,7 +143,7 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
                     <span className="text-slate-600">/</span>
                     <span className="text-sm text-slate-300">{project.title}</span>
                 </div>
-                <div className="text-xs text-slate-500">IDE Environment v2.8</div>
+                <div className="text-xs text-slate-500">IDE Environment v2.9</div>
             </div>
 
             <div className="flex-1 flex overflow-hidden">
@@ -152,18 +183,22 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
 
                             {/* Chapters */}
                             <div>
-                                <div className="flex items-center gap-1 text-indigo-400 text-sm font-bold px-2 py-1 mb-1">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                                    正文卷宗 (Chapters)
+                                <div className="flex items-center justify-between text-indigo-400 px-2 py-1 mb-1 group">
+                                    <div className="flex items-center gap-1 text-sm font-bold">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                        正文卷宗
+                                    </div>
+                                    <button onClick={handleCreateChapter} className="opacity-0 group-hover:opacity-100 hover:text-white" title="新建章节">+</button>
                                 </div>
                                 <div className="pl-4 space-y-1">
                                     {structure.chapters.map(chap => (
                                         <div 
                                             key={chap.id} 
                                             onClick={() => handleFileClick('chapter', chap.id, chap.title)}
-                                            className={`cursor-pointer px-2 py-1 rounded text-xs truncate transition-colors ${activeFile?.id === chap.id ? 'bg-indigo-900/30 text-indigo-200' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                                            className={`group flex justify-between items-center cursor-pointer px-2 py-1 rounded text-xs truncate transition-colors ${activeFile?.id === chap.id ? 'bg-indigo-900/30 text-indigo-200' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
                                         >
-                                            {chap.title}
+                                            <span className="truncate">{chap.title}</span>
+                                            <button onClick={(e) => handleDeleteChapter(chap.id, e)} className="opacity-0 group-hover:opacity-100 hover:text-red-400">×</button>
                                         </div>
                                     ))}
                                     {structure.chapters.length === 0 && <div className="text-[10px] text-slate-600 italic px-2">为空</div>}
@@ -177,7 +212,7 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
                 <div className="flex-1 bg-[#1e1e1e] flex flex-col relative overflow-hidden">
                     <div className="h-9 bg-[#2d2d2d] flex items-center px-2 space-x-1 overflow-x-auto border-b border-black/50 flex-shrink-0">
                         {activeFile && (
-                            <div className="bg-[#1e1e1e] text-xs px-3 py-1.5 min-w-[100px] border-t-2 border-primary text-slate-200 flex items-center justify-between gap-2">
+                            <div className="bg-[#1e1e1e] text-xs px-3 py-1.5 min-w-[100px] border-t-2 border-primary text-slate-200 flex items-center justify-between gap-2 select-none">
                                 <span>{activeFile.title}</span>
                                 <span onClick={(e) => { e.stopPropagation(); setActiveFile(null); }} className="hover:text-red-400 cursor-pointer">×</span>
                             </div>
@@ -187,18 +222,17 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
                     <div className="flex-1 overflow-hidden relative">
                         {activeFile ? (
                             <div className="h-full w-full">
-                                {activeFile.type === 'chapter' && (
-                                    <div className="p-8 h-full overflow-y-auto">
-                                        <div className="max-w-3xl mx-auto prose prose-invert prose-slate">
-                                            <h1 className="text-3xl font-bold mb-6 text-slate-100">{activeFile.title}</h1>
-                                            <div className="text-slate-500 italic border-l-4 border-indigo-600 pl-4 py-2 bg-indigo-900/10">
-                                                [系统提示] 此处为正文编辑区。当前内容为空，等待 AI 生成或人工撰写。
-                                            </div>
-                                            <div className="mt-8 h-96 border border-dashed border-slate-700 rounded-lg flex items-center justify-center text-slate-600">
-                                                正文编辑器占位符 (Editor Placeholder)
-                                            </div>
-                                        </div>
-                                    </div>
+                                {activeFile.type === 'chapter' && activeFile.data && (
+                                    <ChapterEditor 
+                                        projectId={project.id}
+                                        chapter={activeFile.data}
+                                        availableResources={{
+                                            chapters: structure.chapters,
+                                            maps: structure.maps
+                                        }}
+                                        novelSettings={DEFAULT_NOVEL_SETTINGS}
+                                        onSave={handleSaveChapter}
+                                    />
                                 )}
                                 {activeFile.type === 'mindmap' && activeFile.data && (
                                     <MindMapEditor 
@@ -206,7 +240,7 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
                                         mapData={activeFile.data} 
                                         onSave={handleSaveMindMap}
                                         novelSettings={DEFAULT_NOVEL_SETTINGS}
-                                        availableMaps={structure.maps} // 传递所有导图列表，供引用使用
+                                        availableMaps={structure.maps}
                                     />
                                 )}
                             </div>

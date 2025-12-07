@@ -189,6 +189,7 @@ export function createChapter(id: string, projectId: string, title: string, cont
     return { id, project_id: projectId, title, content, order_index: orderIndex, updated_at: now };
 }
 
+// 列表查询优化：不返回 content，减少IO
 export function getChaptersByProject(projectId: string): Omit<DbChapter, 'content'>[] {
     const stmt = db.prepare('SELECT id, project_id, title, order_index, updated_at FROM chapters WHERE project_id = ? ORDER BY order_index ASC');
     return stmt.all(projectId) as Omit<DbChapter, 'content'>[];
@@ -197,6 +198,17 @@ export function getChaptersByProject(projectId: string): Omit<DbChapter, 'conten
 export function getChapterById(id: string): DbChapter | undefined {
     const stmt = db.prepare('SELECT * FROM chapters WHERE id = ?');
     return stmt.get(id) as DbChapter | undefined;
+}
+
+export function updateChapter(id: string, projectId: string, title: string, content: string): void {
+    const stmt = db.prepare('UPDATE chapters SET title = ?, content = ?, updated_at = ? WHERE id = ? AND project_id = ?');
+    const now = new Date().toISOString();
+    stmt.run(title, content, now, id, projectId);
+}
+
+export function deleteChapter(id: string, projectId: string): void {
+    const stmt = db.prepare('DELETE FROM chapters WHERE id = ? AND project_id = ?');
+    stmt.run(id, projectId);
 }
 
 // === Mind Maps ===

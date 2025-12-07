@@ -158,7 +158,10 @@ app.post('/api/generate', async (c) => {
                     break;
                 case WorkflowStep.OUTLINE: prompt = PROMPT_BUILDERS.OUTLINE(settings, context || ''); break;
                 case WorkflowStep.CHARACTER: prompt = PROMPT_BUILDERS.CHARACTER(settings); break;
-                case WorkflowStep.CHAPTER: prompt = PROMPT_BUILDERS.CHAPTER(settings, context || ''); break;
+                case WorkflowStep.CHAPTER: 
+                    // 处理 Context 和 References
+                    prompt = PROMPT_BUILDERS.CHAPTER(settings, context || '', typeof references === 'string' ? references : undefined); 
+                    break;
                 case WorkflowStep.MIND_MAP_NODE:
                      prompt = PROMPT_BUILDERS.MIND_MAP_NODE(context || '', extraPrompt || '', typeof references === 'string' ? references : undefined);
                      break;
@@ -367,6 +370,39 @@ app.delete('/api/projects/:pid/maps/:mid', (c) => {
     db.deleteMindMap(mapId, projectId);
     return c.json({ success: true });
 });
+
+// === Chapter CRUD (New) ===
+
+app.post('/api/projects/:pid/chapters', async (c) => {
+    const projectId = c.req.param('pid');
+    const { title, order } = await c.req.json();
+    const chapterId = crypto.randomUUID();
+    const chap = db.createChapter(chapterId, projectId, title || '新章节', '', order || 99);
+    return c.json(chap);
+});
+
+// 获取单个章节详情 (含 content)
+app.get('/api/projects/:pid/chapters/:cid', (c) => {
+    const chap = db.getChapterById(c.req.param('cid'));
+    if (!chap) return c.json({ error: "Not found" }, 404);
+    return c.json(chap);
+});
+
+app.put('/api/projects/:pid/chapters/:cid', async (c) => {
+    const projectId = c.req.param('pid');
+    const chapterId = c.req.param('cid');
+    const { title, content } = await c.req.json();
+    db.updateChapter(chapterId, projectId, title, content);
+    return c.json({ success: true });
+});
+
+app.delete('/api/projects/:pid/chapters/:cid', (c) => {
+    const projectId = c.req.param('pid');
+    const chapterId = c.req.param('cid');
+    db.deleteChapter(chapterId, projectId);
+    return c.json({ success: true });
+});
+
 
 export default app;
 

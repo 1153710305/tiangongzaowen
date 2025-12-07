@@ -1,6 +1,6 @@
 
 import { logger } from "./loggerService";
-import { NovelSettings, WorkflowStep, Archive, ChatMessage, ReferenceNovel, IdeaCard, Project, ProjectStructure, MindMap } from "../types";
+import { NovelSettings, WorkflowStep, Archive, ChatMessage, ReferenceNovel, IdeaCard, Project, ProjectStructure, MindMap, Chapter } from "../types";
 import { API_ENDPOINTS } from "../constants";
 import { authService } from "./authService";
 
@@ -198,6 +198,46 @@ class ApiService {
             headers: { ...authHeaders } as any
         });
         if (!res.ok) throw new Error("删除失败");
+    }
+
+    // === 章节 CRUD (New) ===
+    public async createChapter(projectId: string, title: string, order: number): Promise<Chapter> {
+        const authHeaders = authService.getAuthHeader();
+        const res = await fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}/chapters`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders } as any,
+            body: JSON.stringify({ title, order })
+        });
+        if (!res.ok) throw new Error("创建章节失败");
+        return await res.json();
+    }
+
+    public async getChapterDetail(projectId: string, chapterId: string): Promise<Chapter> {
+        const authHeaders = authService.getAuthHeader();
+        const res = await fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}/chapters/${chapterId}`, { 
+            headers: { ...authHeaders } as any 
+        });
+        if (!res.ok) throw new Error("获取章节详情失败");
+        return await res.json();
+    }
+
+    public async updateChapter(projectId: string, chapterId: string, title: string, content: string): Promise<void> {
+        const authHeaders = authService.getAuthHeader();
+        const res = await fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}/chapters/${chapterId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...authHeaders } as any,
+            body: JSON.stringify({ title, content })
+        });
+        if (!res.ok) throw new Error("更新章节失败");
+    }
+
+    public async deleteChapter(projectId: string, chapterId: string): Promise<void> {
+        const authHeaders = authService.getAuthHeader();
+        const res = await fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}/chapters/${chapterId}`, {
+            method: 'DELETE',
+            headers: { ...authHeaders } as any
+        });
+        if (!res.ok) throw new Error("删除章节失败");
     }
 }
 

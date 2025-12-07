@@ -1,11 +1,11 @@
 
-# 天工造文 (SkyCraft Novel AI) - 企业级前后端分离版 (v2.8)
+# 天工造文 (SkyCraft Novel AI) - 企业级前后端分离版 (v2.9)
 
 > **架构理念**: 响应速度优先 (SQLite WAL + Hono + Streaming) | 稳定性优先 (Server Logger + Robust Error Handling) | 解耦优先 (Modular Router) | 资产化沉淀 (Structured Cards)
 
 本项目是一个专业的 AI 爆款网文生成系统，已从原型升级为可部署的前后端分离架构，并支持多用户登录、云端存档和全链路监控。
 
-**v2.8 更新：IDE 思维导图全功能上线。支持可视化节点编辑、增删改查及上下文感知的 AI 扩展。**
+**v2.9.1 更新：正文 IDE 升级。新增智能引用系统、正文 AI 续写及流式章节编辑功能。**
 
 ---
 
@@ -30,12 +30,15 @@
     *   **Archive Table**: 存储完整的小说生成历史。
     *   **IdeaCard Table**: 存储结构化的脑洞创意。
     *   **MindMaps Table**: 存储树状 JSON 结构的小说架构。采用 **WAL Mode** 并优化了查询策略（Listing 操作不查大 JSON 字段）。
-*   **Prompt Engineering**: 针对思维导图扩展新增 `MIND_MAP_NODE` 模式，支持上下文引用。
+    *   **Chapters Table**: 存储小说正文。**NEW**: 更新操作实现了原子化，列表查询不含正文内容以保证性能。
+*   **Prompt Engineering**: 针对思维导图扩展新增 `MIND_MAP_NODE` 模式，针对正文新增 `CHAPTER` 上下文注入模式。
 
 ### 2. 客户端 (Frontend) - 根目录
 *   **UI 框架**: React 18 + Tailwind CSS。
-*   **Component**: 新增 `MindMapEditor`，基于 Flexbox 实现递归树状图渲染。
-*   **AI Integration**: 支持流式 Markdown 解析，将 AI 生成的列表实时转化为思维导图节点。
+*   **Component**: 
+    *   `MindMapEditor`: 可视化递归树状图编辑器。
+    *   `ChapterEditor`: **NEW** 智能正文编辑器，支持 Shadow DOM 光标追踪。
+*   **AI Integration**: 支持流式 Markdown 解析，支持多资源上下文并发抓取。
 
 ---
 
@@ -56,14 +59,15 @@ v2.8 版本增强了 AI 生成接口的日志能力。每次 AI 请求（无论�
 ## 🖥 服务器部署详细指南 (Server)
 
 ### 1. 数据库变更 (Schema Migration)
-v2.8 完善了 `mind_maps` 表的 CRUD 操作。
+v2.9 完善了 `chapters` 表的 CRUD 操作。
 
 ```sql
-CREATE TABLE IF NOT EXISTS mind_maps (
+CREATE TABLE IF NOT EXISTS chapters (
     id TEXT PRIMARY KEY,
     project_id TEXT,
     title TEXT,
-    data TEXT, -- JSON 结构: { root: MindMapNode }
+    content TEXT, -- 存储大文本
+    order_index INTEGER,
     updated_at TEXT,
     FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
@@ -76,55 +80,25 @@ CREATE TABLE IF NOT EXISTS mind_maps (
 ### 1. IDE 创作模式 (Project IDE)
 1.  **新建/进入项目**：从脑洞卡片转化或直接创建项目。
 2.  **思维导图 (Mind Map)**：
-    *   **画布操作** (v2.8.5 NEW)：
-        *   **拖拽**：按住鼠标**左键**在空白处拖动即可平移画布。
-        *   **缩放**：使用顶部工具栏的 **[-][+]** 按钮进行缩放，或点击 **[回到根节点]** 复位。
-        *   *注：旧版的鼠标滚轮缩放已移除，以避免误操作。*
-    *   **节点操作**：
-        *   **编辑**：双击节点修改文本 (支持 Shift+Enter 换行)。
-        *   **移动**：拖拽节点到另一个节点上，即可将其移动为该节点的子节点。
-        *   **操作**：点击节点显示菜单，支持添加子节点、删除节点。
-    *   **AI 扩展高级用法**：
-        *   **上下文引用 (@)**：直接输入 `@`，选择**当前导图**中的其他节点。
-        *   **跨文件引用 (:)**：输入 `:`，选择项目内的**其他思维导图**。
-        *   **级联引用 (Cascade)**：先输入 `[参考导图:世界设定]` (通过 : 选择)，然后紧接着输入 `@`。此时下拉菜单会自动加载“世界设定”这张图里的所有节点供你选择！
-        *   **场景示例**：在写“第一章剧情”时，引用 `[参考导图:世界设定]` 里的 `[引用:境界划分]` 节点，AI 就能写出符合设定的升级剧情。
+    *   **布局切换**：支持逻辑结构图、组织结构图、时间轴视图。
+    *   **画布操作**：支持无限拖拽、缩放、主题切换。
+3.  **正文卷宗 (Chapters) - NEW**：
+    *   **智能引用**：
+        *   输入 `:` ：弹出资源菜单，可选择引用其他**章节**或**思维导图**。
+        *   输入 `@` ：**级联引用**。在输入 `[参考导图:xxx]` 后紧跟 `@`，可进一步选择该导图内的具体**节点**。
+    *   **AI 续写**：点击“AI 续写”时，系统会自动扫描文中的引用标签（如 `[引用节点:xxx]`），自动抓取对应的内容作为上下文发送给 AI，实现精准的设定一致性写作。
 
 ---
 
 ## 📝 版本历史 (Changelog)
 
-**v2.8.5 (Toolbar Interactions)**
-*   **UX**: 移除了鼠标滚轮缩放，改用工具栏按钮控制，防止误触。
-*   **UX**: 增加了“回到根节点”、“查看快捷键”等实用工具按钮。
+**v2.9.1 (Chapter Editor)**
+*   **Feature**: 正文编辑器升级。支持 `:` 和 `@` 触发的智能上下文引用。
+*   **Feature**: 章节增删改查 (CRUD) 完整支持。
+*   **AI**: 正文续写支持解析引用标签，自动注入设定资料。
 
-**v2.8.4 (Canvas Interactions)**
-*   **UX**: 实现了思维导图画布的**无限平移 (Pan)**。
-*   **Feature**: 支持**节点拖拽重组 (Drag & Drop)**，可轻松调整思维导图结构。
-
-**v2.8.3 (Cascading Context)**
-*   **Feature**: 思维导图编辑器新增级联引用功能。支持 `[参考导图:XXX] @` 语法，动态加载外部导图的节点结构并注入 AI 上下文。
-
-**v2.8.2 (Audit Logs)**
-*   **Backend**: 强化 AI 接口日志，记录完整的请求/响应体、Token 消耗和 API Key 摘要，助力 Prompt 调试。
-
-**v2.8.1 (Context Refinement)**
-*   **UX**: 优化了 AI 扩展输入框的引用体验。使用 Shadow Div 实现了 `@` 和 `:` 菜单的精确跟随。
-*   **Feature**: 新增 `:` 语法，支持跨文件引用其他思维导图的结构。
-
-**v2.8 (Mind Map Editor)**
-*   **Feature**: 思维导图可视化编辑器。支持递归渲染、节点拖拽(UI基础)、增删改。
-*   **AI**: 节点级 AI 扩展功能。支持使用 `@` 符号引用导图中的其他节点作为 Context。
-*   **Backend**: 完善了 `mind_maps` 的 PUT/DELETE 接口。
-*   **Schema**: 数据库 `mind_maps` 表结构定型，data 字段采用大 JSON 存储以优化单次读取性能。
-
-**v2.7.4 (Hotfix: DB Export)**
-*   **Server**: 修复了 `server/db.ts` 中 `createProject` 等函数未正确导出导致 `db.createProject is not a function` 错误的问题。
-
-**v2.7.3 (Stability Fix: Fetch Error)**
-*   **Server**: 优化 `GoogleGenAI` 初始化逻辑，修复 `fetch failed`。
-
-**v2.7 (IDE Environment)**
-*   **Architecture**: 引入项目、章节、思维导图三层结构。
+**v2.9 (Layout Engine)**
+*   **Feature**: 思维导图引入布局引擎，支持逻辑图(Right)、组织图(Down)、时间轴(Timeline)等多种结构切换。
+*   **UI**: 新增赛博朋克(Cyberpunk)和复古(Retro)主题。
 
 *Powered by Google Gemini & Hono & SQLite*

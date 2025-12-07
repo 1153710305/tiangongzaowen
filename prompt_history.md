@@ -3,6 +3,12 @@
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
 
+## 版本 v2.9 (Layout Support)
+
+### 功能变更
+- **Visualization**: 虽然 AI Prompt 本身没有变动，但前端渲染引擎 (`NodeRenderer`) 进行了重构，以支持不同的 CSS Flexbox 布局（`row` vs `col`）来呈现不同的思维导图结构。
+- **Context**: 布局信息的变更（如从逻辑图变为时间轴）目前仅保存在前端状态中，暂未持久化到 `data` JSON 字段（目前只保存 `root` 节点）。后续版本可考虑将 `layout` 字段一并存入数据库，以便重新打开时恢复视图。
+
 ## 版本 v2.8 (Mind Map AI Expansion)
 
 ### 功能变更
@@ -33,11 +39,3 @@
     - **新逻辑**: 强制输出严格的 JSON 数组字符串，不包含 Markdown 标记。
     - **字段映射**: 明确要求返回 `title`, `intro`, `highlight`, `explosive_point`, `golden_finger` 五个核心字段。
 - **Rationale**: 为了实现前端“脑洞卡片”的可视化和数据库结构化存储，必须让 LLM 充当结构化数据生成器的角色。
-
-## 版本 v2.5.1 (Analysis Mode)
-
-### 功能变更
-- **New Workflow Step**: 引入 `ANALYSIS_IDEA`。
-- **Prompt Logic**: 
-    - 接收 `references` 数组（Title, Intro）。
-    - 指令 AI 扮演市场分析师，先完成 "Why it works?" 的逻辑拆解，再进行 "Generate New Ideas" 的创意裂变。
