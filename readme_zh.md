@@ -1,7 +1,5 @@
 
-
-
-# 天工造文 (SkyCraft Novel AI) - 企业级前后端分离版 (v2.6)
+# 天工造文 (SkyCraft Novel AI) - 企业级前后端分离版 (v2.7)
 
 > **架构理念**: 响应速度优先 (SQLite WAL + Hono + Streaming) | 稳定性优先 (Server Logger + Robust Error Handling) | 解耦优先 (Modular Router) | 资产化沉淀 (Structured Cards)
 
@@ -72,6 +70,11 @@ CREATE TABLE IF NOT EXISTS idea_cards (
 ---
 
 ## 📝 版本历史 (Changelog)
+
+**v2.7.1 (Guest Mode UI)**
+*   **UX**: 移除了强制登录限制，支持访客浏览主界面。
+*   **UI**: 在侧边栏新增“登录/注册”按钮，点击后以模态框形式弹出认证表单。
+*   **Logic**: 未登录状态下尝试生成内容或保存数据时，会自动触发登录弹窗。
 
 **v2.7 (IDE Environment)**
 *   **Architecture**: 引入 `Projects` (项目), `Chapters` (章节), `MindMaps` (思维导图) 三层关系模型。

@@ -29,6 +29,7 @@ export default function App() {
     // === 用户与认证 ===
     const [user, setUser] = useState<User | null>(null);
     const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+    const [showAuthModal, setShowAuthModal] = useState(false); // 控制登录弹窗显示
 
     // === 状态管理 ===
     const [settings, setSettings] = useState<NovelSettings>(DEFAULT_NOVEL_SETTINGS);
@@ -63,12 +64,19 @@ export default function App() {
         const currentUser = authService.getCurrentUser();
         if (currentUser) {
             setUser(currentUser);
-            loadArchives(); // 加载存档
-            loadCards(); // 加载卡片
-            loadProjects(); // 加载项目
+            loadUserData(); // 合并加载数据逻辑
         }
         setIsCheckingAuth(false);
     }, []);
+
+    // 统一加载用户数据
+    const loadUserData = async () => {
+        await Promise.all([
+            loadArchives(),
+            loadCards(),
+            loadProjects()
+        ]);
+    };
 
     // 加载存档列表
     const loadArchives = async () => {
@@ -130,6 +138,13 @@ export default function App() {
      */
     const handleGeneration = async (step: WorkflowStep, description: string, context?: string, references?: ReferenceNovel[]) => {
         if (isGenerating) return;
+        
+        // 未登录拦截
+        if (!user) {
+            setShowAuthModal(true);
+            return;
+        }
+
         setIsGenerating(true);
         setCurrentStep(step);
         setGeneratedContent('');
@@ -182,7 +197,8 @@ export default function App() {
             addToHistory(Role.SYSTEM, `❌ 生成失败: ${errorMsg}`, true);
             
             if (errorMsg.includes("登录") || errorMsg.includes("Unauthorized")) {
-                handleLogout();
+                handleLogout(); // 清理本地状态
+                setShowAuthModal(true); // 弹出登录框
             }
         } finally {
             setIsGenerating(false);
@@ -191,6 +207,10 @@ export default function App() {
 
     // 保存单个脑洞卡片
     const handleSaveCard = async (draft: Partial<IdeaCard>) => {
+        if (!user) {
+            setShowAuthModal(true);
+            return;
+        }
         if (!draft.title) return;
         try {
             const newCard = await apiService.saveIdeaCard({
@@ -218,6 +238,10 @@ export default function App() {
 
     // 保存存档
     const saveArchive = async (id: string | undefined, title: string, historySnapshot = history) => {
+        if (!user) {
+            setShowAuthModal(true);
+            return;
+        }
         setIsSaving(true);
         try {
             const res = await apiService.saveArchive(title, settings, historySnapshot, id);
@@ -290,9 +314,8 @@ export default function App() {
 
     const handleLoginSuccess = (u: User) => {
         setUser(u);
-        loadArchives();
-        loadCards();
-        loadProjects();
+        setShowAuthModal(false); // 关闭弹窗
+        loadUserData(); // 加载数据
     };
 
     const handleLogout = () => {
@@ -320,7 +343,6 @@ export default function App() {
     };
 
     if (isCheckingAuth) return null;
-    if (!user) return <AuthForm onLoginSuccess={handleLoginSuccess} />;
 
     // 如果处于 Project IDE 模式，渲染 IDE 组件
     if (currentProject) {
@@ -336,9 +358,15 @@ export default function App() {
                          <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">
                             天工造文
                         </h1>
-                        <button onClick={handleLogout} className="text-xs text-slate-500 hover:text-white transition-colors">
-                            退出 ({user.username})
-                        </button>
+                        {user ? (
+                             <button onClick={handleLogout} className="text-xs text-slate-500 hover:text-white transition-colors">
+                                退出 ({user.username})
+                            </button>
+                        ) : (
+                             <button onClick={() => setShowAuthModal(true)} className="text-xs text-white bg-primary hover:bg-indigo-500 px-3 py-1 rounded transition-colors shadow-sm font-medium">
+                                登录 / 注册
+                            </button>
+                        )}
                     </div>
                     <p className="text-slate-500 text-xs">V2.7 IDE 环境加强版</p>
                 </div>
@@ -406,6 +434,9 @@ export default function App() {
                                             </button>
                                         </div>
                                     ))}
+                                    {archives.length === 0 && (
+                                        <div className="text-xs text-slate-500 text-center py-2">无存档 (请登录后查看)</div>
+                                    )}
                                 </div>
                             </div>
 
@@ -473,7 +504,7 @@ export default function App() {
                             ))}
                             {savedCards.length === 0 && (
                                 <div className="text-center text-slate-500 py-10 text-xs">
-                                    暂无收藏的脑洞卡片。<br/>去"生成创意"中挑选心仪的灵感吧！
+                                    暂无收藏的脑洞卡片。<br/>{user ? '去"生成创意"中挑选心仪的灵感吧！' : '请先登录'}
                                 </div>
                             )}
                         </div>
@@ -589,6 +620,14 @@ export default function App() {
                     card={selectedCard} 
                     onClose={() => setSelectedCard(null)} 
                     onProjectCreated={handleProjectCreated}
+                />
+            )}
+
+            {/* 登录弹窗 (模态) */}
+            {showAuthModal && (
+                <AuthForm 
+                    onLoginSuccess={handleLoginSuccess}
+                    onClose={() => setShowAuthModal(false)}
                 />
             )}
 

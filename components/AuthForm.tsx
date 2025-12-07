@@ -6,9 +6,10 @@ import { User } from '../types';
 
 interface Props {
     onLoginSuccess: (user: User) => void;
+    onClose?: () => void;
 }
 
-export const AuthForm: React.FC<Props> = ({ onLoginSuccess }) => {
+export const AuthForm: React.FC<Props> = ({ onLoginSuccess, onClose }) => {
     const [isLogin, setIsLogin] = useState(true);
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -36,8 +37,19 @@ export const AuthForm: React.FC<Props> = ({ onLoginSuccess }) => {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-            <div className="bg-paper p-8 rounded-2xl shadow-2xl w-full max-w-md border border-slate-700">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">
+            <div className="bg-paper p-8 rounded-2xl shadow-2xl w-full max-w-md border border-slate-700 relative">
+                {/* 关闭按钮 */}
+                {onClose && (
+                    <button 
+                        onClick={onClose} 
+                        className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors"
+                        title="关闭"
+                    >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                )}
+
                 <div className="text-center mb-8">
                     <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary inline-block">
                         天工造文
