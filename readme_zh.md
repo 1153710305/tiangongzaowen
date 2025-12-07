@@ -71,6 +71,10 @@ CREATE TABLE IF NOT EXISTS idea_cards (
 
 ## 📝 版本历史 (Changelog)
 
+**v2.7.4 (Hotfix: DB Export)**
+*   **Server**: 修复了 `server/db.ts` 中 `createProject` 等函数未正确导出导致 `db.createProject is not a function` 错误的问题。
+*   **Server**: 在服务器启动时增加了数据库模块完整性自检日志。
+
 **v2.7.3 (Stability Fix: Fetch Error)**
 *   **Server**: 将 `GoogleGenAI` 客户端的初始化移动到 `POST /api/generate` 请求处理函数内部。这遵循了 SDK 的最佳实践，确保每次请求都使用最新的环境配置，解决了部分 Node 环境下因全局单例导致的 `fetch failed` 问题。
 *   **Error Handling**: 增加了针对网络超时和连接失败的具体错误捕获，现在会返回 503 状态码并提示用户检查网络，而不是泛泛的 500 错误。

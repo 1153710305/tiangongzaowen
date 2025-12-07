@@ -103,9 +103,6 @@ export function getUserById(id: string): User | undefined {
     return stmt.get(id) as User | undefined;
 }
 
-/**
- * 更新用户密码
- */
 export function updateUserPassword(id: string, newPasswordHash: string): void {
     const stmt = db.prepare('UPDATE users SET password_hash = ? WHERE id = ?');
     stmt.run(newPasswordHash, id);
@@ -161,11 +158,8 @@ export function deleteIdeaCard(id: string, userId: string): void {
     stmt.run(id, userId);
 }
 
-// === Projects (IDE Mode) ===
+// === Projects (IDE Mode) - Explicitly Exported ===
 
-/**
- * 创建新项目 (Novel Project)
- */
 export function createProject(id: string, userId: string, title: string, description: string, ideaCardId?: string): DbProject {
     const stmt = db.prepare('INSERT INTO projects (id, user_id, title, description, idea_card_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
@@ -173,27 +167,18 @@ export function createProject(id: string, userId: string, title: string, descrip
     return { id, user_id: userId, title, description, idea_card_id: ideaCardId, created_at: now, updated_at: now };
 }
 
-/**
- * 获取项目列表
- */
 export function getProjectsByUser(userId: string): DbProject[] {
     const stmt = db.prepare('SELECT * FROM projects WHERE user_id = ? ORDER BY updated_at DESC');
     return stmt.all(userId) as DbProject[];
 }
 
-/**
- * 获取单个项目详情
- */
 export function getProjectById(id: string): DbProject | undefined {
     const stmt = db.prepare('SELECT * FROM projects WHERE id = ?');
     return stmt.get(id) as DbProject | undefined;
 }
 
-// === Chapters ===
+// === Chapters - Explicitly Exported ===
 
-/**
- * 创建章节
- */
 export function createChapter(id: string, projectId: string, title: string, content: string, orderIndex: number): DbChapter {
     const stmt = db.prepare('INSERT INTO chapters (id, project_id, title, content, order_index, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
@@ -201,28 +186,19 @@ export function createChapter(id: string, projectId: string, title: string, cont
     return { id, project_id: projectId, title, content, order_index: orderIndex, updated_at: now };
 }
 
-/**
- * 获取项目的所有章节列表
- * [PERFORMANCE]: 不读取 content 字段，仅读取元数据，保证大部头小说加载速度
- */
 export function getChaptersByProject(projectId: string): Omit<DbChapter, 'content'>[] {
+    // 列表查询不返回 content 字段
     const stmt = db.prepare('SELECT id, project_id, title, order_index, updated_at FROM chapters WHERE project_id = ? ORDER BY order_index ASC');
     return stmt.all(projectId) as Omit<DbChapter, 'content'>[];
 }
 
-/**
- * 获取单个章节完整内容
- */
 export function getChapterById(id: string): DbChapter | undefined {
     const stmt = db.prepare('SELECT * FROM chapters WHERE id = ?');
     return stmt.get(id) as DbChapter | undefined;
 }
 
-// === Mind Maps ===
+// === Mind Maps - Explicitly Exported ===
 
-/**
- * 创建思维导图
- */
 export function createMindMap(id: string, projectId: string, title: string, data: string): DbMindMap {
     const stmt = db.prepare('INSERT INTO mind_maps (id, project_id, title, data, updated_at) VALUES (?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
@@ -230,9 +206,6 @@ export function createMindMap(id: string, projectId: string, title: string, data
     return { id, project_id: projectId, title, data, updated_at: now };
 }
 
-/**
- * 获取项目的思维导图列表
- */
 export function getMindMapsByProject(projectId: string): DbMindMap[] {
     const stmt = db.prepare('SELECT * FROM mind_maps WHERE project_id = ? ORDER BY updated_at DESC');
     return stmt.all(projectId) as DbMindMap[];
@@ -244,7 +217,7 @@ export function getSystemStats() {
     const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
     const archiveCount = db.prepare('SELECT COUNT(*) as count FROM archives').get() as { count: number };
     const cardCount = db.prepare('SELECT COUNT(*) as count FROM idea_cards').get() as { count: number };
-    const projectCount = db.prepare('SELECT COUNT(*) as count FROM projects').get() as { count: number }; // 新增统计
+    const projectCount = db.prepare('SELECT COUNT(*) as count FROM projects').get() as { count: number };
     const lastActive = db.prepare('SELECT updated_at FROM archives ORDER BY updated_at DESC LIMIT 1').get() as { updated_at: string } | undefined;
 
     return {
@@ -260,19 +233,16 @@ export function getAllUsers(): User[] {
     return db.prepare('SELECT id, username, created_at FROM users ORDER BY created_at DESC').all() as User[];
 }
 
-/**
- * 级联删除用户所有数据
- */
 export function deleteUserFull(userId: string) {
     const deleteArchives = db.prepare('DELETE FROM archives WHERE user_id = ?');
     const deleteCards = db.prepare('DELETE FROM idea_cards WHERE user_id = ?');
-    const deleteProjects = db.prepare('DELETE FROM projects WHERE user_id = ?'); // 会级联删除 chapters, mind_maps
+    const deleteProjects = db.prepare('DELETE FROM projects WHERE user_id = ?');
     const deleteUser = db.prepare('DELETE FROM users WHERE id = ?');
     
     const transaction = db.transaction(() => {
         deleteArchives.run(userId);
         deleteCards.run(userId);
-        deleteProjects.run(userId); 
+        deleteProjects.run(userId);
         deleteUser.run(userId);
     });
     

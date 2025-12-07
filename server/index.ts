@@ -7,17 +7,20 @@ import { GoogleGenAI } from '@google/genai';
 import { SYSTEM_INSTRUCTION, PROMPT_BUILDERS } from './prompts.ts';
 import { RANDOM_DATA_POOL } from './data.ts';
 import { NovelSettings, WorkflowStep, ReferenceNovel } from './types.ts';
-import { logger } from './logger.ts'; // 引入日志模块
-import { adminRouter } from './admin_router.ts'; // 引入解耦后的后台路由
+import { logger } from './logger.ts';
+import { adminRouter } from './admin_router.ts';
 import * as db from './db.ts';
 
 // 初始化数据库
 try {
     db.initDB();
-    logger.info("数据库初始化成功");
+    if (typeof db.createProject !== 'function') {
+        logger.error("❌ CRITICAL: db.createProject function is missing from exports!");
+    } else {
+        logger.info("✅ Database module loaded successfully (Project API enabled)");
+    }
 } catch (e: any) {
     logger.error("数据库初始化失败", { error: e.message });
-    // 使用 process.exit(1) 而不是 casting，确保 Node 环境下正常退出
     if (typeof process !== 'undefined') {
         (process as any).exit(1);
     }
@@ -52,7 +55,7 @@ app.use('*', async (c, next) => {
     const logMsg = `${method} ${url} - ${status} (${ms}ms)`;
     if (status >= 500) {
         logger.error(logMsg);
-    } else if (status >= 400 && status !== 401) { // 401 属于正常鉴权失败，降级为 info 或 warn
+    } else if (status >= 400 && status !== 401) { 
         logger.warn(logMsg);
     } else {
         logger.info(logMsg);
@@ -61,7 +64,6 @@ app.use('*', async (c, next) => {
 
 // 2. 全局错误捕获
 app.onError((err, c) => {
-    // 专门处理 JWT 鉴权失败的错误
     if (err.message.includes('Unauthorized')) {
         return c.json({ error: 'Unauthorized', message: '未授权访问，请重新登录' }, 401);
     }
@@ -71,10 +73,9 @@ app.onError((err, c) => {
 });
 
 // API Key & JWT Secret
-// 注意：API_KEY 现在在请求处理函数中动态读取，不再作为全局常量初始化 AI 客户端
 const JWT_SECRET = process.env.JWT_SECRET || 'skycraft_secret_key_change_me';
 
-// === 挂载后台管理路由 (功能解耦) ===
+// === 挂载后台管理路由 ===
 app.route('/admin', adminRouter);
 
 // === 公开路由 ===
@@ -96,7 +97,7 @@ app.post('/api/auth/register', async (c) => {
             return c.json({ error: '用户名已存在' }, 400);
         }
 
-        const passwordHash = password; // ⚠️ DEMO ONLY: 真实项目请务必 Hash!
+        const passwordHash = password; // ⚠️ DEMO ONLY
         
         const userId = crypto.randomUUID();
         const user = db.createUser(userId, username, passwordHash);
@@ -138,9 +139,9 @@ app.post('/api/auth/login', async (c) => {
 app.use('/api/generate', jwt({ secret: JWT_SECRET }));
 app.use('/api/archives/*', jwt({ secret: JWT_SECRET }));
 app.use('/api/cards/*', jwt({ secret: JWT_SECRET }));
-app.use('/api/projects/*', jwt({ secret: JWT_SECRET })); // 新增: Projects API
+app.use('/api/projects/*', jwt({ secret: JWT_SECRET }));
 
-// AI 生成 (受保护)
+// AI 生成
 app.post('/api/generate', async (c) => {
     const API_KEY = process.env.API_KEY;
     if (!API_KEY) {
@@ -152,9 +153,7 @@ app.post('/api/generate', async (c) => {
     logger.info(`[AI生成] 用户: ${payload.username} 请求生成`);
 
     try {
-        // 在请求内初始化 AI 客户端，确保上下文和 Key 都是最新的
         const ai = new GoogleGenAI({ apiKey: API_KEY });
-
         const body = await c.req.json();
         const { settings, step, context, references } = body as { 
             settings: NovelSettings, 
@@ -168,11 +167,9 @@ app.post('/api/generate', async (c) => {
         let prompt = '';
         try {
             switch (step) {
-                // IDEA 步骤支持传入 context (一句话灵感)
                 case WorkflowStep.IDEA: 
                     prompt = PROMPT_BUILDERS.IDEA(settings, context); 
                     break;
-                // 分析仿写模式
                 case WorkflowStep.ANALYSIS_IDEA:
                     if (!references || references.length === 0) {
                         return c.json({ error: "分析模式需要提供参考小说" }, 400);
@@ -219,12 +216,10 @@ app.post('/api/generate', async (c) => {
         });
 
     } catch (error: any) {
-        // 专门处理 fetch failed 网络错误
         if (error.message && error.message.includes('fetch failed')) {
             logger.error("Google Gemini API 连接失败 (Network/Timeout)", { error: error.message });
             return c.json({ error: "无法连接至 AI 服务，请检查网络设置或稍后重试 (Timeout/Fetch Failed)" }, 503);
         }
-
         logger.error("AI生成请求失败", { error: error.message });
         return c.json({ error: error.message }, 500);
     }
@@ -253,15 +248,12 @@ app.get('/api/archives', (c) => {
 // 保存存档
 app.post('/api/archives', async (c) => {
     const payload = c.get('jwtPayload');
-    
-    // 校验用户存在性，防止外键错误
     if (!db.getUserById(payload.id)) {
         return c.json({ error: 'User not found', message: '用户凭证失效，请重新登录' }, 401);
     }
 
     try {
         const { id, title, settings, history } = await c.req.json();
-        
         const contentStr = JSON.stringify({ settings, history });
         
         if (id) {
@@ -272,13 +264,7 @@ app.post('/api/archives', async (c) => {
             const newId = crypto.randomUUID();
             const archive = db.createArchive(newId, payload.id, title, contentStr);
             logger.info(`用户 ${payload.username} 创建了新存档: ${newId}`);
-            
-            return c.json({ 
-                ...archive, 
-                settings, 
-                history, 
-                content: undefined 
-            });
+            return c.json({ ...archive, settings, history, content: undefined });
         }
     } catch (e: any) {
         logger.error(`保存存档失败`, { error: e.message });
@@ -326,12 +312,9 @@ app.get('/api/cards', (c) => {
 
 app.post('/api/cards', async (c) => {
     const payload = c.get('jwtPayload');
-    
-    // 校验用户存在性，防止外键错误
     if (!db.getUserById(payload.id)) {
         return c.json({ error: 'User not found', message: '用户凭证失效，请重新登录' }, 401);
     }
-
     try {
         const data = await c.req.json();
         const id = crypto.randomUUID();
@@ -366,8 +349,6 @@ app.delete('/api/cards/:id', (c) => {
 // 1. 从脑洞卡片创建新项目
 app.post('/api/projects/from-card', async (c) => {
     const payload = c.get('jwtPayload');
-
-    // 校验用户存在性，防止外键错误
     if (!db.getUserById(payload.id)) {
         return c.json({ error: 'User not found', message: '用户凭证失效，请重新登录' }, 401);
     }
@@ -377,6 +358,7 @@ app.post('/api/projects/from-card', async (c) => {
         const projectId = crypto.randomUUID();
         
         // 1. 创建项目
+        if (typeof db.createProject !== 'function') throw new Error("db.createProject is not a function");
         const project = db.createProject(projectId, payload.id, title, description || '', cardId);
         
         // 2. 初始化思维导图 (空)
@@ -392,7 +374,7 @@ app.post('/api/projects/from-card', async (c) => {
         return c.json(project);
     } catch (e: any) {
         logger.error("创建项目失败", { error: e.message });
-        return c.json({ error: "创建项目失败" }, 500);
+        return c.json({ error: e.message }, 500);
     }
 });
 
