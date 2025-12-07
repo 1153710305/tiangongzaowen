@@ -65,37 +65,42 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
     // 监听 focusTargetId 变化，实现自动跳转到新节点
     useEffect(() => {
         if (focusTargetId && canvasRef.current) {
-            // 延迟一点点时间，等待 DOM 渲染完成
-            setTimeout(() => {
-                const nodeElement = document.querySelector(`[data-node-id="${focusTargetId}"]`);
-                if (nodeElement && canvasRef.current) {
-                    const nodeRect = nodeElement.getBoundingClientRect();
-                    const canvasRect = canvasRef.current.getBoundingClientRect();
+            // 使用 requestAnimationFrame 确保在下一帧渲染后执行
+            requestAnimationFrame(() => {
+                // 延迟一点点时间，等待 Flexbox 布局完全稳定
+                setTimeout(() => {
+                    // 使用具体的 node-content-ID 来定位，确保中心对准的是文字胶囊而不是整个子树容器
+                    const nodeElement = document.getElementById(`node-content-${focusTargetId}`);
                     
-                    // 计算节点中心点相对于视口的偏移
-                    const nodeCenterX = nodeRect.left + nodeRect.width / 2;
-                    const nodeCenterY = nodeRect.top + nodeRect.height / 2;
-                    
-                    // 计算画布中心点
-                    const canvasCenterX = canvasRect.left + canvasRect.width / 2;
-                    const canvasCenterY = canvasRect.top + canvasRect.height / 2;
-                    
-                    // 计算需要移动的距离 (当前偏移 + 差值)
-                    // 注意：因为 viewState.x 是 transform 的一部分，我们需要反向计算
-                    const deltaX = canvasCenterX - nodeCenterX;
-                    const deltaY = canvasCenterY - nodeCenterY;
-                    
-                    setViewState(prev => ({
-                        ...prev,
-                        x: prev.x + deltaX,
-                        y: prev.y + deltaY
-                    }));
-                    
-                    // 聚焦后清除目标，选中该节点
-                    setSelectedId(focusTargetId);
-                    setFocusTargetId(null);
-                }
-            }, 100);
+                    if (nodeElement && canvasRef.current) {
+                        const nodeRect = nodeElement.getBoundingClientRect();
+                        const canvasRect = canvasRef.current.getBoundingClientRect();
+                        
+                        // 计算节点中心点相对于视口的绝对坐标
+                        const nodeCenterX = nodeRect.left + nodeRect.width / 2;
+                        const nodeCenterY = nodeRect.top + nodeRect.height / 2;
+                        
+                        // 计算画布容器中心点
+                        const canvasCenterX = canvasRect.left + canvasRect.width / 2;
+                        const canvasCenterY = canvasRect.top + canvasRect.height / 2;
+                        
+                        // 计算需要移动的距离 (画布中心 - 节点中心)
+                        // 将此差值叠加到当前的 transform 坐标上
+                        const deltaX = canvasCenterX - nodeCenterX;
+                        const deltaY = canvasCenterY - nodeCenterY;
+                        
+                        setViewState(prev => ({
+                            ...prev,
+                            x: prev.x + deltaX,
+                            y: prev.y + deltaY
+                        }));
+                        
+                        // 聚焦后清除目标，并确保该节点被选中
+                        setSelectedId(focusTargetId);
+                        setFocusTargetId(null);
+                    }
+                }, 50);
+            });
         }
     }, [focusTargetId]);
 

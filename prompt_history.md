@@ -3,6 +3,14 @@
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
 
+## 版本 v2.9.2 (UX Optimization)
+
+### 功能变更
+- **Mind Map Auto-Focus**: 
+    - 优化了新建节点时的交互体验。通过在 `NodeContent` 组件中注入唯一的 DOM ID (`node-content-${id}`)，实现了画布视角精确跳转到节点文字内容的中心，而非整个子树的几何中心。
+    - 引入 `requestAnimationFrame` 确保在 DOM 重排（Reflow）完成后再进行坐标计算，解决了复杂布局下定位偏移的问题。
+- **Node Styling**: 进一步精简了普通节点的样式，默认采用 `whitespace-nowrap` 强制单行显示，仅在字数超长时换行，并降低了背景和边框的视觉权重，让用户聚焦于内容。
+
 ## 版本 v2.9 (Layout Support)
 
 ### 功能变更

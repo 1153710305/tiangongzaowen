@@ -205,6 +205,7 @@ const NodeContent: React.FC<any> = ({ node, selectedId, depth, theme, isRoot, on
         nodeStyleClasses = `${theme.node.root} rounded-xl px-6 py-3 text-lg font-bold min-w-[120px] z-20 text-center`;
     } else {
         // 普通节点：默认 min-w-fit 且 whitespace-nowrap 保证单行，内容过长(超过300px)时才允许换行
+        // 使用 !important 或特定组合确保单行显示优先级
         nodeStyleClasses = `
             ${isDragOver ? theme.node.dragTarget : (isSelected ? theme.node.selected : theme.node.base)} 
             px-3 py-1.5 text-sm rounded-md 
@@ -216,6 +217,7 @@ const NodeContent: React.FC<any> = ({ node, selectedId, depth, theme, isRoot, on
     return (
         <div className="relative group z-20 mindmap-node">
             <div 
+                id={`node-content-${node.id}`} // 关键修改：添加具体的内容ID，用于精确聚焦
                 onClick={(e) => { e.stopPropagation(); onSelect(node.id); }}
                 onDoubleClick={(e) => { e.stopPropagation(); setIsEditing(true); }}
                 draggable={!isRoot && !isEditing}
