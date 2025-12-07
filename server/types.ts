@@ -1,28 +1,24 @@
 
 /**
  * 服务端专用类型定义
- * 复制自根目录 types.ts，确保服务端可以独立打包部署，无需依赖上层目录
  */
 
-// 小说核心配置接口
 export interface NovelSettings {
-    genre: string; // 流派
-    trope: string; // 核心梗
-    protagonistType: string; // 主角类型
-    goldenFinger: string; // 金手指
-    pacing: 'fast' | 'normal' | 'slow'; // 节奏
-    targetAudience: 'male' | 'female'; // 受众
-    tone: string; // 基调
+    genre: string; 
+    trope: string; 
+    protagonistType: string; 
+    goldenFinger: string; 
+    pacing: 'fast' | 'normal' | 'slow'; 
+    targetAudience: 'male' | 'female'; 
+    tone: string; 
 }
 
-// 参考小说接口 (用于爆款分析模式)
 export interface ReferenceNovel {
     title: string;
     intro: string;
     url?: string;
 }
 
-// === 新增：脑洞卡片数据结构 (对应数据库 JSONContent) ===
 export interface IdeaCardData {
     title: string;
     intro: string;
@@ -31,17 +27,15 @@ export interface IdeaCardData {
     golden_finger: string;
 }
 
-// 步骤枚举
 export enum WorkflowStep {
-    IDEA = 'idea', // 创意
-    ANALYSIS_IDEA = 'analysis_idea', // 新增：爆款分析仿写
-    OUTLINE = 'outline', // 大纲
-    CHARACTER = 'character', // 人设
-    CHAPTER = 'chapter', // 正文
-    REVIEW = 'review' // 审稿
+    IDEA = 'idea', 
+    ANALYSIS_IDEA = 'analysis_idea', 
+    OUTLINE = 'outline', 
+    CHARACTER = 'character', 
+    CHAPTER = 'chapter', 
+    REVIEW = 'review' 
 }
 
-// 日志级别
 export enum LogLevel {
     INFO = 'INFO',
     WARN = 'WARN',
@@ -62,17 +56,46 @@ export interface Archive {
     id: string;
     user_id: string;
     title: string;
-    content: string; // JSON string of { settings, history }
+    content: string; 
     created_at: string;
     updated_at: string;
 }
 
-// 新增：脑洞卡片 DB 模型
-// 性能设计：将详情存为 JSON 字符串，减少列数，读取时一次性 parse
 export interface DbIdeaCard {
     id: string;
     user_id: string;
     title: string;
-    content: string; // JSON string of IdeaCardData
+    content: string; 
     created_at: string;
+}
+
+// === 新增：小说项目数据库模型 ===
+
+export interface DbNovel {
+    id: string;
+    user_id: string;
+    title: string;
+    origin_card_id?: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface DbChapter {
+    id: string;
+    novel_id: string;
+    title: string;
+    content: string; // Large Text
+    order_index: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface DbMindMap {
+    id: string;
+    novel_id: string;
+    title: string;
+    nodes: string; // JSON String
+    created_at: string;
+    updated_at: string;
 }

@@ -1,82 +1,52 @@
 
-# 天工造文 (SkyCraft Novel AI) - 企业级前后端分离版 (v2.6)
+# 天工造文 (SkyCraft Novel AI) - 企业级前后端分离版 (v2.7)
 
-> **架构理念**: 响应速度优先 (SQLite WAL + Hono + Streaming) | 稳定性优先 (Server Logger + Robust Error Handling) | 解耦优先 (Modular Router) | 资产化沉淀 (Structured Cards)
+> **架构理念**: 响应速度优先 (SQLite WAL + Hono + Streaming) | 稳定性优先 (Server Logger) | 模块化 (Modular Router) | 资产化沉淀 (Idea Cards & Novels)
 
-本项目是一个专业的 AI 爆款网文生成系统，已从原型升级为可部署的前后端分离架构，并支持多用户登录、云端存档和全链路监控。
+本项目是一个专业的 AI 爆款网文生成系统。
 
-**v2.6 更新：引入“脑洞卡片 (Idea Cards)”系统，将创意生成过程结构化，支持收藏、管理和历史回溯。**
-
----
-
-## 📚 目录 (Table of Contents)
-
-1. [技术架构解析](#-技术架构解析)
-2. [服务器部署详细指南 (Server)](#-服务器部署详细指南-server)
-3. [后台管理系统 (Admin Dashboard)](#-后台管理系统-admin-dashboard)
-4. [日志与监控 (Logging & Monitoring)](#-日志与监控-logging--monitoring)
-5. [前端部署手册 (Client)](#-前端部署手册-client)
-6. [使用说明书 (User Manual)](#-使用说明书-user-manual)
+**v2.7 更新：小说项目工作台 (Novel Workspace)**
+*   实现从“脑洞卡片”一键初始化“小说项目”。
+*   提供专属的 IDE 界面，支持章节和思维导图的增删改查。
+*   数据库性能优化：正文内容采用懒加载机制。
 
 ---
 
-## 🛠 技术架构解析
+## 🛠 数据库架构 (Schema Design v2.7)
 
-为了实现极致的响应速度和扩展性，我们选用了以下技术栈：
+为了保证百万字长篇小说的编辑性能，我们采用了高度规范化的关系型设计：
 
-### 1. 服务端 (Backend) - `server/`
-*   **核心框架**: **Hono**。极速 Web 标准框架，TTFB (首字节时间) 极低。
-*   **数据库**: **SQLite (better-sqlite3)**。
-    *   **Archive Table**: 存储完整的小说生成历史。
-    *   **IdeaCard Table [NEW]**: 存储结构化的脑洞创意（Title, Intro, Highlights）。
-*   **Prompt Engineering**: 强制模型输出 JSON 格式，便于前端解析。
+### 1. `novels` (项目表)
+*   **用途**: 存储小说项目的元数据。
+*   **字段**: `id` (PK), `user_id`, `title`, `origin_card_id` (关联脑洞), `status` ('draft').
 
-### 2. 客户端 (Frontend) - 根目录
-*   **UI 框架**: React 18 + Tailwind CSS。
-*   **State**: 增加 `draftCards` 和 `savedCards` 状态管理。
+### 2. `chapters` (章节表 - 读写分离优化)
+*   **用途**: 存储正文内容。
+*   **性能设计**: 列表查询时 **绝不返回** `content` 字段。只有进入编辑器时才按需加载 `content`。
+*   **字段**: `id` (PK), `novel_id` (FK), `title`, `content` (TEXT, Lazy Load), `order_index`.
 
----
-
-## 🖥 服务器部署详细指南 (Server)
-
-### 1. 数据库变更 (Schema Migration)
-v2.6 自动新增 `idea_cards` 表：
-
-```sql
-CREATE TABLE IF NOT EXISTS idea_cards (
-    id TEXT PRIMARY KEY,
-    user_id TEXT,
-    title TEXT, 
-    content TEXT, -- JSON String: {intro, highlight, explosive_point, golden_finger}
-    created_at TEXT,
-    FOREIGN KEY(user_id) REFERENCES users(id)
-);
-```
-此表设计优先考虑读取性能，将结构化详情打包为 JSON 存储，减少 Join 操作。
+### 3. `mind_maps` (思维导图表)
+*   **用途**: 存储世界观、人物关系图。
+*   **字段**: `id` (PK), `novel_id` (FK), `title`, `nodes` (JSON String).
 
 ---
 
-## 📖 使用说明书 (User Manual)
+## 📖 使用说明书
 
-### 1. 创意生成与收藏 (NEW)
-1.  在左侧选择“参数配置”、“脑洞发散”或“爆款仿写”模式点击生成。
-2.  AI 会流式输出生成的 JSON 过程。
-3.  生成结束后，系统自动解析并展示为 **“脑洞卡片”**。
-4.  点击卡片下方的 **“收藏此脑洞”** 按钮，将其保存到云端。
+### 1. 创意生成 (Generator)
+*   在主界面通过参数配置或爆款分析生成脑洞。
+*   收藏心仪的脑洞为“脑洞卡片”。
 
-### 2. 查看历史卡片
-在左侧边栏顶部，点击 **“脑洞卡片库”** 切换视图，即可查看所有收藏的历史创意。
+### 2. 小说初始化 (Initialization)
+*   点击“脑洞卡片库”中的卡片，打开详情页。
+*   点击 **“🚀 初始化小说项目”**。
+*   系统将自动创建项目文件夹，并跳转至工作台。
+
+### 3. 写作工作台 (Workspace)
+*   **左侧资源树**: 切换“正文文件夹”和“思维导图”。
+*   **中间编辑器**: 选中文件进行编辑。
+*   **保存**: 实时保存内容到 SQLite 数据库。
 
 ---
-
-## 📝 版本历史 (Changelog)
-
-**v2.6 (Idea Cards)**
-*   **Feature**: 创意生成结果结构化，不再是纯文本。
-*   **DB**: 新增 `idea_cards` 表。
-*   **UI**: 新增待选卡片展示区和侧边栏卡片库视图。
-
-**v2.5.1 (Analysis Mode)**
-*   **Feature**: 新增“爆款仿写/分析模式”。
 
 *Powered by Google Gemini & Hono & SQLite*

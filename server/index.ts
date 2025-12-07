@@ -7,8 +7,8 @@ import { GoogleGenAI } from '@google/genai';
 import { SYSTEM_INSTRUCTION, PROMPT_BUILDERS } from './prompts.ts';
 import { RANDOM_DATA_POOL } from './data.ts';
 import { NovelSettings, WorkflowStep, ReferenceNovel } from './types.ts';
-import { logger } from './logger.ts'; // 引入日志模块
-import { adminRouter } from './admin_router.ts'; // 引入解耦后的后台路由
+import { logger } from './logger.ts';
+import { adminRouter } from './admin_router.ts';
 import * as db from './db.ts';
 
 // 初始化数据库
@@ -17,7 +17,6 @@ try {
     logger.info("数据库初始化成功");
 } catch (e: any) {
     logger.error("数据库初始化失败", { error: e.message });
-    // 使用 process.exit(1) 而不是 casting，确保 Node 环境下正常退出
     if (typeof process !== 'undefined') {
         (process as any).exit(1);
     }
@@ -25,340 +24,211 @@ try {
 
 const app = new Hono();
 
-// 配置 CORS
 app.use('/*', cors({
     origin: '*',
-    allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'DELETE', 'PUT', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
     exposeHeaders: ['Content-Length'],
     maxAge: 600,
     credentials: true,
 }));
 
-// === 全局日志与错误处理中间件 ===
-
-// 1. 请求日志中间件
+// === 日志与错误处理 ===
 app.use('*', async (c, next) => {
     const start = Date.now();
     const method = c.req.method;
     const url = c.req.url;
-
     await next();
-
     const ms = Date.now() - start;
     const status = c.res.status;
-    
-    // 记录请求日志
     const logMsg = `${method} ${url} - ${status} (${ms}ms)`;
-    if (status >= 500) {
-        logger.error(logMsg);
-    } else if (status >= 400 && status !== 401) { // 401 属于正常鉴权失败，降级为 info 或 warn
-        logger.warn(logMsg);
-    } else {
-        logger.info(logMsg);
-    }
+    if (status >= 500) logger.error(logMsg);
+    else if (status >= 400 && status !== 401) logger.warn(logMsg);
+    else logger.info(logMsg);
 });
 
-// 2. 全局错误捕获
 app.onError((err, c) => {
-    // 专门处理 JWT 鉴权失败的错误
     if (err.message.includes('Unauthorized')) {
         return c.json({ error: 'Unauthorized', message: '未授权访问，请重新登录' }, 401);
     }
-
     logger.error(`全局未捕获异常: ${err.message}`, { stack: err.stack });
     return c.json({ error: '服务器内部错误', details: err.message }, 500);
 });
 
-// API Key & JWT Secret
 const API_KEY = process.env.API_KEY;
 const JWT_SECRET = process.env.JWT_SECRET || 'skycraft_secret_key_change_me';
-
-if (!API_KEY) {
-    logger.error("❌ 严重错误: API_KEY 未设置");
-}
-
+if (!API_KEY) logger.error("❌ 严重错误: API_KEY 未设置");
 const ai = new GoogleGenAI({ apiKey: API_KEY || '' });
 
-// === 挂载后台管理路由 (功能解耦) ===
 app.route('/admin', adminRouter);
 
 // === 公开路由 ===
-
 app.get('/', (c) => c.text('SkyCraft AI Backend (Auth Enabled) is Running! 🚀'));
-
 app.get('/api/config/pool', (c) => c.json(RANDOM_DATA_POOL));
 
-// 注册
+// 注册 & 登录
 app.post('/api/auth/register', async (c) => {
     try {
         const { username, password } = await c.req.json();
-        if (!username || !password || String(password).length < 6) {
-            return c.json({ error: '用户名或密码无效 (密码至少6位)' }, 400);
-        }
-        
-        const existing = db.getUserByUsername(username);
-        if (existing) {
-            return c.json({ error: '用户名已存在' }, 400);
-        }
-
-        const passwordHash = password; // ⚠️ DEMO ONLY: 真实项目请务必 Hash!
-        
-        const userId = crypto.randomUUID();
-        const user = db.createUser(userId, username, passwordHash);
-        
-        logger.info(`新用户注册: ${username} (${userId})`);
-
-        const token = await sign({ id: user.id, username: user.username, role: 'user', exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 }, JWT_SECRET);
-        
+        if (!username || !password || String(password).length < 6) return c.json({ error: '无效参数' }, 400);
+        if (db.getUserByUsername(username)) return c.json({ error: '用户名已存在' }, 400);
+        const user = db.createUser(crypto.randomUUID(), username, password);
+        const token = await sign({ id: user.id, username: user.username, role: 'user', exp: Math.floor(Date.now() / 1000) + 604800 }, JWT_SECRET);
         return c.json({ token, user: { id: user.id, username: user.username } });
-    } catch (e: any) {
-        logger.error(`注册失败`, { error: e.message });
-        return c.json({ error: e.message }, 500);
-    }
+    } catch (e: any) { return c.json({ error: e.message }, 500); }
 });
 
-// 登录
 app.post('/api/auth/login', async (c) => {
     try {
         const { username, password } = await c.req.json();
         const user = db.getUserByUsername(username);
-        
-        if (!user || user.password_hash !== password) {
-            logger.warn(`登录失败: ${username} (凭证错误)`);
-            return c.json({ error: '用户名或密码错误' }, 401);
-        }
-
-        logger.info(`用户登录: ${username}`);
-        const token = await sign({ id: user.id, username: user.username, role: 'user', exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 }, JWT_SECRET);
-        
+        if (!user || user.password_hash !== password) return c.json({ error: '用户名或密码错误' }, 401);
+        const token = await sign({ id: user.id, username: user.username, role: 'user', exp: Math.floor(Date.now() / 1000) + 604800 }, JWT_SECRET);
         return c.json({ token, user: { id: user.id, username: user.username } });
-    } catch (e: any) {
-        logger.error(`登录接口异常`, { error: e.message });
-        return c.json({ error: e.message }, 500);
-    }
+    } catch (e: any) { return c.json({ error: e.message }, 500); }
 });
 
-// === 普通用户受保护路由 ===
+// === 受保护路由 ===
+app.use('/api/*', jwt({ secret: JWT_SECRET }));
 
-app.use('/api/generate', jwt({ secret: JWT_SECRET }));
-app.use('/api/archives/*', jwt({ secret: JWT_SECRET }));
-app.use('/api/cards/*', jwt({ secret: JWT_SECRET })); // 新增
-
-// AI 生成 (受保护)
+// 1. AI 生成
 app.post('/api/generate', async (c) => {
-    if (!API_KEY) return c.json({ error: "Server API Key not configured" }, 500);
-
-    const payload = c.get('jwtPayload'); 
-    logger.info(`[AI生成] 用户: ${payload.username} 请求生成`);
-
+    if (!API_KEY) return c.json({ error: "API Key Missing" }, 500);
+    const payload = c.get('jwtPayload');
     try {
         const body = await c.req.json();
-        const { settings, step, context, references } = body as { 
-            settings: NovelSettings, 
-            step: WorkflowStep,
-            context?: string,
-            references?: ReferenceNovel[] 
-        };
-
-        if (!settings || !step) return c.json({ error: "Missing parameters" }, 400);
-
+        const { settings, step, context, references } = body;
+        
         let prompt = '';
-        try {
-            switch (step) {
-                // IDEA 步骤支持传入 context (一句话灵感)
-                case WorkflowStep.IDEA: 
-                    prompt = PROMPT_BUILDERS.IDEA(settings, context); 
-                    break;
-                // 分析仿写模式
-                case WorkflowStep.ANALYSIS_IDEA:
-                    if (!references || references.length === 0) {
-                        return c.json({ error: "分析模式需要提供参考小说" }, 400);
-                    }
-                    prompt = PROMPT_BUILDERS.ANALYSIS_IDEA(settings, references);
-                    break;
-                case WorkflowStep.OUTLINE: prompt = PROMPT_BUILDERS.OUTLINE(settings, context || ''); break;
-                case WorkflowStep.CHARACTER: prompt = PROMPT_BUILDERS.CHARACTER(settings); break;
-                case WorkflowStep.CHAPTER: prompt = PROMPT_BUILDERS.CHAPTER(settings, context || ''); break;
-                default: return c.json({ error: "Invalid step" }, 400);
-            }
-        } catch (err) { return c.json({ error: "Prompt build failed" }, 500); }
+        if (step === WorkflowStep.IDEA) prompt = PROMPT_BUILDERS.IDEA(settings, context);
+        else if (step === WorkflowStep.ANALYSIS_IDEA) prompt = PROMPT_BUILDERS.ANALYSIS_IDEA(settings, references || []);
+        else if (step === WorkflowStep.OUTLINE) prompt = PROMPT_BUILDERS.OUTLINE(settings, context);
+        else if (step === WorkflowStep.CHARACTER) prompt = PROMPT_BUILDERS.CHARACTER(settings);
+        else if (step === WorkflowStep.CHAPTER) prompt = PROMPT_BUILDERS.CHAPTER(settings, context);
+        else return c.json({ error: "Invalid step" }, 400);
 
         const responseStream = await ai.models.generateContentStream({
             model: 'gemini-2.5-flash',
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            config: {
-                systemInstruction: SYSTEM_INSTRUCTION,
-                temperature: 0.85, 
-                topP: 0.95,
-                topK: 40,
-                // 注意：我们这里不强制 responseMimeType: 'application/json'，
-                // 因为流式传输 JSON 很容易被前端解析器搞挂。
-                // 我们让模型输出纯文本 JSON 字符串，前端流式接收文本，最后再 parse。
-            }
+            config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.85 }
         });
 
         const { readable, writable } = new TransformStream();
         const writer = writable.getWriter();
         const encoder = new TextEncoder();
-
         (async () => {
             try {
                 for await (const chunk of responseStream) {
                     if (chunk.text) await writer.write(encoder.encode(chunk.text));
                 }
-            } catch (err: any) {
-                logger.error("AI流式传输中断", { error: err.message });
-                await writer.write(encoder.encode(`\n[System Error: ${err.message}]`));
-            } finally {
-                await writer.close();
-            }
+            } catch (err: any) { await writer.write(encoder.encode(`\n[Error: ${err.message}]`)); } 
+            finally { await writer.close(); }
         })();
-
-        return c.newResponse(readable, {
-            headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Transfer-Encoding': 'chunked' },
-        });
-
-    } catch (error: any) {
-        logger.error("AI生成请求失败", { error: error.message });
-        return c.json({ error: error.message }, 500);
-    }
+        return c.newResponse(readable, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+    } catch (e: any) { return c.json({ error: e.message }, 500); }
 });
 
-// 获取存档列表
+// 2. 存档管理 (Archives)
 app.get('/api/archives', (c) => {
     const payload = c.get('jwtPayload');
-    try {
-        const archives = db.getArchivesByUser(payload.id);
-        const result = archives.map(a => {
-            try {
-                const content = JSON.parse(a.content);
-                return { ...a, ...content, content: undefined };
-            } catch (e) {
-                return a;
-            }
-        });
-        return c.json(result);
-    } catch (e: any) {
-        logger.error(`获取存档失败`, { user: payload.username, error: e.message });
-        return c.json({ error: '获取失败' }, 500);
-    }
+    const list = db.getArchivesByUser(payload.id).map(a => {
+        try { return { ...a, ...JSON.parse(a.content), content: undefined }; } catch { return a; }
+    });
+    return c.json(list);
 });
-
-// 保存存档
 app.post('/api/archives', async (c) => {
     const payload = c.get('jwtPayload');
-    try {
-        const { id, title, settings, history } = await c.req.json();
-        
-        const contentStr = JSON.stringify({ settings, history });
-        
-        if (id) {
-            db.updateArchive(id, payload.id, title, contentStr);
-            logger.info(`用户 ${payload.username} 更新了存档: ${id}`);
-            return c.json({ success: true, id });
-        } else {
-            const newId = crypto.randomUUID();
-            const archive = db.createArchive(newId, payload.id, title, contentStr);
-            logger.info(`用户 ${payload.username} 创建了新存档: ${newId}`);
-            
-            return c.json({ 
-                ...archive, 
-                settings, 
-                history, 
-                content: undefined 
-            });
-        }
-    } catch (e: any) {
-        logger.error(`保存存档失败`, { error: e.message });
-        return c.json({ error: '保存失败' }, 500);
-    }
+    const { id, title, settings, history } = await c.req.json();
+    const content = JSON.stringify({ settings, history });
+    if (id) { db.updateArchive(id, payload.id, title, content); return c.json({ success: true, id }); }
+    const newArch = db.createArchive(crypto.randomUUID(), payload.id, title, content);
+    return c.json({ ...newArch, settings, history, content: undefined });
 });
-
-// 删除存档
 app.delete('/api/archives/:id', (c) => {
-    const payload = c.get('jwtPayload');
     const id = c.req.param('id');
-    try {
-        db.deleteArchive(id, payload.id);
-        logger.info(`用户 ${payload.username} 删除了存档: ${id}`);
-        return c.json({ success: true });
-    } catch (e: any) {
-        logger.error(`删除存档失败`, { error: e.message });
-        return c.json({ error: '删除失败' }, 500);
-    }
+    db.deleteArchive(id, c.get('jwtPayload').id);
+    return c.json({ success: true });
 });
 
-// === 脑洞卡片接口 (新增) ===
-
-// 获取脑洞卡片
+// 3. 脑洞卡片 (Cards)
 app.get('/api/cards', (c) => {
     const payload = c.get('jwtPayload');
-    try {
-        const cards = db.getIdeaCardsByUser(payload.id);
-        const result = cards.map(c => {
-            try {
-                const content = JSON.parse(c.content);
-                // 展平 JSON 结构
-                return { 
-                    id: c.id, 
-                    userId: c.user_id, 
-                    title: c.title, 
-                    created_at: c.created_at,
-                    ...content 
-                };
-            } catch(e) { return c; }
-        });
-        return c.json(result);
-    } catch (e: any) {
-        logger.error("获取脑洞卡片失败", { error: e.message });
-        return c.json({ error: "获取失败" }, 500);
-    }
+    const list = db.getIdeaCardsByUser(payload.id).map(c => {
+        try { return { id: c.id, userId: c.user_id, title: c.title, created_at: c.created_at, ...JSON.parse(c.content) }; } catch { return c; }
+    });
+    return c.json(list);
 });
-
-// 保存脑洞卡片
 app.post('/api/cards', async (c) => {
     const payload = c.get('jwtPayload');
-    try {
-        const data = await c.req.json();
-        // data 包含 title, intro, highlight, explosive_point, golden_finger
-        const id = crypto.randomUUID();
-        const card = db.createIdeaCard(id, payload.id, data);
-        logger.info(`用户 ${payload.username} 保存了脑洞卡片: ${data.title}`);
-        
-        return c.json({ 
-            id: card.id, 
-            userId: card.user_id, 
-            title: card.title, 
-            created_at: card.created_at,
-            ...data
-        });
-    } catch (e: any) {
-        logger.error("保存脑洞卡片失败", { error: e.message });
-        return c.json({ error: "保存失败" }, 500);
-    }
+    const data = await c.req.json();
+    const id = crypto.randomUUID();
+    const card = db.createIdeaCard(id, payload.id, data);
+    return c.json({ id: card.id, userId: card.user_id, title: card.title, created_at: card.created_at, ...data });
+});
+app.delete('/api/cards/:id', (c) => {
+    db.deleteIdeaCard(c.req.param('id'), c.get('jwtPayload').id);
+    return c.json({ success: true });
 });
 
-// 删除脑洞卡片
-app.delete('/api/cards/:id', (c) => {
+// 4. 小说项目 (Novels) - New
+app.post('/api/novels/init', async (c) => {
     const payload = c.get('jwtPayload');
-    const id = c.req.param('id');
+    const { cardId, title } = await c.req.json();
+    if (!cardId || !title) return c.json({ error: "Missing cardId or title" }, 400);
+    
     try {
-        db.deleteIdeaCard(id, payload.id);
-        return c.json({ success: true });
+        const novel = db.initNovelFromCard(payload.id, cardId, title);
+        logger.info(`初始化小说项目: ${title}`);
+        return c.json(novel);
     } catch (e: any) {
-        return c.json({ error: '删除失败' }, 500);
+        return c.json({ error: e.message }, 500);
     }
+});
+app.get('/api/novels', (c) => {
+    const payload = c.get('jwtPayload');
+    return c.json(db.getNovelsByUser(payload.id));
+});
+
+// 5. 章节管理 (Chapters) - New
+app.get('/api/novels/:id/chapters', (c) => {
+    const novelId = c.req.param('id');
+    return c.json(db.getChaptersList(novelId));
+});
+app.get('/api/chapters/:id', (c) => {
+    const chapter = db.getChapterContent(c.req.param('id'));
+    if (!chapter) return c.json({ error: "Not found" }, 404);
+    return c.json(chapter);
+});
+app.post('/api/chapters', async (c) => {
+    const { novelId, title, content } = await c.req.json();
+    return c.json(db.createChapter(novelId, title, content));
+});
+app.put('/api/chapters/:id', async (c) => {
+    const { title, content } = await c.req.json();
+    db.updateChapter(c.req.param('id'), title, content);
+    return c.json({ success: true });
+});
+app.delete('/api/chapters/:id', (c) => {
+    db.deleteChapter(c.req.param('id'));
+    return c.json({ success: true });
+});
+
+// 6. 思维导图管理 (Mind Maps) - New
+app.get('/api/novels/:id/mindmaps', (c) => {
+    return c.json(db.getMindMapsList(c.req.param('id')));
+});
+app.post('/api/mindmaps', async (c) => {
+    const { novelId, title, nodes } = await c.req.json();
+    return c.json(db.createMindMap(novelId, title, nodes));
+});
+app.put('/api/mindmaps/:id', async (c) => {
+    const { title, nodes } = await c.req.json();
+    db.updateMindMap(c.req.param('id'), title, nodes);
+    return c.json({ success: true });
+});
+app.delete('/api/mindmaps/:id', (c) => {
+    db.deleteMindMap(c.req.param('id'));
+    return c.json({ success: true });
 });
 
 export default app;
-
-// 本地启动
-if (typeof process !== 'undefined' && (process as any).versions && (process as any).versions.node) {
-    import('@hono/node-server').then(({ serve }) => {
-        const port = Number(process.env.PORT) || 3000;
-        logger.info(`🚀 SkyCraft Server 正在启动... 端口: ${port}`);
-        logger.info(`👉 后台管理入口: http://localhost:${port}/admin`);
-        serve({ fetch: app.fetch, port });
-    });
-}

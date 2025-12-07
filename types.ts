@@ -8,39 +8,79 @@ export enum Role {
 
 // 小说核心配置接口
 export interface NovelSettings {
-    genre: string; // 流派：如玄幻、都市、言情
-    trope: string; // 核心梗：如重生、系统、无敌、马甲
-    protagonistType: string; // 主角类型：如腹黑、杀伐果断、咸鱼
-    goldenFinger: string; // 金手指：主角的特殊能力
-    pacing: 'fast' | 'normal' | 'slow'; // 节奏：快节奏(爽文)、常规、慢热
-    targetAudience: 'male' | 'female'; // 男频/女频
-    tone: string; // 基调：轻松、热血、虐心
+    genre: string; // 流派
+    trope: string; // 核心梗
+    protagonistType: string; // 主角类型
+    goldenFinger: string; // 金手指
+    pacing: 'fast' | 'normal' | 'slow'; // 节奏
+    targetAudience: 'male' | 'female'; // 受众
+    tone: string; // 基调
 }
 
 // 参考小说接口 (用于仿写模式)
 export interface ReferenceNovel {
     title: string;
     intro: string;
-    url?: string; // 可选，仅作记录
+    url?: string;
 }
 
-// === 新增：脑洞卡片接口 ===
+// 脑洞卡片接口
 export interface IdeaCard {
     id: string; // UUID
     userId: string;
     title: string;
-    intro: string; // 简介
-    highlight: string; // 爽点
-    explosive_point: string; // 爆点
-    golden_finger: string; // 金手指
+    intro: string; 
+    highlight: string; 
+    explosive_point: string; 
+    golden_finger: string; 
     created_at: string;
+}
+
+// === 新增：小说项目结构 ===
+
+// 视图模式
+export type ViewMode = 'GENERATOR' | 'WORKSPACE';
+
+// 小说项目实体
+export interface Novel {
+    id: string;
+    userId: string;
+    title: string;
+    originCardId?: string; // 关联的脑洞卡片ID
+    coverUrl?: string;
+    status: 'draft' | 'published' | 'archived';
+    createdAt: string;
+    updatedAt: string;
+}
+
+// 章节实体 (列表视图用，不含大文本)
+export interface ChapterListItem {
+    id: string;
+    novelId: string;
+    title: string;
+    orderIndex: number;
+    updatedAt: string;
+}
+
+// 章节详情 (包含内容)
+export interface Chapter extends ChapterListItem {
+    content: string;
+}
+
+// 思维导图实体
+export interface MindMap {
+    id: string;
+    novelId: string;
+    title: string;
+    nodes: string; // JSON String of graph nodes
+    updatedAt: string;
 }
 
 // 聊天/生成记录接口
 export interface ChatMessage {
     id: string;
     role: Role;
-    content: string; // Markdown内容
+    content: string; 
     timestamp: number;
     isError?: boolean;
 }
@@ -62,17 +102,15 @@ export interface LogEntry {
     details?: any;
 }
 
-// 生成模式：流式或一次性
 export type GenerationMode = 'stream' | 'normal';
 
-// 步骤枚举
 export enum WorkflowStep {
-    IDEA = 'idea', // 创意/脑暴 (参数模式/一句话模式)
-    ANALYSIS_IDEA = 'analysis_idea', // 新增：爆款分析仿写模式
-    OUTLINE = 'outline', // 大纲
-    CHARACTER = 'character', // 人设
-    CHAPTER = 'chapter', // 正文
-    REVIEW = 'review' // 审稿/润色
+    IDEA = 'idea', 
+    ANALYSIS_IDEA = 'analysis_idea', 
+    OUTLINE = 'outline', 
+    CHARACTER = 'character', 
+    CHAPTER = 'chapter', 
+    REVIEW = 'review' 
 }
 
 export interface User {
@@ -91,6 +129,6 @@ export interface Archive {
     title: string;
     settings: NovelSettings;
     history: ChatMessage[];
-    createdAt: string; // ISO String
-    updatedAt: string; // ISO String
+    createdAt: string; 
+    updatedAt: string; 
 }
