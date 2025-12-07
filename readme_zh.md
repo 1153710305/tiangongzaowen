@@ -71,6 +71,10 @@ CREATE TABLE IF NOT EXISTS idea_cards (
 
 ## 📝 版本历史 (Changelog)
 
+**v2.7.2 (Bug Fix: Auth/FK)**
+*   **Server**: 修复了“Foreign Key constraint failed”错误。现在所有写入操作（存档、卡片、项目）前都会校验 Token 用户是否真实存在于数据库中，若不存在则返回 401。
+*   **Client**: 增强了对 401 Unauthorized 错误的处理。当后端返回 401 时，前端会自动登出并弹出登录框，解决因服务端数据库重置导致的 Token 失效问题。
+
 **v2.7.1 (Guest Mode UI)**
 *   **UX**: 移除了强制登录限制，支持访客浏览主界面。
 *   **UI**: 在侧边栏新增“登录/注册”按钮，点击后以模态框形式弹出认证表单。

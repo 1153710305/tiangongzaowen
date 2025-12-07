@@ -246,6 +246,12 @@ app.get('/api/archives', (c) => {
 // 保存存档
 app.post('/api/archives', async (c) => {
     const payload = c.get('jwtPayload');
+    
+    // 校验用户存在性，防止外键错误
+    if (!db.getUserById(payload.id)) {
+        return c.json({ error: 'User not found', message: '用户凭证失效，请重新登录' }, 401);
+    }
+
     try {
         const { id, title, settings, history } = await c.req.json();
         
@@ -313,6 +319,12 @@ app.get('/api/cards', (c) => {
 
 app.post('/api/cards', async (c) => {
     const payload = c.get('jwtPayload');
+    
+    // 校验用户存在性，防止外键错误
+    if (!db.getUserById(payload.id)) {
+        return c.json({ error: 'User not found', message: '用户凭证失效，请重新登录' }, 401);
+    }
+
     try {
         const data = await c.req.json();
         const id = crypto.randomUUID();
@@ -326,6 +338,7 @@ app.post('/api/cards', async (c) => {
             ...data
         });
     } catch (e: any) {
+        logger.error("保存卡片失败", { error: e.message });
         return c.json({ error: "保存失败" }, 500);
     }
 });
@@ -346,6 +359,12 @@ app.delete('/api/cards/:id', (c) => {
 // 1. 从脑洞卡片创建新项目
 app.post('/api/projects/from-card', async (c) => {
     const payload = c.get('jwtPayload');
+
+    // 校验用户存在性，防止外键错误
+    if (!db.getUserById(payload.id)) {
+        return c.json({ error: 'User not found', message: '用户凭证失效，请重新登录' }, 401);
+    }
+
     try {
         const { cardId, title, description } = await c.req.json();
         const projectId = crypto.randomUUID();

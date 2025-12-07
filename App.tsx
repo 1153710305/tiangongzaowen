@@ -223,8 +223,13 @@ export default function App() {
             setSavedCards(prev => [newCard, ...prev]);
             setDraftCards(prev => prev.filter(d => d.title !== draft.title));
             logger.info("卡片已保存");
-        } catch (e) {
-            alert('保存失败，请重试');
+        } catch (e: any) {
+             if (e.message === "Unauthorized") {
+                handleLogout();
+                setShowAuthModal(true);
+            } else {
+                alert('保存失败，请重试');
+            }
         }
     };
 
@@ -255,8 +260,12 @@ export default function App() {
                 logger.info("存档已更新");
                 setArchives(prev => prev.map(a => a.id === id ? { ...a, title, settings, history: historySnapshot } : a));
             }
-        } catch (e) {
+        } catch (e: any) {
             logger.error("保存失败", e);
+             if (e.message === "Unauthorized") {
+                handleLogout();
+                setShowAuthModal(true);
+            }
         } finally {
             setIsSaving(false);
         }
@@ -539,7 +548,7 @@ export default function App() {
                             }`}>
                                 <div className="flex items-center mb-2 pb-2 border-b border-slate-600/50">
                                     <span className={`text-xs font-bold uppercase tracking-wider ${
-                                        msg.role === Role.USER ? 'text-primary' : (msg.role === Role.SYSTEM ? (msg.isError ? 'text-red-400' : 'text-green-400') : 'text-secondary')
+                                        msg.role === Role.USER ? 'text-primary' : (msg.role === Role.SYSTEM ? 'SYSTEM' : 'AI AUTHOR')
                                     }`}>
                                         {msg.role === Role.USER ? 'USER' : (msg.role === Role.SYSTEM ? 'SYSTEM' : 'AI AUTHOR')}
                                     </span>

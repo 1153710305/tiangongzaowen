@@ -61,7 +61,7 @@ class ApiService {
             });
 
             if (response.status === 401) {
-                throw new Error("请先登录");
+                throw new Error("Unauthorized");
             }
 
             if (!response.ok) {
@@ -127,7 +127,10 @@ class ApiService {
                 headers: { 'Content-Type': 'application/json', ...authHeaders } as any,
                 body: JSON.stringify({ id, title, settings, history })
             });
+            
+            if (res.status === 401) throw new Error("Unauthorized");
             if (!res.ok) throw new Error("保存存档失败");
+            
             return await res.json();
         } catch (error) {
             logger.error("Save archive error", error);
@@ -180,7 +183,10 @@ class ApiService {
                 headers: { 'Content-Type': 'application/json', ...authHeaders } as any,
                 body: JSON.stringify(cardData)
             });
+            
+            if (res.status === 401) throw new Error("Unauthorized");
             if (!res.ok) throw new Error("保存卡片失败");
+            
             return await res.json();
         } catch (error) {
             logger.error("Save card error", error);
@@ -217,7 +223,10 @@ class ApiService {
                 headers: { 'Content-Type': 'application/json', ...authHeaders } as any,
                 body: JSON.stringify({ cardId, title, description })
             });
+
+            if (res.status === 401) throw new Error("Unauthorized");
             if (!res.ok) throw new Error("创建项目失败");
+            
             return await res.json();
         } catch (error) {
             logger.error("Create project error", error);
