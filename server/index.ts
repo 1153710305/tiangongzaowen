@@ -110,6 +110,7 @@ app.use('/api/generate', jwt({ secret: JWT_SECRET }));
 app.use('/api/archives/*', jwt({ secret: JWT_SECRET }));
 app.use('/api/cards/*', jwt({ secret: JWT_SECRET }));
 app.use('/api/projects/*', jwt({ secret: JWT_SECRET }));
+app.use('/api/prompts/*', jwt({ secret: JWT_SECRET })); // 新增
 
 // AI 生成
 app.post('/api/generate', async (c) => {
@@ -169,6 +170,11 @@ app.post('/api/generate', async (c) => {
             }
         } catch (err) { return c.json({ error: "Prompt build failed" }, 500); }
 
+        // 如果有额外的 Prompt (来自用户提示词库), 附加到 prompt 末尾
+        if (extraPrompt && step !== WorkflowStep.MIND_MAP_NODE) {
+            prompt += `\n\n【用户额外指令/约束】:\n${extraPrompt}`;
+        }
+
         // 填充请求日志
         auditLog.request = {
             step,
@@ -212,7 +218,7 @@ app.post('/api/generate', async (c) => {
                 const duration = Date.now() - startTime;
                 auditLog.response = {
                     timeCost: `${duration}ms`,
-                    tokenUsage: tokenUsage, // Gemini 返回 { promptTokenCount, candidatesTokenCount, totalTokenCount }
+                    tokenUsage: tokenUsage, 
                     fullText: fullResponseText
                 };
                 
@@ -403,6 +409,35 @@ app.delete('/api/projects/:pid/chapters/:cid', (c) => {
     return c.json({ success: true });
 });
 
+// === Prompts CRUD (New) ===
+app.get('/api/prompts', (c) => {
+    const payload = c.get('jwtPayload');
+    const prompts = db.getUserPrompts(payload.id);
+    return c.json(prompts);
+});
+
+app.post('/api/prompts', async (c) => {
+    const payload = c.get('jwtPayload');
+    const { type, title, content } = await c.req.json();
+    const id = crypto.randomUUID();
+    const prompt = db.createUserPrompt(id, payload.id, type, title, content);
+    return c.json(prompt);
+});
+
+app.put('/api/prompts/:id', async (c) => {
+    const payload = c.get('jwtPayload');
+    const id = c.req.param('id');
+    const { title, content } = await c.req.json();
+    db.updateUserPrompt(id, payload.id, title, content);
+    return c.json({ success: true });
+});
+
+app.delete('/api/prompts/:id', (c) => {
+    const payload = c.get('jwtPayload');
+    const id = c.req.param('id');
+    db.deleteUserPrompt(id, payload.id);
+    return c.json({ success: true });
+});
 
 export default app;
 

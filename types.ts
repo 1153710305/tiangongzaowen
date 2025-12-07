@@ -77,6 +77,19 @@ export interface ProjectStructure {
     maps: MindMap[];
 }
 
+// === 提示词库相关 (New) ===
+export type PromptType = 'system' | 'constraint' | 'normal';
+
+export interface UserPrompt {
+    id: string;
+    user_id: string;
+    type: PromptType;
+    title: string;
+    content: string;
+    created_at: string;
+    updated_at: string;
+}
+
 // 聊天/生成记录接口
 export interface ChatMessage {
     id: string;
@@ -112,7 +125,7 @@ export enum WorkflowStep {
     CHARACTER = 'character',
     CHAPTER = 'chapter',
     REVIEW = 'review',
-    MIND_MAP_NODE = 'mind_map_node' // 新增：思维导图节点扩展
+    MIND_MAP_NODE = 'mind_map_node'
 }
 
 export interface User {

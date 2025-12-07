@@ -1,8 +1,9 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { NovelSettingsForm } from '../NovelSettingsForm';
 import { Button } from '../Button';
 import { User, Archive, WorkflowStep, NovelSettings, ReferenceNovel, IdeaCard } from '../../types';
+import { PromptLibraryModal } from '../PromptLibraryModal';
 
 interface AppSidebarProps {
     user: User | null;
@@ -39,6 +40,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     onResetArchive, onSaveArchive, isSavingArchive, settings, setSettings,
     isGenerating, currentStep, onGenerateIdea, onGenerateOutline, onGenerateCharacter, onGenerateChapter
 }) => {
+    const [showPromptLib, setShowPromptLib] = useState(false);
+
     return (
         <div className="w-96 flex-shrink-0 border-r border-slate-700 bg-[#161b22] flex flex-col h-full">
             <div className="p-4 border-b border-slate-700">
@@ -56,6 +59,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
                 <button onClick={onShowProjectList} className="w-full bg-gradient-to-r from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 hover:border-indigo-500 text-indigo-200 hover:text-white py-3 rounded-xl flex items-center justify-center gap-2 font-bold transition-all shadow-md group">
                     <span className="text-xl group-hover:scale-110 transition-transform">📂</span>我的作品库 ({projectCount})
+                </button>
+
+                <button onClick={() => setShowPromptLib(true)} className="w-full bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white py-2 rounded-lg text-xs font-medium transition-all">
+                    📚 管理我的提示词库
                 </button>
 
                 <div className="flex space-x-2 bg-dark p-1 rounded-lg">
@@ -101,6 +108,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                     </>
                 )}
             </div>
+            
+            {showPromptLib && <PromptLibraryModal onClose={() => setShowPromptLib(false)} />}
         </div>
     );
 };

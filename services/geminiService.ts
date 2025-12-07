@@ -1,6 +1,6 @@
 
 import { logger } from "./loggerService";
-import { NovelSettings, WorkflowStep, Archive, ChatMessage, ReferenceNovel, IdeaCard, Project, ProjectStructure, MindMap, Chapter } from "../types";
+import { NovelSettings, WorkflowStep, Archive, ChatMessage, ReferenceNovel, IdeaCard, Project, ProjectStructure, MindMap, Chapter, UserPrompt, PromptType } from "../types";
 import { API_ENDPOINTS } from "../constants";
 import { authService } from "./authService";
 
@@ -238,6 +238,47 @@ class ApiService {
             headers: { ...authHeaders } as any
         });
         if (!res.ok) throw new Error("删除章节失败");
+    }
+
+    // === 提示词库 CRUD (New) ===
+    public async getUserPrompts(): Promise<UserPrompt[]> {
+        const authHeaders = authService.getAuthHeader();
+        // 如果没有 API_BASE_URL 常量暴露，需要 hardcode 或引入
+        const res = await fetch(`${API_ENDPOINTS.PROJECTS.replace('/api/projects', '')}/api/prompts`, { 
+            headers: { ...authHeaders } as any 
+        });
+        if (!res.ok) return [];
+        return await res.json();
+    }
+
+    public async createUserPrompt(type: PromptType, title: string, content: string): Promise<UserPrompt> {
+        const authHeaders = authService.getAuthHeader();
+        const res = await fetch(`${API_ENDPOINTS.PROJECTS.replace('/api/projects', '')}/api/prompts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders } as any,
+            body: JSON.stringify({ type, title, content })
+        });
+        if (!res.ok) throw new Error("创建失败");
+        return await res.json();
+    }
+
+    public async updateUserPrompt(id: string, title: string, content: string): Promise<void> {
+        const authHeaders = authService.getAuthHeader();
+        const res = await fetch(`${API_ENDPOINTS.PROJECTS.replace('/api/projects', '')}/api/prompts/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...authHeaders } as any,
+            body: JSON.stringify({ title, content })
+        });
+        if (!res.ok) throw new Error("更新失败");
+    }
+
+    public async deleteUserPrompt(id: string): Promise<void> {
+        const authHeaders = authService.getAuthHeader();
+        const res = await fetch(`${API_ENDPOINTS.PROJECTS.replace('/api/projects', '')}/api/prompts/${id}`, {
+            method: 'DELETE',
+            headers: { ...authHeaders } as any
+        });
+        if (!res.ok) throw new Error("删除失败");
     }
 }
 

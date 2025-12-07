@@ -8,6 +8,7 @@ import ReactMarkdown from 'react-markdown';
 import { THEMES, LAYOUTS, LayoutType } from './mindmap/themes';
 import { serializeNodeTree, deleteNodeFromTree, moveNodeInTree, updateNodeInTree, getAllNodesFlat } from './mindmap/utils';
 import { NodeRenderer } from './mindmap/NodeRenderer';
+import { PromptSelector } from './PromptSelector';
 
 interface Props {
     projectId: string;
@@ -234,12 +235,18 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                 </div>
             </div>
 
-            {/* AI Modal (Existing code...) */}
+            {/* AI Modal (Updated for Prompt Selection) */}
             {showAiModal && aiTargetNode && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm text-slate-200">
                     <div className="bg-slate-800 w-full max-w-2xl rounded-xl shadow-2xl border border-slate-700 p-4">
                         <h3 className="font-bold text-white mb-4">✨ AI 扩展: {aiTargetNode.label}</h3>
+                        
+                        <div className="mb-4 space-y-2">
+                             <PromptSelector type="normal" label="插入常用指令" onSelect={(val) => setAiPrompt(prev => prev + '\n' + val)} />
+                        </div>
+
                         <textarea value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} className="w-full h-24 bg-slate-900 border border-slate-600 rounded p-3 text-sm text-white mb-4" />
+                        
                         <div className="flex justify-end gap-2">
                             <Button variant="ghost" onClick={() => setShowAiModal(false)}>取消</Button>
                             <Button onClick={handleAiGenerate} isLoading={isGenerating}>生成</Button>

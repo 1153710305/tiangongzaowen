@@ -1,6 +1,6 @@
 
 import Database from 'better-sqlite3';
-import { User, Archive, DbIdeaCard, IdeaCardData, DbProject, DbChapter, DbMindMap } from './types.ts';
+import { User, Archive, DbIdeaCard, IdeaCardData, DbProject, DbChapter, DbMindMap, DbUserPrompt, PromptType } from './types.ts';
 import fs from 'fs';
 import path from 'path';
 
@@ -69,7 +69,6 @@ export function initDB() {
         CREATE INDEX IF NOT EXISTS idx_chapters_project ON chapters(project_id);
         
         -- 思维导图表：核心性能点
-        -- data 字段存储完整 JSON 树，读取一次即可获得全貌
         CREATE TABLE IF NOT EXISTS mind_maps (
             id TEXT PRIMARY KEY,
             project_id TEXT,
@@ -79,9 +78,26 @@ export function initDB() {
             FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
         );
         CREATE INDEX IF NOT EXISTS idx_mindmaps_project ON mind_maps(project_id);
+
+        -- === 提示词库表 (New) ===
+        -- 性能优化：type 建立索引方便快速筛选分类
+        CREATE TABLE IF NOT EXISTS user_prompts (
+            id TEXT PRIMARY KEY,
+            user_id TEXT,
+            type TEXT, -- system, constraint, normal
+            title TEXT,
+            content TEXT,
+            created_at TEXT,
+            updated_at TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_prompts_user ON user_prompts(user_id);
+        CREATE INDEX IF NOT EXISTS idx_prompts_type ON user_prompts(type);
     `);
     console.log(`[DB] Database initialized at ${DB_PATH} (WAL mode: ON)`);
 }
+
+// ... existing user, archive, card, project, chapter, mindmap functions ...
 
 // === Users ===
 export function createUser(id: string, username: string, passwordHash: string): User {
@@ -172,10 +188,6 @@ export function getProjectById(id: string): DbProject | undefined {
     return stmt.get(id) as DbProject | undefined;
 }
 
-/**
- * 删除项目 (级联删除所有章节和思维导图)
- * 依赖于 FOREIGN KEYS ON 和 ON DELETE CASCADE 定义
- */
 export function deleteProject(id: string, userId: string): void {
     const stmt = db.prepare('DELETE FROM projects WHERE id = ? AND user_id = ?');
     stmt.run(id, userId);
@@ -189,7 +201,6 @@ export function createChapter(id: string, projectId: string, title: string, cont
     return { id, project_id: projectId, title, content, order_index: orderIndex, updated_at: now };
 }
 
-// 列表查询优化：不返回 content，减少IO
 export function getChaptersByProject(projectId: string): Omit<DbChapter, 'content'>[] {
     const stmt = db.prepare('SELECT id, project_id, title, order_index, updated_at FROM chapters WHERE project_id = ? ORDER BY order_index ASC');
     return stmt.all(projectId) as Omit<DbChapter, 'content'>[];
@@ -219,7 +230,6 @@ export function createMindMap(id: string, projectId: string, title: string, data
     return { id, project_id: projectId, title, data, updated_at: now };
 }
 
-// 列表查询优化：不返回 data 字段
 export function getMindMapsByProject(projectId: string): Omit<DbMindMap, 'data'>[] {
     const stmt = db.prepare('SELECT id, project_id, title, updated_at FROM mind_maps WHERE project_id = ? ORDER BY updated_at DESC');
     return stmt.all(projectId) as Omit<DbMindMap, 'data'>[];
@@ -239,6 +249,30 @@ export function updateMindMap(id: string, projectId: string, title: string, data
 export function deleteMindMap(id: string, projectId: string): void {
     const stmt = db.prepare('DELETE FROM mind_maps WHERE id = ? AND project_id = ?');
     stmt.run(id, projectId);
+}
+
+// === Prompts (New) ===
+export function createUserPrompt(id: string, userId: string, type: PromptType, title: string, content: string): DbUserPrompt {
+    const stmt = db.prepare('INSERT INTO user_prompts (id, user_id, type, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const now = new Date().toISOString();
+    stmt.run(id, userId, type, title, content, now, now);
+    return { id, user_id: userId, type, title, content, created_at: now, updated_at: now };
+}
+
+export function getUserPrompts(userId: string): DbUserPrompt[] {
+    const stmt = db.prepare('SELECT * FROM user_prompts WHERE user_id = ? ORDER BY created_at DESC');
+    return stmt.all(userId) as DbUserPrompt[];
+}
+
+export function updateUserPrompt(id: string, userId: string, title: string, content: string): void {
+    const stmt = db.prepare('UPDATE user_prompts SET title = ?, content = ?, updated_at = ? WHERE id = ? AND user_id = ?');
+    const now = new Date().toISOString();
+    stmt.run(title, content, now, id, userId);
+}
+
+export function deleteUserPrompt(id: string, userId: string): void {
+    const stmt = db.prepare('DELETE FROM user_prompts WHERE id = ? AND user_id = ?');
+    stmt.run(id, userId);
 }
 
 // === Admin ===
@@ -266,12 +300,14 @@ export function deleteUserFull(userId: string) {
     const deleteArchives = db.prepare('DELETE FROM archives WHERE user_id = ?');
     const deleteCards = db.prepare('DELETE FROM idea_cards WHERE user_id = ?');
     const deleteProjects = db.prepare('DELETE FROM projects WHERE user_id = ?');
+    const deletePrompts = db.prepare('DELETE FROM user_prompts WHERE user_id = ?');
     const deleteUser = db.prepare('DELETE FROM users WHERE id = ?');
     
     const transaction = db.transaction(() => {
         deleteArchives.run(userId);
         deleteCards.run(userId);
         deleteProjects.run(userId);
+        deletePrompts.run(userId);
         deleteUser.run(userId);
     });
     

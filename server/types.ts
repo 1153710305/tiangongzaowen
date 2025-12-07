@@ -25,6 +25,7 @@ export interface IdeaCardData {
     highlight: string;
     explosive_point: string;
     golden_finger: string;
+    created_at: string;
 }
 
 export enum WorkflowStep {
@@ -34,7 +35,7 @@ export enum WorkflowStep {
     CHARACTER = 'character',
     CHAPTER = 'chapter',
     REVIEW = 'review',
-    MIND_MAP_NODE = 'mind_map_node' // 新增
+    MIND_MAP_NODE = 'mind_map_node'
 }
 
 export enum LogLevel {
@@ -92,5 +93,18 @@ export interface DbMindMap {
     project_id: string;
     title: string;
     data: string;
+    updated_at: string;
+}
+
+// 提示词库
+export type PromptType = 'system' | 'constraint' | 'normal';
+
+export interface DbUserPrompt {
+    id: string;
+    user_id: string;
+    type: PromptType;
+    title: string;
+    content: string;
+    created_at: string;
     updated_at: string;
 }
