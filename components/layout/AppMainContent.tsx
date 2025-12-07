@@ -86,18 +86,72 @@ export const AppMainContent: React.FC<AppMainContentProps> = ({
                 )}
 
                 {draftCards.length > 0 && (
-                    <div className="flex flex-col gap-4 max-w-4xl pb-10">
-                        <div className="flex items-center gap-2 text-pink-400 font-bold">AI 生成了以下脑洞方案，请点击保存：</div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-4 max-w-5xl mx-auto pb-10">
+                        <div className="flex items-center gap-2 text-pink-400 font-bold px-1">
+                            <span>💡</span> AI 生成了以下脑洞方案，请点击收藏：
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
                             {draftCards.map((draft, idx) => (
-                                <div key={idx} className="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg flex flex-col relative group hover:border-pink-500 transition-colors h-[400px]">
-                                    <h3 className="text-xl font-bold text-white mb-2 shrink-0">{draft.title}</h3>
-                                    <div className="text-sm text-slate-300 mb-4 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                                        <div className="mb-2">{draft.intro}</div>
-                                        {draft.highlight && <div className="text-xs text-indigo-300 mt-2 bg-indigo-900/20 p-2 rounded">🔥 爽点: {draft.highlight}</div>}
-                                        {draft.golden_finger && <div className="text-xs text-yellow-300 mt-2 bg-yellow-900/20 p-2 rounded">✨ 金手指: {draft.golden_finger}</div>}
+                                <div key={idx} className="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg flex flex-col relative group hover:border-pink-500 transition-all h-[480px]">
+                                    {/* 标题 */}
+                                    <h3 className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-indigo-400 mb-4 shrink-0 truncate">
+                                        {draft.title || '未命名脑洞'}
+                                    </h3>
+
+                                    {/* 滚动内容区域 */}
+                                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3 mb-4 text-xs">
+                                        
+                                        {/* 简介 */}
+                                        <div className="bg-black/20 rounded-lg p-3 border border-slate-700/50">
+                                            <div className="text-slate-500 font-bold mb-1 flex items-center gap-1">
+                                                <span>📖</span> 简介
+                                            </div>
+                                            <div className="text-slate-300 leading-relaxed">
+                                                {draft.intro || '暂无简介描述...'}
+                                            </div>
+                                        </div>
+
+                                        {/* 开局爆点 */}
+                                        {draft.explosive_point && (
+                                            <div className="bg-red-900/10 rounded-lg p-3 border border-red-500/20">
+                                                <div className="text-red-400 font-bold mb-1 flex items-center gap-1">
+                                                    <span>💣</span> 开局爆点
+                                                </div>
+                                                <div className="text-slate-300 leading-relaxed">
+                                                    {draft.explosive_point}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* 核心爽点 */}
+                                        {draft.highlight && (
+                                            <div className="bg-indigo-900/10 rounded-lg p-3 border border-indigo-500/20">
+                                                <div className="text-indigo-400 font-bold mb-1 flex items-center gap-1">
+                                                    <span>🔥</span> 核心爽点
+                                                </div>
+                                                <div className="text-slate-300 leading-relaxed">
+                                                    {draft.highlight}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* 金手指 */}
+                                        {draft.golden_finger && (
+                                            <div className="bg-yellow-900/10 rounded-lg p-3 border border-yellow-500/20">
+                                                <div className="text-yellow-400 font-bold mb-1 flex items-center gap-1">
+                                                    <span>✨</span> 金手指
+                                                </div>
+                                                <div className="text-slate-300 leading-relaxed">
+                                                    {draft.golden_finger}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                    <Button onClick={() => onSaveCard(draft)} className="w-full mt-auto shrink-0" size="sm" variant="secondary">💾 收藏此脑洞到卡片库</Button>
+                                    
+                                    {/* 底部按钮 */}
+                                    <Button onClick={() => onSaveCard(draft)} className="w-full mt-auto shrink-0 shadow-lg border border-white/5" size="sm" variant="secondary">
+                                        💾 收藏此脑洞
+                                    </Button>
                                 </div>
                             ))}
                         </div>
