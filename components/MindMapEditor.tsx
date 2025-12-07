@@ -10,7 +10,8 @@ interface Props {
     projectId: string;
     mapData: MindMap;
     onSave: (mapId: string, title: string, dataStr: string) => void;
-    novelSettings?: NovelSettings; // 用于 AI 上下文
+    novelSettings?: NovelSettings;
+    availableMaps?: { id: string, title: string }[]; // 可用的其他思维导图，用于 : 引用
 }
 
 // 递归渲染节点组件
@@ -125,7 +126,7 @@ const NodeRenderer: React.FC<{
     );
 };
 
-export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, novelSettings }) => {
+export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, novelSettings, availableMaps = [] }) => {
     // 数据状态
     const [rootNode, setRootNode] = useState<MindMapNode | null>(null);
     const [title, setTitle] = useState(mapData.title);
@@ -138,11 +139,12 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
     const [isGenerating, setIsGenerating] = useState(false);
     const [aiContent, setAiContent] = useState('');
     
-    // @ 引用相关状态
-    const [showMentionList, setShowMentionList] = useState(false);
+    // === 引用系统状态 ===
+    const [showMentionList, setShowMentionList] = useState<'node' | 'map' | null>(null); // 'node' for @, 'map' for :
     const [mentionFilter, setMentionFilter] = useState('');
     const [cursorPos, setCursorPos] = useState({ top: 0, left: 0 });
     const promptInputRef = useRef<HTMLTextAreaElement>(null);
+    const mirrorRef = useRef<HTMLDivElement>(null); // 用于模拟光标位置
 
     // 初始化
     useEffect(() => {
@@ -151,7 +153,6 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
             if (parsed.root) {
                 setRootNode(parsed.root);
             } else {
-                // 兼容旧格式或空数据
                 setRootNode({ id: 'root', label: '核心创意', children: [] });
             }
         } catch (e) {
@@ -160,14 +161,13 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
         setTitle(mapData.title);
     }, [mapData]);
 
-    // 手动保存
     const handleManualSave = () => {
         if (!rootNode) return;
         const dataStr = JSON.stringify({ root: rootNode });
         onSave(mapData.id, title, dataStr);
     };
 
-    // === 节点操作函数 (Utils) ===
+    // === Utils ===
     const updateNode = (node: MindMapNode, id: string, updater: (n: MindMapNode) => MindMapNode): MindMapNode => {
         if (node.id === id) return updater(node);
         return { ...node, children: node.children.map(c => updateNode(c, id, updater)) };
@@ -203,7 +203,6 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
         if (selectedId === id) setSelectedId(null);
     };
 
-    // === AI 操作 ===
     const openAiModal = (node: MindMapNode) => {
         setAiTargetNode(node);
         setAiPrompt(`基于“${node.label}”，请生成...`);
@@ -211,33 +210,84 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
         setShowAiModal(true);
     };
 
-    const handlePromptInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        const val = e.target.value;
-        setAiPrompt(val);
+    // === 核心逻辑：计算光标位置 ===
+    const updateCursorPosition = (val: string, selectionEnd: number) => {
+        if (!mirrorRef.current || !promptInputRef.current) return;
 
-        const lastChar = val.slice(-1);
-        if (lastChar === '@') {
-            const rect = e.target.getBoundingClientRect();
-            setCursorPos({ top: rect.bottom + 5, left: rect.left + 20 }); 
-            setShowMentionList(true);
-            setMentionFilter('');
-        } else if (showMentionList) {
-            const match = val.match(/@([^@\s]*)$/);
-            if (match) setMentionFilter(match[1]);
-            else setShowMentionList(false);
+        const textBeforeCursor = val.substring(0, selectionEnd);
+        const textAfterCursor = val.substring(selectionEnd);
+        
+        // 将文本放入 Mirror Div，并在光标处插入一个 span
+        mirrorRef.current.textContent = textBeforeCursor;
+        const span = document.createElement('span');
+        span.textContent = '|';
+        mirrorRef.current.appendChild(span);
+        mirrorRef.current.appendChild(document.createTextNode(textAfterCursor));
+        
+        // 获取 span 相对于 Mirror Div 的位置
+        const rect = span.getBoundingClientRect();
+        const wrapperRect = promptInputRef.current.parentElement?.getBoundingClientRect();
+
+        if (wrapperRect) {
+            // 计算相对坐标
+            const top = rect.top - wrapperRect.top + 24; // +行高
+            const left = rect.left - wrapperRect.left;
+            setCursorPos({ top, left });
         }
     };
 
-    const insertMention = (nodeLabel: string) => {
-        const match = aiPrompt.match(/@([^@\s]*)$/);
-        if (match) {
-            const prefix = aiPrompt.substring(0, match.index);
-            setAiPrompt(`${prefix}[引用:${nodeLabel}] `);
+    const handlePromptInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const val = e.target.value;
+        const selectionEnd = e.target.selectionEnd;
+        setAiPrompt(val);
+        updateCursorPosition(val, selectionEnd);
+
+        // 检查最后一个触发词
+        const textBeforeCursor = val.substring(0, selectionEnd);
+        
+        // 匹配 @ (节点引用)
+        const mentionMatch = textBeforeCursor.match(/@([^@\s:\[\]]*)$/);
+        // 匹配 : (导图引用)
+        const mapMatch = textBeforeCursor.match(/:([^@\s:\[\]]*)$/);
+
+        if (mentionMatch) {
+            setShowMentionList('node');
+            setMentionFilter(mentionMatch[1]);
+        } else if (mapMatch) {
+            setShowMentionList('map');
+            setMentionFilter(mapMatch[1]);
         } else {
-            setAiPrompt(prev => prev + `[引用:${nodeLabel}] `);
+            setShowMentionList(null);
         }
-        setShowMentionList(false);
-        promptInputRef.current?.focus();
+    };
+
+    const insertMention = (itemLabel: string, type: 'node' | 'map') => {
+        const selectionEnd = promptInputRef.current?.selectionEnd || 0;
+        const textBeforeCursor = aiPrompt.substring(0, selectionEnd);
+        const textAfterCursor = aiPrompt.substring(selectionEnd);
+        
+        // 找到触发符号的位置
+        const triggerChar = type === 'node' ? '@' : ':';
+        const lastTriggerIndex = textBeforeCursor.lastIndexOf(triggerChar);
+        
+        if (lastTriggerIndex !== -1) {
+            const prefix = aiPrompt.substring(0, lastTriggerIndex);
+            // 构造标签
+            const tag = type === 'node' ? `[引用:${itemLabel}]` : `[参考导图:${itemLabel}]`;
+            
+            const newText = prefix + tag + " " + textAfterCursor;
+            setAiPrompt(newText);
+            
+            // 恢复焦点并设置光标位置
+            setTimeout(() => {
+                if (promptInputRef.current) {
+                    promptInputRef.current.focus();
+                    const newCursorPos = prefix.length + tag.length + 1;
+                    promptInputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+                }
+            }, 0);
+        }
+        setShowMentionList(null);
     };
 
     const handleAiGenerate = async () => {
@@ -245,17 +295,52 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
         setIsGenerating(true);
         setAiContent('');
 
-        // 提取引用上下文
+        // === 1. 解析 @ 节点引用 ===
         const references: string[] = [];
-        const regex = /\[引用:([^\]]+)\]/g;
+        const nodeRegex = /\[引用:([^\]]+)\]/g;
         let match;
         const allNodes = getAllNodesFlat(rootNode);
         
-        while ((match = regex.exec(aiPrompt)) !== null) {
+        while ((match = nodeRegex.exec(aiPrompt)) !== null) {
             const label = match[1];
             const refNode = allNodes.find(n => n.label === label);
-            if (refNode) references.push(`节点【${refNode.label}】包含子节点: ${refNode.children.map(c => c.label).join(', ')}`);
+            if (refNode) {
+                // 简单的序列化当前节点及其直接子节点
+                const childrenStr = refNode.children.map(c => c.label).join(', ');
+                references.push(`相关节点【${refNode.label}】${childrenStr ? `(包含子项: ${childrenStr})` : ''}`);
+            }
         }
+
+        // === 2. 解析 : 导图引用 (需要异步加载) ===
+        const mapRegex = /\[参考导图:([^\]]+)\]/g;
+        const mapFetches: Promise<void>[] = [];
+        
+        while ((match = mapRegex.exec(aiPrompt)) !== null) {
+            const mapTitle = match[1];
+            const targetMap = availableMaps.find(m => m.title === mapTitle);
+            
+            if (targetMap && targetMap.id !== mapData.id) { // 防止引用自己
+                const fetchPromise = apiService.getMindMapDetail(projectId, targetMap.id)
+                    .then(detail => {
+                         try {
+                             const parsed = JSON.parse(detail.data);
+                             // 将整个导图结构简化为文本摘要注入
+                             // 简单起见，我们提取根节点和第一层
+                             const root = parsed.root as MindMapNode;
+                             const summary = root.children.map(c => c.label).join(', ');
+                             references.push(`参考文件【导图:${mapTitle}】: 核心主题《${root.label}》，包含分支：${summary}。`);
+                         } catch(e) {
+                             references.push(`参考文件【导图:${mapTitle}】(解析失败)`);
+                         }
+                    })
+                    .catch(e => {
+                        logger.error(`加载引用导图失败: ${mapTitle}`);
+                    });
+                mapFetches.push(fetchPromise);
+            }
+        }
+
+        await Promise.all(mapFetches);
 
         try {
             await apiService.generateStream(
@@ -273,7 +358,6 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
         }
     };
 
-    // 解析 AI Markdown 列表
     const applyAiResult = () => {
         if (!aiTargetNode || !rootNode || !aiContent) return;
 
@@ -312,10 +396,17 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
 
     if (!rootNode) return <div className="text-white p-4">Loading...</div>;
 
-    const filteredMentionList = getAllNodesFlat(rootNode).filter(n => 
-        n.label.toLowerCase().includes(mentionFilter.toLowerCase()) && 
-        n.id !== aiTargetNode?.id
-    );
+    // 过滤列表
+    let dropdownItems: { id: string, label: string, type: 'node' | 'map' }[] = [];
+    if (showMentionList === 'node') {
+        dropdownItems = getAllNodesFlat(rootNode)
+            .filter(n => n.label.toLowerCase().includes(mentionFilter.toLowerCase()) && n.id !== aiTargetNode?.id)
+            .map(n => ({ id: n.id, label: n.label, type: 'node' }));
+    } else if (showMentionList === 'map') {
+        dropdownItems = availableMaps
+            .filter(m => m.title.toLowerCase().includes(mentionFilter.toLowerCase()) && m.id !== mapData.id)
+            .map(m => ({ id: m.id, label: m.title, type: 'map' }));
+    }
 
     return (
         <div className="h-full flex flex-col bg-[#1e1e1e]">
@@ -360,22 +451,48 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                         
                         <div className="p-4 space-y-4 flex-1 overflow-y-auto">
                             <div className="relative">
-                                <label className="block text-xs text-slate-400 mb-1">提示词 (输入 @ 可引用其他节点)</label>
-                                <textarea
-                                    ref={promptInputRef}
-                                    value={aiPrompt}
-                                    onChange={handlePromptInput}
-                                    className="w-full h-24 bg-slate-900 border border-slate-600 rounded p-3 text-sm text-white focus:border-pink-500 outline-none resize-none"
-                                    placeholder="例如：生成3个关于这个情节的反转..."
-                                />
+                                <label className="block text-xs text-slate-400 mb-1">
+                                    提示词 (输入 <span className="text-pink-400 font-bold">@</span> 引用当前节点，输入 <span className="text-indigo-400 font-bold">:</span> 引用其他导图)
+                                </label>
+                                
+                                <div className="relative">
+                                    <textarea
+                                        ref={promptInputRef}
+                                        value={aiPrompt}
+                                        onChange={handlePromptInput}
+                                        className="w-full h-24 bg-slate-900 border border-slate-600 rounded p-3 text-sm text-white focus:border-pink-500 outline-none resize-none overflow-hidden relative z-10 bg-transparent"
+                                        style={{ lineHeight: '1.5em' }}
+                                        placeholder="例如：生成3个关于这个情节的反转..."
+                                    />
+                                    {/* Mirror Div 用于计算光标位置 */}
+                                    <div 
+                                        ref={mirrorRef}
+                                        className="absolute top-0 left-0 w-full h-24 p-3 text-sm border border-transparent whitespace-pre-wrap invisible z-0"
+                                        style={{ lineHeight: '1.5em' }}
+                                    ></div>
+                                </div>
+
                                 {showMentionList && (
-                                    <div className="absolute z-50 bg-slate-800 border border-slate-600 shadow-xl rounded-lg w-48 max-h-40 overflow-y-auto" style={{ top: cursorPos.top, left: cursorPos.left }}>
-                                        {filteredMentionList.map(n => (
-                                            <div key={n.id} onClick={() => insertMention(n.label)} className="px-3 py-2 text-xs text-slate-300 hover:bg-indigo-600 hover:text-white cursor-pointer truncate">
-                                                {n.label}
+                                    <div 
+                                        className="absolute z-50 bg-slate-800 border border-slate-600 shadow-xl rounded-lg w-56 max-h-40 overflow-y-auto flex flex-col" 
+                                        style={{ top: cursorPos.top, left: cursorPos.left }}
+                                    >
+                                        <div className="text-[10px] bg-slate-900 text-slate-500 px-2 py-1 sticky top-0 border-b border-slate-700">
+                                            {showMentionList === 'node' ? '引用当前导图节点' : '引用项目内其他导图'}
+                                        </div>
+                                        {dropdownItems.map(item => (
+                                            <div 
+                                                key={item.id} 
+                                                onClick={() => insertMention(item.label, item.type)} 
+                                                className="px-3 py-2 text-xs text-slate-300 hover:bg-indigo-600 hover:text-white cursor-pointer truncate flex items-center gap-2"
+                                            >
+                                                <span className={item.type === 'node' ? 'text-pink-400' : 'text-indigo-400'}>
+                                                    {item.type === 'node' ? '●' : '📅'}
+                                                </span>
+                                                {item.label}
                                             </div>
                                         ))}
-                                        {filteredMentionList.length === 0 && <div className="p-2 text-xs text-slate-500">无匹配节点</div>}
+                                        {dropdownItems.length === 0 && <div className="p-2 text-xs text-slate-500 text-center">无匹配项</div>}
                                     </div>
                                 )}
                             </div>

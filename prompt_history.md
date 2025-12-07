@@ -7,7 +7,9 @@
 
 ### 功能变更
 - **New Workflow Step**: `MIND_MAP_NODE`。
-- **Context Injection**: 支持通过 `extraPrompt` 动态插入用户指令，并通过 `references` 插入用户手动选择（@引用）的节点上下文。
+- **Context Injection**: 
+    - **Local**: 支持通过 `[引用:NodeName]` 注入当前导图的局部结构。
+    - **Global**: 支持通过 `[参考导图:MapName]` 注入项目内其他导图的全局摘要（需要前端异步 Fetch 数据）。
 - **Output Format**: 强制要求输出 Markdown List (`- content` 或 `  - content`)，以便前端正则解析器能将其转化为递归的树状 JSON 结构。
 
 ## 版本 v2.7 (IDE Structure Support)

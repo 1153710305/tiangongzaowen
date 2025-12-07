@@ -198,6 +198,7 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
                                         mapData={activeFile.data} 
                                         onSave={handleSaveMindMap}
                                         novelSettings={DEFAULT_NOVEL_SETTINGS}
+                                        availableMaps={structure.maps} // 传递所有导图列表，供引用使用
                                     />
                                 )}
                             </div>
