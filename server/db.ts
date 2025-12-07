@@ -31,7 +31,6 @@ export function initDB() {
         );
         CREATE INDEX IF NOT EXISTS idx_archives_user ON archives(user_id);
 
-        -- 脑洞卡片表
         CREATE TABLE IF NOT EXISTS idea_cards (
             id TEXT PRIMARY KEY,
             user_id TEXT,
@@ -42,9 +41,8 @@ export function initDB() {
         );
         CREATE INDEX IF NOT EXISTS idx_idea_cards_user ON idea_cards(user_id);
 
-        -- === v2.7 IDE 架构新增表 ===
+        -- === IDE 项目相关表 ===
 
-        -- 1. 项目表 (Projects)
         CREATE TABLE IF NOT EXISTS projects (
             id TEXT PRIMARY KEY,
             user_id TEXT,
@@ -57,8 +55,6 @@ export function initDB() {
         );
         CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
 
-        -- 2. 章节表 (Chapters)
-        -- 性能优化：content 字段可能很大，单独查询
         CREATE TABLE IF NOT EXISTS chapters (
             id TEXT PRIMARY KEY,
             project_id TEXT,
@@ -70,12 +66,13 @@ export function initDB() {
         );
         CREATE INDEX IF NOT EXISTS idx_chapters_project ON chapters(project_id);
         
-        -- 3. 思维导图表 (MindMaps)
+        -- 思维导图表：核心性能点
+        -- data 字段存储完整 JSON 树，读取一次即可获得全貌
         CREATE TABLE IF NOT EXISTS mind_maps (
             id TEXT PRIMARY KEY,
             project_id TEXT,
             title TEXT,
-            data TEXT, -- JSON 结构
+            data TEXT, 
             updated_at TEXT,
             FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
         );
@@ -85,7 +82,6 @@ export function initDB() {
 }
 
 // === Users ===
-
 export function createUser(id: string, username: string, passwordHash: string): User {
     const stmt = db.prepare('INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)');
     const now = new Date().toISOString();
@@ -108,8 +104,7 @@ export function updateUserPassword(id: string, newPasswordHash: string): void {
     stmt.run(newPasswordHash, id);
 }
 
-// === Archives (Legacy) ===
-
+// === Archives ===
 export function createArchive(id: string, userId: string, title: string, content: string): Archive {
     const stmt = db.prepare('INSERT INTO archives (id, user_id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
@@ -139,7 +134,6 @@ export function deleteArchive(id: string, userId: string): void {
 }
 
 // === Idea Cards ===
-
 export function createIdeaCard(id: string, userId: string, data: IdeaCardData): DbIdeaCard {
     const stmt = db.prepare('INSERT INTO idea_cards (id, user_id, title, content, created_at) VALUES (?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
@@ -158,8 +152,7 @@ export function deleteIdeaCard(id: string, userId: string): void {
     stmt.run(id, userId);
 }
 
-// === Projects (IDE Mode) - Explicitly Exported ===
-
+// === Projects ===
 export function createProject(id: string, userId: string, title: string, description: string, ideaCardId?: string): DbProject {
     const stmt = db.prepare('INSERT INTO projects (id, user_id, title, description, idea_card_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
@@ -177,8 +170,7 @@ export function getProjectById(id: string): DbProject | undefined {
     return stmt.get(id) as DbProject | undefined;
 }
 
-// === Chapters - Explicitly Exported ===
-
+// === Chapters ===
 export function createChapter(id: string, projectId: string, title: string, content: string, orderIndex: number): DbChapter {
     const stmt = db.prepare('INSERT INTO chapters (id, project_id, title, content, order_index, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
@@ -187,7 +179,6 @@ export function createChapter(id: string, projectId: string, title: string, cont
 }
 
 export function getChaptersByProject(projectId: string): Omit<DbChapter, 'content'>[] {
-    // 列表查询不返回 content 字段
     const stmt = db.prepare('SELECT id, project_id, title, order_index, updated_at FROM chapters WHERE project_id = ? ORDER BY order_index ASC');
     return stmt.all(projectId) as Omit<DbChapter, 'content'>[];
 }
@@ -197,8 +188,7 @@ export function getChapterById(id: string): DbChapter | undefined {
     return stmt.get(id) as DbChapter | undefined;
 }
 
-// === Mind Maps - Explicitly Exported ===
-
+// === Mind Maps ===
 export function createMindMap(id: string, projectId: string, title: string, data: string): DbMindMap {
     const stmt = db.prepare('INSERT INTO mind_maps (id, project_id, title, data, updated_at) VALUES (?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
@@ -206,13 +196,29 @@ export function createMindMap(id: string, projectId: string, title: string, data
     return { id, project_id: projectId, title, data, updated_at: now };
 }
 
-export function getMindMapsByProject(projectId: string): DbMindMap[] {
-    const stmt = db.prepare('SELECT * FROM mind_maps WHERE project_id = ? ORDER BY updated_at DESC');
-    return stmt.all(projectId) as DbMindMap[];
+// 列表查询优化：不返回 data 字段
+export function getMindMapsByProject(projectId: string): Omit<DbMindMap, 'data'>[] {
+    const stmt = db.prepare('SELECT id, project_id, title, updated_at FROM mind_maps WHERE project_id = ? ORDER BY updated_at DESC');
+    return stmt.all(projectId) as Omit<DbMindMap, 'data'>[];
 }
 
-// === Admin Functions ===
+export function getMindMapById(id: string): DbMindMap | undefined {
+    const stmt = db.prepare('SELECT * FROM mind_maps WHERE id = ?');
+    return stmt.get(id) as DbMindMap | undefined;
+}
 
+export function updateMindMap(id: string, projectId: string, title: string, data: string): void {
+    const stmt = db.prepare('UPDATE mind_maps SET title = ?, data = ?, updated_at = ? WHERE id = ? AND project_id = ?');
+    const now = new Date().toISOString();
+    stmt.run(title, data, now, id, projectId);
+}
+
+export function deleteMindMap(id: string, projectId: string): void {
+    const stmt = db.prepare('DELETE FROM mind_maps WHERE id = ? AND project_id = ?');
+    stmt.run(id, projectId);
+}
+
+// === Admin ===
 export function getSystemStats() {
     const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
     const archiveCount = db.prepare('SELECT COUNT(*) as count FROM archives').get() as { count: number };

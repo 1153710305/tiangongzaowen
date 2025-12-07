@@ -1,9 +1,14 @@
 
-
-
 # 提示词历史记录 (Prompt History)
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
+
+## 版本 v2.8 (Mind Map AI Expansion)
+
+### 功能变更
+- **New Workflow Step**: `MIND_MAP_NODE`。
+- **Context Injection**: 支持通过 `extraPrompt` 动态插入用户指令，并通过 `references` 插入用户手动选择（@引用）的节点上下文。
+- **Output Format**: 强制要求输出 Markdown List (`- content` 或 `  - content`)，以便前端正则解析器能将其转化为递归的树状 JSON 结构。
 
 ## 版本 v2.7 (IDE Structure Support)
 
