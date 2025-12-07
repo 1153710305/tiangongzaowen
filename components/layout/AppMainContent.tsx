@@ -86,14 +86,18 @@ export const AppMainContent: React.FC<AppMainContentProps> = ({
                 )}
 
                 {draftCards.length > 0 && (
-                    <div className="flex flex-col gap-4 max-w-4xl">
+                    <div className="flex flex-col gap-4 max-w-4xl pb-10">
                         <div className="flex items-center gap-2 text-pink-400 font-bold">AI 生成了以下脑洞方案，请点击保存：</div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {draftCards.map((draft, idx) => (
-                                <div key={idx} className="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg flex flex-col relative overflow-hidden group hover:border-pink-500 transition-colors">
-                                    <h3 className="text-xl font-bold text-white mb-2">{draft.title}</h3>
-                                    <p className="text-sm text-slate-300 mb-4 flex-1">{draft.intro}</p>
-                                    <Button onClick={() => onSaveCard(draft)} className="w-full mt-auto" size="sm" variant="secondary">💾 收藏此脑洞到卡片库</Button>
+                                <div key={idx} className="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg flex flex-col relative group hover:border-pink-500 transition-colors h-[400px]">
+                                    <h3 className="text-xl font-bold text-white mb-2 shrink-0">{draft.title}</h3>
+                                    <div className="text-sm text-slate-300 mb-4 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                                        <div className="mb-2">{draft.intro}</div>
+                                        {draft.highlight && <div className="text-xs text-indigo-300 mt-2 bg-indigo-900/20 p-2 rounded">🔥 爽点: {draft.highlight}</div>}
+                                        {draft.golden_finger && <div className="text-xs text-yellow-300 mt-2 bg-yellow-900/20 p-2 rounded">✨ 金手指: {draft.golden_finger}</div>}
+                                    </div>
+                                    <Button onClick={() => onSaveCard(draft)} className="w-full mt-auto shrink-0" size="sm" variant="secondary">💾 收藏此脑洞到卡片库</Button>
                                 </div>
                             ))}
                         </div>

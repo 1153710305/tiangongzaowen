@@ -9,7 +9,7 @@ interface Props {
     settings: NovelSettings;
     onChange: (settings: NovelSettings) => void;
     // 修改：允许传递可选的自定义Context (idea模式) 或 Reference (analysis模式)
-    onGenerateIdea: (customContext?: string, references?: ReferenceNovel[]) => void;
+    onGenerateIdea: (customContext?: string, references?: ReferenceNovel[], model?: string) => void;
     isGenerating: boolean;
     // 新增：存档加载提示
     loadedFromArchive?: string;
@@ -23,6 +23,10 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
     const [dataPool, setDataPool] = useState<any>(null);
     const [isLoadingPool, setIsLoadingPool] = useState(true);
     
+    // 模型选择状态
+    const [aiModel, setAiModel] = useState('');
+    const [availableModels, setAvailableModels] = useState<{id: string, name: string}[]>([]);
+
     // 输入模式切换
     const [inputMode, setInputMode] = useState<InputMode>('config');
     // 一句话脑洞状态
@@ -34,17 +38,32 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
 
     // 初始化时加载后端配置
     useEffect(() => {
-        const loadPool = async () => {
-            const pool = await apiService.fetchConfigPool();
-            if (pool) {
-                setDataPool(pool);
-                logger.info("已加载后端爆款素材库");
-            } else {
-                logger.warn("使用本地兜底素材库（无法连接后端）");
+        const loadConfig = async () => {
+            try {
+                // 并行加载素材池和模型配置
+                const [pool, modelConfig] = await Promise.all([
+                    apiService.fetchConfigPool(),
+                    apiService.getAiModels()
+                ]);
+
+                if (pool) {
+                    setDataPool(pool);
+                    logger.info("已加载后端爆款素材库");
+                } else {
+                    logger.warn("使用本地兜底素材库（无法连接后端）");
+                }
+                
+                if (modelConfig) {
+                    setAvailableModels(modelConfig.models);
+                    setAiModel(modelConfig.defaultModel);
+                }
+            } catch (e) {
+                logger.error("加载配置失败", e);
+            } finally {
+                setIsLoadingPool(false);
             }
-            setIsLoadingPool(false);
         };
-        loadPool();
+        loadConfig();
     }, []);
 
     // 处理单个字段变更
@@ -87,7 +106,7 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                 alert("请输入您的灵感");
                 return;
             }
-            onGenerateIdea(oneLinerInput);
+            onGenerateIdea(oneLinerInput, undefined, aiModel);
         } else if (inputMode === 'analysis') {
             // 校验参考小说
             const validRefs = references.filter(r => r.title.trim() && r.intro.trim());
@@ -95,9 +114,9 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                 alert("请至少输入一个参考小说的标题和简介");
                 return;
             }
-            onGenerateIdea(undefined, validRefs);
+            onGenerateIdea(undefined, validRefs, aiModel);
         } else {
-            onGenerateIdea();
+            onGenerateIdea(undefined, undefined, aiModel);
         }
     };
 
@@ -122,7 +141,7 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                 </div>
             )}
             
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex justify-between items-center mb-2">
                 <h2 className="text-xl font-bold text-primary flex items-center">
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
                     创作模式
@@ -147,6 +166,22 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                         {isLoadingPool ? '加载中...' : '一键随机爆款'}
                     </button>
                 )}
+            </div>
+
+            {/* 模型选择器 */}
+            <div className="mb-4 bg-slate-800/50 p-2 rounded-lg border border-slate-700/50 flex items-center gap-2">
+                <span className="text-xs text-slate-400 font-medium whitespace-nowrap">AI 模型:</span>
+                <select 
+                    value={aiModel} 
+                    onChange={(e) => setAiModel(e.target.value)}
+                    className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-slate-300 outline-none focus:border-indigo-500 cursor-pointer hover:bg-slate-800 transition-colors"
+                >
+                    {availableModels.length > 0 ? (
+                        availableModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)
+                    ) : (
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash (默认)</option>
+                    )}
+                </select>
             </div>
 
             {/* 模式切换 Tabs */}

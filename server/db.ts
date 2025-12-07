@@ -105,8 +105,9 @@ export function initDB() {
     const checkConfig = db.prepare('SELECT key FROM system_configs WHERE key = ?').get('ai_models');
     if (!checkConfig) {
         const defaultModels = JSON.stringify([
-            { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (快速)' },
-            { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (强推理)' }
+            { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (标准/快速)' },
+            { id: 'gemini-2.5-flash-lite-preview-02-05', name: 'Gemini 2.5 Flash Lite (极速/省流)' },
+            { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (强逻辑/深度)' }
         ]);
         const now = new Date().toISOString();
         db.prepare('INSERT INTO system_configs (key, value, updated_at) VALUES (?, ?, ?)').run('ai_models', defaultModels, now);

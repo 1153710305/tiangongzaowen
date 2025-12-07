@@ -27,7 +27,7 @@ interface AppSidebarProps {
     setSettings: (s: NovelSettings) => void;
     isGenerating: boolean;
     currentStep: WorkflowStep;
-    onGenerateIdea: (ctx?: string, refs?: ReferenceNovel[]) => void;
+    onGenerateIdea: (ctx?: string, refs?: ReferenceNovel[], model?: string) => void;
     onGenerateOutline: () => void;
     onGenerateCharacter: () => void;
     onGenerateChapter: () => void;

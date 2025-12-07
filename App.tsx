@@ -51,14 +51,14 @@ export default function App() {
         setHistory(prev => [...prev, { id: Date.now().toString(), role, content, timestamp: Date.now(), isError }]);
     };
 
-    const handleGeneration = async (step: WorkflowStep, desc: string, context?: string, refs?: ReferenceNovel[]) => {
+    const handleGeneration = async (step: WorkflowStep, desc: string, context?: string, refs?: ReferenceNovel[], model?: string) => {
         if (isGenerating) return;
         if (!user) { setShowAuthModal(true); return; }
         setIsGenerating(true); setCurrentStep(step); setGeneratedContent(''); setDraftCards([]);
         addToHistory(Role.USER, `开始任务：${desc}`);
         try {
             const finalContent = await apiService.generateStream(
-                settings, step, context || '', refs, (chunk) => setGeneratedContent(prev => prev + chunk)
+                settings, step, context || '', refs, (chunk) => setGeneratedContent(prev => prev + chunk), undefined, model
             );
             if (step === WorkflowStep.IDEA || step === WorkflowStep.ANALYSIS_IDEA) {
                 try {
@@ -136,7 +136,7 @@ export default function App() {
                         setCurrentArchiveTitle={setCurrentArchiveTitle} onLoadArchive={loadArchive} onDeleteArchive={async (id, e) => { e.stopPropagation(); await apiService.deleteArchive(id); setArchives(prev => prev.filter(a => a.id !== id)); }}
                         onResetArchive={resetArchive} onSaveArchive={() => saveArchive(currentArchiveId, currentArchiveTitle)} isSavingArchive={isSaving}
                         settings={settings} setSettings={setSettings} isGenerating={isGenerating} currentStep={currentStep}
-                        onGenerateIdea={(c, r) => handleGeneration(r ? WorkflowStep.ANALYSIS_IDEA : WorkflowStep.IDEA, r ? "分析生成" : "创意脑洞", c, r)}
+                        onGenerateIdea={(c, r, m) => handleGeneration(r ? WorkflowStep.ANALYSIS_IDEA : WorkflowStep.IDEA, r ? "分析生成" : "创意脑洞", c, r, m)}
                         onGenerateOutline={() => handleGeneration(WorkflowStep.OUTLINE, "生成大纲", history.slice(-1)[0]?.content)}
                         onGenerateCharacter={() => handleGeneration(WorkflowStep.CHARACTER, "生成人设")}
                         onGenerateChapter={() => handleGeneration(WorkflowStep.CHAPTER, "撰写正文", history.slice(-1)[0]?.content)}
