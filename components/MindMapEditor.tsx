@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { MindMap, MindMapNode, WorkflowStep, NovelSettings } from '../types';
 import { apiService } from '../services/geminiService';
@@ -140,11 +139,16 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
     const [aiContent, setAiContent] = useState('');
     
     // === 引用系统状态 ===
-    const [showMentionList, setShowMentionList] = useState<'node' | 'map' | null>(null); // 'node' for @, 'map' for :
+    // 'node': 本地节点, 'map': 外部导图, 'remote_node': 外部导图的节点
+    const [showMentionList, setShowMentionList] = useState<'node' | 'map' | 'remote_node' | null>(null); 
     const [mentionFilter, setMentionFilter] = useState('');
     const [cursorPos, setCursorPos] = useState({ top: 0, left: 0 });
+    const [remoteNodeOptions, setRemoteNodeOptions] = useState<{id: string, label: string}[]>([]); // 缓存加载的外部节点
+    const [remoteMapLoading, setRemoteMapLoading] = useState(false); // 外部导图加载状态
+
     const promptInputRef = useRef<HTMLTextAreaElement>(null);
     const mirrorRef = useRef<HTMLDivElement>(null); // 用于模拟光标位置
+    const remoteMapCache = useRef<Map<string, MindMapNode[]>>(new Map()); // 缓存已加载的外部导图数据
 
     // 初始化
     useEffect(() => {
@@ -217,22 +221,47 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
         const textBeforeCursor = val.substring(0, selectionEnd);
         const textAfterCursor = val.substring(selectionEnd);
         
-        // 将文本放入 Mirror Div，并在光标处插入一个 span
         mirrorRef.current.textContent = textBeforeCursor;
         const span = document.createElement('span');
         span.textContent = '|';
         mirrorRef.current.appendChild(span);
         mirrorRef.current.appendChild(document.createTextNode(textAfterCursor));
         
-        // 获取 span 相对于 Mirror Div 的位置
         const rect = span.getBoundingClientRect();
         const wrapperRect = promptInputRef.current.parentElement?.getBoundingClientRect();
 
         if (wrapperRect) {
-            // 计算相对坐标
-            const top = rect.top - wrapperRect.top + 24; // +行高
+            const top = rect.top - wrapperRect.top + 24; 
             const left = rect.left - wrapperRect.left;
             setCursorPos({ top, left });
+        }
+    };
+
+    const fetchRemoteMapNodes = async (mapTitle: string) => {
+        // 1. 检查缓存
+        if (remoteMapCache.current.has(mapTitle)) {
+            setRemoteNodeOptions(remoteMapCache.current.get(mapTitle)!);
+            return;
+        }
+
+        // 2. 查找 ID
+        const targetMap = availableMaps.find(m => m.title === mapTitle);
+        if (!targetMap) return;
+
+        setRemoteMapLoading(true);
+        try {
+            const detail = await apiService.getMindMapDetail(projectId, targetMap.id);
+            const parsed = JSON.parse(detail.data);
+            if (parsed.root) {
+                const nodes = getAllNodesFlat(parsed.root);
+                // 存入缓存（简单扁平化用于搜索）
+                remoteMapCache.current.set(mapTitle, nodes);
+                setRemoteNodeOptions(nodes);
+            }
+        } catch (e) {
+            logger.error(`Failed to load remote map: ${mapTitle}`);
+        } finally {
+            setRemoteMapLoading(false);
         }
     };
 
@@ -242,18 +271,29 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
         setAiPrompt(val);
         updateCursorPosition(val, selectionEnd);
 
-        // 检查最后一个触发词
         const textBeforeCursor = val.substring(0, selectionEnd);
         
-        // 匹配 @ (节点引用)
+        // 匹配 @ (可能是本地节点，也可能是外部节点)
         const mentionMatch = textBeforeCursor.match(/@([^@\s:\[\]]*)$/);
         // 匹配 : (导图引用)
         const mapMatch = textBeforeCursor.match(/:([^@\s:\[\]]*)$/);
 
-        if (mentionMatch) {
+        // 核心变更：检测级联引用 [参考导图:XXX] @
+        const remoteContextMatch = textBeforeCursor.match(/\[参考导图:([^\]]+)\]\s*@([^@\s:\[\]]*)$/);
+
+        if (remoteContextMatch) {
+            // 模式：外部节点引用
+            const mapName = remoteContextMatch[1];
+            const filter = remoteContextMatch[2];
+            setShowMentionList('remote_node');
+            setMentionFilter(filter);
+            fetchRemoteMapNodes(mapName); // 触发加载外部导图
+        } else if (mentionMatch) {
+            // 模式：本地节点引用
             setShowMentionList('node');
             setMentionFilter(mentionMatch[1]);
         } else if (mapMatch) {
+            // 模式：导图引用
             setShowMentionList('map');
             setMentionFilter(mapMatch[1]);
         } else {
@@ -261,24 +301,30 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
         }
     };
 
-    const insertMention = (itemLabel: string, type: 'node' | 'map') => {
+    const insertMention = (itemLabel: string, type: 'node' | 'map' | 'remote_node') => {
         const selectionEnd = promptInputRef.current?.selectionEnd || 0;
         const textBeforeCursor = aiPrompt.substring(0, selectionEnd);
         const textAfterCursor = aiPrompt.substring(selectionEnd);
         
         // 找到触发符号的位置
-        const triggerChar = type === 'node' ? '@' : ':';
+        const triggerChar = (type === 'node' || type === 'remote_node') ? '@' : ':';
         const lastTriggerIndex = textBeforeCursor.lastIndexOf(triggerChar);
         
         if (lastTriggerIndex !== -1) {
             const prefix = aiPrompt.substring(0, lastTriggerIndex);
-            // 构造标签
-            const tag = type === 'node' ? `[引用:${itemLabel}]` : `[参考导图:${itemLabel}]`;
+            
+            // 无论本地还是外部节点，插入格式统一为 [引用:NodeName]
+            // AI 会根据上下文中的 [参考导图:XXX] 来决定去哪里找这个 Node
+            let tag = '';
+            if (type === 'map') {
+                tag = `[参考导图:${itemLabel}]`;
+            } else {
+                tag = `[引用:${itemLabel}]`;
+            }
             
             const newText = prefix + tag + " " + textAfterCursor;
             setAiPrompt(newText);
             
-            // 恢复焦点并设置光标位置
             setTimeout(() => {
                 if (promptInputRef.current) {
                     promptInputRef.current.focus();
@@ -295,52 +341,93 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
         setIsGenerating(true);
         setAiContent('');
 
-        // === 1. 解析 @ 节点引用 ===
+        // 收集需要注入的上下文
         const references: string[] = [];
-        const nodeRegex = /\[引用:([^\]]+)\]/g;
-        let match;
-        const allNodes = getAllNodesFlat(rootNode);
         
+        // 1. 扫描所有的 [参考导图:XXX] 并加载
+        const mapRegex = /\[参考导图:([^\]]+)\]/g;
+        let match;
+        const referencedMapTitles = new Set<string>();
+        
+        // 用于存储外部导图的根节点，方便后续查找
+        const externalMapsData = new Map<string, MindMapNode>();
+
+        while ((match = mapRegex.exec(aiPrompt)) !== null) {
+            referencedMapTitles.add(match[1]);
+        }
+
+        // 异步加载所有被引用的导图
+        const loadPromises = Array.from(referencedMapTitles).map(async (mapTitle) => {
+             // 防止引用自己
+             if (mapTitle === mapData.title) return;
+
+             const targetMap = availableMaps.find(m => m.title === mapTitle);
+             if (targetMap) {
+                 try {
+                     // 优先读缓存
+                     if (remoteMapCache.current.has(mapTitle)) {
+                         // 缓存里存的是 flat nodes，我们需要结构，这里简单起见，如果缓存有，说明已经 fetch 过了
+                         // 但为了获取结构化数据，可能需要保留 root node。
+                         // 这里做一个简化：重新 fetch 或者优化缓存结构。
+                         // 为保证正确性，这里重新 fetch 详情（Hono SQLite 很快）或者优化为缓存完整 JSON
+                         const detail = await apiService.getMindMapDetail(projectId, targetMap.id);
+                         const parsed = JSON.parse(detail.data);
+                         if (parsed.root) externalMapsData.set(mapTitle, parsed.root);
+                     } else {
+                         const detail = await apiService.getMindMapDetail(projectId, targetMap.id);
+                         const parsed = JSON.parse(detail.data);
+                         if (parsed.root) {
+                             externalMapsData.set(mapTitle, parsed.root);
+                             // 顺便更新缓存
+                             remoteMapCache.current.set(mapTitle, getAllNodesFlat(parsed.root));
+                         }
+                     }
+                 } catch (e) {
+                     logger.error(`加载外部导图失败: ${mapTitle}`);
+                 }
+             }
+        });
+
+        await Promise.all(loadPromises);
+
+        // 2. 注入外部导图的全局摘要（如果有引用但没有具体指定节点）
+        externalMapsData.forEach((root, title) => {
+             const summary = root.children.map(c => c.label).join(', ');
+             references.push(`参考文件【导图:${title}】: 主题《${root.label}》，包含分支：${summary}。`);
+        });
+
+        // 3. 扫描 [引用:XXX] 并定位节点（本地优先，外部次之）
+        const nodeRegex = /\[引用:([^\]]+)\]/g;
+        const allLocalNodes = getAllNodesFlat(rootNode);
+
         while ((match = nodeRegex.exec(aiPrompt)) !== null) {
             const label = match[1];
-            const refNode = allNodes.find(n => n.label === label);
-            if (refNode) {
-                // 简单的序列化当前节点及其直接子节点
-                const childrenStr = refNode.children.map(c => c.label).join(', ');
-                references.push(`相关节点【${refNode.label}】${childrenStr ? `(包含子项: ${childrenStr})` : ''}`);
-            }
-        }
-
-        // === 2. 解析 : 导图引用 (需要异步加载) ===
-        const mapRegex = /\[参考导图:([^\]]+)\]/g;
-        const mapFetches: Promise<void>[] = [];
-        
-        while ((match = mapRegex.exec(aiPrompt)) !== null) {
-            const mapTitle = match[1];
-            const targetMap = availableMaps.find(m => m.title === mapTitle);
             
-            if (targetMap && targetMap.id !== mapData.id) { // 防止引用自己
-                const fetchPromise = apiService.getMindMapDetail(projectId, targetMap.id)
-                    .then(detail => {
-                         try {
-                             const parsed = JSON.parse(detail.data);
-                             // 将整个导图结构简化为文本摘要注入
-                             // 简单起见，我们提取根节点和第一层
-                             const root = parsed.root as MindMapNode;
-                             const summary = root.children.map(c => c.label).join(', ');
-                             references.push(`参考文件【导图:${mapTitle}】: 核心主题《${root.label}》，包含分支：${summary}。`);
-                         } catch(e) {
-                             references.push(`参考文件【导图:${mapTitle}】(解析失败)`);
-                         }
-                    })
-                    .catch(e => {
-                        logger.error(`加载引用导图失败: ${mapTitle}`);
-                    });
-                mapFetches.push(fetchPromise);
+            // A. 查本地
+            const localNode = allLocalNodes.find(n => n.label === label);
+            if (localNode) {
+                const childrenStr = localNode.children.map(c => c.label).join(', ');
+                references.push(`本地节点详情【${localNode.label}】${childrenStr ? `(包含子项: ${childrenStr})` : '(无子项)'}`);
+                continue; // 找到了就不去外部找了，防止同名冲突
+            }
+
+            // B. 查外部
+            let foundInExternal = false;
+            for (const [mapTitle, extRoot] of externalMapsData.entries()) {
+                const extNodes = getAllNodesFlat(extRoot);
+                const extNode = extNodes.find(n => n.label === label);
+                if (extNode) {
+                    const childrenStr = extNode.children.map(c => c.label).join(', ');
+                    references.push(`来自【${mapTitle}】的节点详情【${extNode.label}】${childrenStr ? `(包含子项: ${childrenStr})` : '(无子项)'}`);
+                    foundInExternal = true;
+                    break;
+                }
+            }
+            
+            if (!localNode && !foundInExternal) {
+                references.push(`引用节点【${label}】: (未找到该节点内容)`);
             }
         }
-
-        await Promise.all(mapFetches);
 
         try {
             await apiService.generateStream(
@@ -396,16 +483,25 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
 
     if (!rootNode) return <div className="text-white p-4">Loading...</div>;
 
-    // 过滤列表
-    let dropdownItems: { id: string, label: string, type: 'node' | 'map' }[] = [];
+    // 过滤列表逻辑
+    let dropdownItems: { id: string, label: string, type: 'node' | 'map' | 'remote_node' }[] = [];
+    let dropdownTitle = '';
+
     if (showMentionList === 'node') {
+        dropdownTitle = '引用当前导图节点';
         dropdownItems = getAllNodesFlat(rootNode)
             .filter(n => n.label.toLowerCase().includes(mentionFilter.toLowerCase()) && n.id !== aiTargetNode?.id)
             .map(n => ({ id: n.id, label: n.label, type: 'node' }));
     } else if (showMentionList === 'map') {
+        dropdownTitle = '引用项目内其他导图';
         dropdownItems = availableMaps
             .filter(m => m.title.toLowerCase().includes(mentionFilter.toLowerCase()) && m.id !== mapData.id)
             .map(m => ({ id: m.id, label: m.title, type: 'map' }));
+    } else if (showMentionList === 'remote_node') {
+        dropdownTitle = remoteMapLoading ? '加载外部节点中...' : '引用外部导图节点';
+        dropdownItems = remoteNodeOptions
+            .filter(n => n.label.toLowerCase().includes(mentionFilter.toLowerCase()))
+            .map(n => ({ id: n.id, label: n.label, type: 'remote_node' }));
     }
 
     return (
@@ -453,6 +549,7 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                             <div className="relative">
                                 <label className="block text-xs text-slate-400 mb-1">
                                     提示词 (输入 <span className="text-pink-400 font-bold">@</span> 引用当前节点，输入 <span className="text-indigo-400 font-bold">:</span> 引用其他导图)
+                                    <span className="block text-[10px] text-slate-500 mt-0.5">技巧: 输入 [参考导图:XXX] 后再按 @，可选择该导图内的节点。</span>
                                 </label>
                                 
                                 <div className="relative">
@@ -474,25 +571,28 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
 
                                 {showMentionList && (
                                     <div 
-                                        className="absolute z-50 bg-slate-800 border border-slate-600 shadow-xl rounded-lg w-56 max-h-40 overflow-y-auto flex flex-col" 
+                                        className="absolute z-50 bg-slate-800 border border-slate-600 shadow-xl rounded-lg w-64 max-h-48 overflow-y-auto flex flex-col animate-fade-in" 
                                         style={{ top: cursorPos.top, left: cursorPos.left }}
                                     >
-                                        <div className="text-[10px] bg-slate-900 text-slate-500 px-2 py-1 sticky top-0 border-b border-slate-700">
-                                            {showMentionList === 'node' ? '引用当前导图节点' : '引用项目内其他导图'}
+                                        <div className="text-[10px] bg-slate-900 text-slate-400 px-2 py-1.5 sticky top-0 border-b border-slate-700 flex justify-between items-center">
+                                            <span>{dropdownTitle}</span>
+                                            {remoteMapLoading && <span className="animate-spin h-3 w-3 border-2 border-indigo-500 border-t-transparent rounded-full"></span>}
                                         </div>
                                         {dropdownItems.map(item => (
                                             <div 
                                                 key={item.id} 
                                                 onClick={() => insertMention(item.label, item.type)} 
-                                                className="px-3 py-2 text-xs text-slate-300 hover:bg-indigo-600 hover:text-white cursor-pointer truncate flex items-center gap-2"
+                                                className="px-3 py-2 text-xs text-slate-300 hover:bg-indigo-600 hover:text-white cursor-pointer truncate flex items-center gap-2 border-b border-slate-700/50 last:border-0"
                                             >
-                                                <span className={item.type === 'node' ? 'text-pink-400' : 'text-indigo-400'}>
-                                                    {item.type === 'node' ? '●' : '📅'}
+                                                <span className={item.type === 'map' ? 'text-indigo-400' : 'text-pink-400'}>
+                                                    {item.type === 'map' ? '📅' : '●'}
                                                 </span>
                                                 {item.label}
                                             </div>
                                         ))}
-                                        {dropdownItems.length === 0 && <div className="p-2 text-xs text-slate-500 text-center">无匹配项</div>}
+                                        {dropdownItems.length === 0 && !remoteMapLoading && (
+                                            <div className="p-2 text-xs text-slate-500 text-center">无匹配项</div>
+                                        )}
                                     </div>
                                 )}
                             </div>

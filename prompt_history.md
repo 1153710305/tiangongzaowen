@@ -9,7 +9,10 @@
 - **New Workflow Step**: `MIND_MAP_NODE`。
 - **Context Injection**: 
     - **Local**: 支持通过 `[引用:NodeName]` 注入当前导图的局部结构。
-    - **Global**: 支持通过 `[参考导图:MapName]` 注入项目内其他导图的全局摘要（需要前端异步 Fetch 数据）。
+    - **Global**: 支持通过 `[参考导图:MapName]` 注入项目内其他导图的全局摘要。
+    - **Cascading (v2.8.3)**: 
+        - 逻辑：当同时检测到 `[参考导图:MapA]` 和 `[引用:NodeB]` 时，系统会优先在 `MapA` 中查找 `NodeB` 的结构数据。
+        - 目的：实现跨文件的细粒度引用（如引用“世界观设定”文件中的“魔法等级”节点）。
 - **Output Format**: 强制要求输出 Markdown List (`- content` 或 `  - content`)，以便前端正则解析器能将其转化为递归的树状 JSON 结构。
 
 ### 审计与调试
