@@ -54,6 +54,12 @@ export const ADMIN_SCRIPT = `
             logInterval: null,
             isAutoRefresh: false,
 
+            // Config State
+            config: {
+                aiModelsJson: '[]',
+                defaultModel: ''
+            },
+
             get filteredLogs() {
                 if (!this.logs || !Array.isArray(this.logs)) return [];
                 return this.logs.filter(log => {
@@ -83,6 +89,7 @@ export const ADMIN_SCRIPT = `
                 
                 if (tab === 'dashboard') this.fetchStats();
                 if (tab === 'users') this.fetchUsers();
+                if (tab === 'settings') this.fetchConfig();
                 if (tab === 'logs') { 
                     this.fetchLogs(); 
                     // Auto enable refresh for logs
@@ -160,6 +167,37 @@ export const ADMIN_SCRIPT = `
                 try { 
                     this.detailData = await this.authedFetch('/admin/api/archives/' + id); 
                 } catch(e) {} finally { this.detailLoading = false; } 
+            },
+
+            // === Configs ===
+            async fetchConfig() {
+                try {
+                    const res = await this.authedFetch('/admin/api/configs');
+                    this.config.aiModelsJson = JSON.stringify(res.ai_models, null, 2);
+                    this.config.defaultModel = res.default_model;
+                } catch(e) { console.error(e); }
+            },
+            async saveAiModels() {
+                try {
+                    // Try parsing first to check validity
+                    JSON.parse(this.config.aiModelsJson);
+                    const res = await fetch('/admin/api/configs', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.adminToken },
+                        body: JSON.stringify({ key: 'ai_models', value: this.config.aiModelsJson })
+                    });
+                    if (res.ok) alert('模型列表已更新'); else alert('更新失败');
+                } catch(e) { alert('JSON 格式错误: ' + e.message); }
+            },
+            async saveDefaultModel() {
+                try {
+                     const res = await fetch('/admin/api/configs', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.adminToken },
+                        body: JSON.stringify({ key: 'default_model', value: this.config.defaultModel })
+                    });
+                    if (res.ok) alert('默认模型已更新'); else alert('更新失败');
+                } catch(e) { alert('更新失败'); }
             },
 
             // === Logs ===

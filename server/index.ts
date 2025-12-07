@@ -69,6 +69,23 @@ app.route('/admin', adminRouter);
 app.get('/', (c) => c.text('SkyCraft AI Backend (Auth Enabled) is Running! 🚀'));
 app.get('/api/config/pool', (c) => c.json(RANDOM_DATA_POOL));
 
+// 获取可用模型列表 (New)
+app.get('/api/config/models', (c) => {
+    try {
+        const modelsStr = db.getSystemConfig('ai_models');
+        const defaultModel = db.getSystemConfig('default_model');
+        const models = modelsStr ? JSON.parse(modelsStr) : [];
+        return c.json({ models, defaultModel: defaultModel || 'gemini-2.5-flash' });
+    } catch (e: any) {
+        logger.error("获取模型配置失败", { error: e.message });
+        // 兜底默认值
+        return c.json({ 
+            models: [{ id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' }], 
+            defaultModel: 'gemini-2.5-flash' 
+        });
+    }
+});
+
 // 注册
 app.post('/api/auth/register', async (c) => {
     try {
@@ -110,7 +127,7 @@ app.use('/api/generate', jwt({ secret: JWT_SECRET }));
 app.use('/api/archives/*', jwt({ secret: JWT_SECRET }));
 app.use('/api/cards/*', jwt({ secret: JWT_SECRET }));
 app.use('/api/projects/*', jwt({ secret: JWT_SECRET }));
-app.use('/api/prompts/*', jwt({ secret: JWT_SECRET })); // 新增
+app.use('/api/prompts/*', jwt({ secret: JWT_SECRET })); 
 
 // AI 生成
 app.post('/api/generate', async (c) => {
@@ -121,9 +138,27 @@ app.post('/api/generate', async (c) => {
     }
 
     const apiKeyMasked = `...${API_KEY.slice(-4)}`;
-    const modelName = 'gemini-2.5-flash';
+    
+    // 从请求体获取 model 参数，默认使用 flash
+    const body = await c.req.json();
+    const { settings, step, context, references, extraPrompt, model } = body as { 
+        settings: NovelSettings, 
+        step: WorkflowStep,
+        context?: string,
+        references?: ReferenceNovel[] | string,
+        extraPrompt?: string,
+        model?: string
+    };
+
     const payload = c.get('jwtPayload'); 
     
+    // 确定使用的模型：优先使用请求参数 -> 其次使用数据库配置 -> 最后兜底 Flash
+    let modelName = model;
+    if (!modelName) {
+        const dbDefault = db.getSystemConfig('default_model');
+        modelName = dbDefault || 'gemini-2.5-flash';
+    }
+
     // 准备审计日志对象
     let auditLog: any = {
         user: payload.username,
@@ -136,15 +171,7 @@ app.post('/api/generate', async (c) => {
 
     try {
         const ai = new GoogleGenAI({ apiKey: API_KEY });
-        const body = await c.req.json();
-        const { settings, step, context, references, extraPrompt } = body as { 
-            settings: NovelSettings, 
-            step: WorkflowStep,
-            context?: string,
-            references?: ReferenceNovel[] | string,
-            extraPrompt?: string 
-        };
-
+        
         if (!step) return c.json({ error: "Missing step parameter" }, 400);
 
         let prompt = '';
@@ -182,10 +209,10 @@ app.post('/api/generate', async (c) => {
             settings
         };
         
-        logger.info(`[AI Start] ${step} by ${payload.username}`);
+        logger.info(`[AI Start] ${step} by ${payload.username} using ${modelName}`);
 
         const responseStream = await ai.models.generateContentStream({
-            model: modelName,
+            model: modelName!, // modelName is ensured to be string above
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,

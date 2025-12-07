@@ -20,7 +20,28 @@ class ApiService {
     }
 
     /**
+     * 获取后端配置的AI模型列表 (New)
+     */
+    public async getAiModels(): Promise<{ models: {id: string, name: string}[], defaultModel: string }> {
+        try {
+            const res = await fetch(`${API_ENDPOINTS.CONFIG.replace('/pool', '/models')}`);
+            if (!res.ok) throw new Error("获取模型配置失败");
+            return await res.json();
+        } catch (error) {
+            // 兜底默认值
+            return { models: [], defaultModel: 'gemini-2.5-flash' };
+        }
+    }
+
+    /**
      * 请求生成内容（流式）
+     * @param settings 小说设定
+     * @param step 工作流步骤
+     * @param context 上下文内容
+     * @param references 参考资料
+     * @param onChunk 流式回调
+     * @param extraPrompt 额外指令
+     * @param model 指定使用的模型 (可选)
      */
     public async generateStream(
         settings: NovelSettings, 
@@ -28,17 +49,18 @@ class ApiService {
         context: string = '', 
         references: ReferenceNovel[] | string | undefined, 
         onChunk: (text: string) => void,
-        extraPrompt?: string
+        extraPrompt?: string,
+        model?: string
     ): Promise<string> {
         
-        logger.info(`[Client] 请求生成: ${step}`);
+        logger.info(`[Client] 请求生成: ${step}`, { model });
         const authHeaders = authService.getAuthHeader();
 
         try {
             const response = await fetch(API_ENDPOINTS.GENERATE, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...authHeaders } as any,
-                body: JSON.stringify({ settings, step, context, references, extraPrompt })
+                body: JSON.stringify({ settings, step, context, references, extraPrompt, model })
             });
 
             if (response.status === 401) throw new Error("Unauthorized");
@@ -243,7 +265,6 @@ class ApiService {
     // === 提示词库 CRUD (New) ===
     public async getUserPrompts(): Promise<UserPrompt[]> {
         const authHeaders = authService.getAuthHeader();
-        // 如果没有 API_BASE_URL 常量暴露，需要 hardcode 或引入
         const res = await fetch(`${API_ENDPOINTS.PROJECTS.replace('/api/projects', '')}/api/prompts`, { 
             headers: { ...authHeaders } as any 
         });

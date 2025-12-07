@@ -47,6 +47,9 @@ export const ADMIN_HTML = `
                 <button @click="switchTab('users')" :class="{'bg-indigo-600/20 text-indigo-300': currentTab === 'users'}" class="w-full text-left px-4 py-3 rounded-lg text-slate-400 hover:text-white transition-colors flex items-center gap-2">
                     <span>👥</span> 用户管理
                 </button>
+                <button @click="switchTab('settings')" :class="{'bg-indigo-600/20 text-indigo-300': currentTab === 'settings'}" class="w-full text-left px-4 py-3 rounded-lg text-slate-400 hover:text-white transition-colors flex items-center gap-2">
+                    <span>⚙️</span> 系统设置
+                </button>
                 <button @click="switchTab('logs')" :class="{'bg-indigo-600/20 text-indigo-300': currentTab === 'logs'}" class="w-full text-left px-4 py-3 rounded-lg text-slate-400 hover:text-white transition-colors flex items-center gap-2">
                     <span>📜</span> 系统日志
                 </button>
@@ -124,6 +127,28 @@ export const ADMIN_HTML = `
                             </tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+            
+            <!-- 系统设置 -->
+            <div x-show="currentTab === 'settings'" class="animate-fade-in">
+                <h2 class="text-2xl font-bold text-white mb-6">系统设置</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-indigo-400">默认 AI 模型</h3>
+                            <button @click="saveDefaultModel" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded transition-colors">保存配置</button>
+                        </div>
+                        <p class="text-xs text-slate-500 mb-2">当用户未指定模型时使用的默认模型ID。</p>
+                        <input x-model="config.defaultModel" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white outline-none focus:border-indigo-500 mb-4" placeholder="例如: gemini-2.5-flash">
+                        
+                        <h3 class="font-bold text-indigo-400 mb-2 mt-6">模型列表配置 (JSON)</h3>
+                        <p class="text-xs text-slate-500 mb-2">配置前端可选的模型列表。格式为 [{"id":"...","name":"..."}]。</p>
+                        <textarea x-model="config.aiModelsJson" class="w-full h-48 bg-slate-900 border border-slate-600 rounded p-2 text-xs font-mono text-slate-300 outline-none focus:border-indigo-500 resize-none"></textarea>
+                        <div class="mt-2 text-right">
+                             <button @click="saveAiModels" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded transition-colors">保存列表</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 

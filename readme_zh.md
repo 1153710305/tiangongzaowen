@@ -1,11 +1,11 @@
 
-# 天工造文 (SkyCraft Novel AI) - 企业级前后端分离版 (v2.9)
+# 天工造文 (SkyCraft Novel AI) - 企业级前后端分离版 (v2.9.5)
 
 > **架构理念**: 响应速度优先 (SQLite WAL + Hono + Streaming) | 稳定性优先 (Server Logger + Robust Error Handling) | 解耦优先 (Modular Router) | 资产化沉淀 (Structured Cards)
 
 本项目是一个专业的 AI 爆款网文生成系统，已从原型升级为可部署的前后端分离架构，并支持多用户登录、云端存档和全链路监控。
 
-**v2.9.1 更新：正文 IDE 升级。新增智能引用系统、正文 AI 续写及流式章节编辑功能。**
+**v2.9.5 更新：思维导图 AI 增强。新增大模型切换（Flash/Pro）及操作指引提示。**
 
 ---
 
@@ -48,6 +48,7 @@
 v2.8 版本增强了 AI 生成接口的日志能力。每次 AI 请求（无论成功或失败）都会生成一条详细的日志，包含：
 *   **API Key Masked**: 仅显示后四位，确保安全。
 *   **Token Usage**: 包含 Prompt Token (输入) 和 Candidate Token (输出) 数量，便于成本核算。
+*   **Model Name**: 记录实际调用的模型名称 (Gemini 2.5 Flash 或 Gemini 3 Pro)。
 *   **Full Context**: 完整的 System Instruction 和用户 Prompt。
 *   **Full Response**: 完整的 AI 生成结果。
 *   **Latency**: 接口响应总耗时。
@@ -82,6 +83,10 @@ CREATE TABLE IF NOT EXISTS chapters (
 2.  **思维导图 (Mind Map)**：
     *   **布局切换**：支持逻辑结构图、组织结构图、时间轴视图。
     *   **画布操作**：支持无限拖拽、缩放、主题切换。
+    *   **AI 扩展**：
+        *   **模型切换**：可在弹窗中选择 `Gemini 2.5 Flash` (默认，快速) 或 `Gemini 3 Pro` (适合复杂推理)。
+        *   **智能引用**：输入 `:` 引用导图，输入 `@` 引用节点。
+        *   **快捷键**：使用 `Shift + Enter` 进行换行。
 3.  **正文卷宗 (Chapters) - NEW**：
     *   **智能引用**：
         *   输入 `:` ：弹出资源菜单，可选择引用其他**章节**或**思维导图**。
@@ -91,6 +96,10 @@ CREATE TABLE IF NOT EXISTS chapters (
 ---
 
 ## 📝 版本历史 (Changelog)
+
+**v2.9.5 (Mind Map UI Polish)**
+*   **Feature**: 思维导图 AI 弹窗新增模型选择器 (Model Switcher)。
+*   **UX**: 增加了关于 `:` (引用导图) 和 `@` (引用节点) 以及 `Shift+Enter` 换行的操作指引。
 
 **v2.9.1 (Chapter Editor)**
 *   **Feature**: 正文编辑器升级。支持 `:` 和 `@` 触发的智能上下文引用。

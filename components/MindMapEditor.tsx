@@ -52,25 +52,40 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
     const [isGenerating, setIsGenerating] = useState(false);
     const [aiContent, setAiContent] = useState('');
     const [aiError, setAiError] = useState<string | null>(null);
+    // AI 模型配置状态 (动态)
+    const [aiModel, setAiModel] = useState('');
+    const [availableModels, setAvailableModels] = useState<{id: string, name: string}[]>([]);
+
+    // AI 弹窗上下文菜单状态
+    const aiTextareaRef = useRef<HTMLTextAreaElement>(null);
+    const aiMirrorRef = useRef<HTMLDivElement>(null);
+    const [aiMenuType, setAiMenuType] = useState<'map' | 'node' | null>(null);
+    const [aiMenuPos, setAiMenuPos] = useState({ top: 0, left: 0 });
+    const [aiFilterText, setAiFilterText] = useState('');
+    const [aiActiveMapId, setAiActiveMapId] = useState<string | null>(null);
+    const [aiNodeOptions, setAiNodeOptions] = useState<{id: string, label: string}[]>([]);
     
+    // 初始化加载
     useEffect(() => {
+        // 1. 解析导图数据
         try {
             const parsed = JSON.parse(mapData.data);
             if (parsed.root) setRootNode(parsed.root);
             else setRootNode({ id: 'root', label: '核心创意', children: [] });
-            
-            // 加载新数据时清空历史记录
             setHistory([]);
             setFuture([]);
-            
-            // 尝试恢复保存的布局偏好 (如果未来支持保存 layout 到 data)
-            // if (parsed.layout) setActiveLayout(parsed.layout);
         } catch (e) {
             setRootNode({ id: 'root', label: '核心创意', children: [] });
             setHistory([]);
             setFuture([]);
         }
         setTitle(mapData.title);
+
+        // 2. 加载后端模型配置
+        apiService.getAiModels().then(config => {
+            setAvailableModels(config.models);
+            setAiModel(config.defaultModel);
+        });
     }, [mapData]);
 
     // 监听 focusTargetId 变化，实现自动跳转到新节点
@@ -276,12 +291,204 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
     const handleZoomOut = () => setViewState(s => ({ ...s, scale: Math.max(s.scale / 1.2, 0.2) }));
     const handleResetView = () => setViewState({ x: 0, y: 0, scale: 1 });
 
-    // === AI 逻辑 (保持不变) ===
-    const openAiModal = (node: MindMapNode) => { setAiTargetNode(node); setAiPrompt(`基于“${node.label}”，请生成...`); setAiContent(''); setAiError(null); setShowAiModal(true); };
-    const handleAiGenerate = async () => { 
-        if (!aiTargetNode || !rootNode) return; setIsGenerating(true); setAiContent(''); setAiError(null);
-        try { await apiService.generateStream(novelSettings || {} as any, WorkflowStep.MIND_MAP_NODE, aiTargetNode.label, '', (chunk) => setAiContent(p => p + chunk), aiPrompt); } catch (e: any) { setAiError(e.message); } finally { setIsGenerating(false); }
+    // === AI 逻辑增强 ===
+    const openAiModal = (node: MindMapNode) => { setAiTargetNode(node); setAiPrompt(`基于“${node.label}”，请生成...`); setAiContent(''); setAiError(null); setShowAiModal(true); setAiMenuType(null); };
+    
+    // 1. AI 输入框光标追踪
+    const updateAiCursorCoords = () => {
+        if (!aiTextareaRef.current || !aiMirrorRef.current) return;
+        const textarea = aiTextareaRef.current;
+        const mirror = aiMirrorRef.current;
+
+        mirror.style.width = `${textarea.offsetWidth}px`;
+        const textBeforeCursor = textarea.value.substring(0, textarea.selectionStart);
+        mirror.innerHTML = textBeforeCursor.replace(/\n/g, '<br/>') + '<span id="ai-cursor">|</span>';
+        
+        const cursorSpan = mirror.querySelector('#ai-cursor') as HTMLElement;
+        if (cursorSpan) {
+            // 相对于父容器（modal-content）定位
+            setAiMenuPos({
+                top: cursorSpan.offsetTop + 24, 
+                left: cursorSpan.offsetLeft
+            });
+        }
     };
+
+    // 2. AI 输入处理 (支持 : 和 @)
+    const handleAiInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const val = e.target.value;
+        const cursorPos = e.target.selectionStart;
+        setAiPrompt(val);
+
+        const charBefore = val[cursorPos - 1];
+        
+        // 触发导图选择
+        if (charBefore === ':') {
+            updateAiCursorCoords();
+            setAiMenuType('map');
+            setAiFilterText('');
+            return;
+        }
+
+        // 触发节点选择（级联 或 当前导图）
+        if (charBefore === '@') {
+            const textBack = val.substring(0, cursorPos - 1);
+            // 查找最近的一个 [参考导图:ID:Title]
+            const mapRegex = /\[参考导图:([a-zA-Z0-9-]+):([^\]]+)\]$/;
+            const match = textBack.match(mapRegex);
+            
+            updateAiCursorCoords();
+            setAiMenuType('node');
+            setAiFilterText('');
+
+            if (match) {
+                // 级联模式：引用外部导图的节点
+                const mapId = match[1];
+                setAiActiveMapId(mapId);
+                fetchMapNodes(mapId); // 获取该导图的节点
+            } else {
+                // 本地模式：引用当前导图的节点
+                setAiActiveMapId(mapData.id); // 使用当前导图ID
+                // 从 rootNode 提取节点列表
+                if (rootNode) {
+                    const flatNodes = getAllNodesFlat(rootNode);
+                    setAiNodeOptions(flatNodes.map(n => ({ id: n.id, label: n.label })));
+                } else {
+                    setAiNodeOptions([]);
+                }
+            }
+            return;
+        }
+
+        if ([' ', '\n'].includes(charBefore)) {
+            setAiMenuType(null);
+        }
+        if (aiMenuType) {
+            setAiFilterText(prev => prev + charBefore);
+        }
+    };
+
+    // 3. 获取引用导图的节点数据
+    const fetchMapNodes = async (mapId: string) => {
+        try {
+            const map = await apiService.getMindMapDetail(projectId, mapId);
+            if (map && map.data) {
+                const root = JSON.parse(map.data).root;
+                const flatNodes: {id: string, label: string}[] = [];
+                const traverse = (n: MindMapNode) => {
+                    flatNodes.push({ id: n.id, label: n.label });
+                    if (n.children) n.children.forEach(traverse);
+                };
+                if (root) traverse(root);
+                setAiNodeOptions(flatNodes);
+            }
+        } catch (e) {
+            logger.error("Failed to load map nodes for AI context", e);
+            setAiNodeOptions([]);
+        }
+    };
+
+    // 4. 插入文本到输入框
+    const insertAiText = (text: string, backspaceCount = 0) => {
+        if (!aiTextareaRef.current) return;
+        const el = aiTextareaRef.current;
+        const start = el.selectionStart;
+        const end = el.selectionEnd;
+        const textBefore = aiPrompt.substring(0, start - backspaceCount);
+        const textAfter = aiPrompt.substring(end);
+        
+        const newContent = textBefore + text + textAfter;
+        setAiPrompt(newContent);
+        setAiMenuType(null);
+        
+        setTimeout(() => {
+            el.focus();
+            el.setSelectionRange(start - backspaceCount + text.length, start - backspaceCount + text.length);
+        }, 0);
+    };
+
+    // 5. 生成请求（包含上下文注入）
+    const handleAiGenerate = async () => { 
+        if (!aiTargetNode || !rootNode) return; 
+        setIsGenerating(true); setAiContent(''); setAiError(null);
+        
+        try {
+            // 解析引用，提取结构化数据
+            const refRegex = /\[(参考导图|引用节点):([a-zA-Z0-9-]+):?([a-zA-Z0-9-]+)?:?([^\]]+)?\]/g;
+            let match;
+            const referencesData: string[] = [];
+            
+            // 复制 prompt 防止 regex 状态问题
+            const promptText = aiPrompt;
+            
+            while ((match = refRegex.exec(promptText)) !== null) {
+                const [fullTag, type, id1, id2, title] = match;
+                
+                if (type === '参考导图') {
+                    // id1 = mapId
+                    try {
+                        const map = await apiService.getMindMapDetail(projectId, id1);
+                        if (map && map.data) {
+                             const root = JSON.parse(map.data).root;
+                             // 注入整个导图结构
+                             referencesData.push(`【参考导图结构：${map.title}】\n${serializeNodeTree(root)}`);
+                        }
+                    } catch(e) { logger.warn(`Failed to fetch ref map ${id1}`); }
+                } else if (type === '引用节点') {
+                    // id1 = mapId, id2 = nodeId
+                    // 优化：如果是引用当前导图，直接使用内存中的 rootNode (最新状态)，避免 API 调用延迟和数据不一致
+                    if (id1 === mapData.id && rootNode) {
+                         const findNode = (n: MindMapNode): MindMapNode | null => {
+                                if (n.id === id2) return n;
+                                if (n.children) for (const c of n.children) { const f = findNode(c); if(f) return f; }
+                                return null;
+                            };
+                            const target = findNode(rootNode);
+                            if (target) {
+                                // 注入该节点及其子树结构
+                                referencesData.push(`【参考节点结构：${target.label} (来自当前导图)】\n${serializeNodeTree(target)}`);
+                            }
+                    } else {
+                        // 引用的是外部导图
+                        try {
+                            const map = await apiService.getMindMapDetail(projectId, id1);
+                            if (map && map.data) {
+                                const root = JSON.parse(map.data).root;
+                                const findNode = (n: MindMapNode): MindMapNode | null => {
+                                    if (n.id === id2) return n;
+                                    if (n.children) for (const c of n.children) { const f = findNode(c); if(f) return f; }
+                                    return null;
+                                };
+                                const target = findNode(root);
+                                if (target) {
+                                    // 注入该节点及其子树结构
+                                    referencesData.push(`【参考节点结构：${target.label} (来自 ${map.title})】\n${serializeNodeTree(target)}`);
+                                }
+                            }
+                        } catch(e) { logger.warn(`Failed to fetch ref node ${id2}`); }
+                    }
+                }
+            }
+
+            // 合并上下文
+            const finalReferences = referencesData.length > 0 ? referencesData.join('\n\n') : undefined;
+
+            await apiService.generateStream(
+                novelSettings || {} as any, 
+                WorkflowStep.MIND_MAP_NODE, 
+                aiTargetNode.label, 
+                finalReferences, // 传入结构化数据作为上下文
+                (chunk) => setAiContent(p => p + chunk), 
+                promptText,
+                aiModel // 传入选择的模型
+            ); 
+        } catch (e: any) { 
+            setAiError(e.message); 
+        } finally { 
+            setIsGenerating(false); 
+        }
+    };
+
     const applyAiResult = () => { 
         if (!aiTargetNode || !rootNode || !aiContent) return;
         const lines = aiContent.split('\n').filter(l => l.trim().length > 0);
@@ -423,17 +630,94 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                 </div>
             </div>
 
-            {/* AI Modal (Updated for Prompt Selection) */}
+            {/* AI Modal (Updated for Context Injection) */}
             {showAiModal && aiTargetNode && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm text-slate-200">
-                    <div className="bg-slate-800 w-full max-w-2xl rounded-xl shadow-2xl border border-slate-700 p-4">
+                    <div className="bg-slate-800 w-full max-w-2xl rounded-xl shadow-2xl border border-slate-700 p-4 relative animate-fade-in">
                         <h3 className="font-bold text-white mb-4">✨ AI 扩展: {aiTargetNode.label}</h3>
                         
-                        <div className="mb-4 space-y-2">
-                             <PromptSelector type="normal" label="插入常用指令" onSelect={(val) => setAiPrompt(prev => prev + '\n' + val)} />
+                        {/* 模型选择与常用指令 */}
+                        <div className="mb-4 flex gap-4">
+                            <div className="w-1/3">
+                                <label className="block text-xs text-slate-500 mb-1">选择模型</label>
+                                <select 
+                                    value={aiModel} 
+                                    onChange={(e) => setAiModel(e.target.value)}
+                                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-xs text-slate-300 outline-none focus:border-indigo-500"
+                                >
+                                    {availableModels.length > 0 ? (
+                                        availableModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)
+                                    ) : (
+                                        <option value="gemini-2.5-flash">Gemini 2.5 Flash (Default)</option>
+                                    )}
+                                </select>
+                            </div>
+                            <div className="flex-1">
+                                <PromptSelector type="normal" label="插入常用指令" onSelect={(val) => insertAiText(val)} />
+                            </div>
                         </div>
 
-                        <textarea value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} className="w-full h-24 bg-slate-900 border border-slate-600 rounded p-3 text-sm text-white mb-4" />
+                        {/* 镜像 Div 用于光标定位 */}
+                        <div 
+                            ref={aiMirrorRef}
+                            className="absolute top-0 left-0 -z-50 opacity-0 whitespace-pre-wrap break-words pointer-events-none"
+                            style={{ fontFamily: 'ui-sans-serif, system-ui, sans-serif', fontSize: '0.875rem', padding: '0' }}
+                        ></div>
+
+                        <div className="relative">
+                            <textarea 
+                                ref={aiTextareaRef}
+                                value={aiPrompt} 
+                                onChange={handleAiInput} 
+                                className="w-full h-32 bg-slate-900 border border-slate-600 rounded p-3 text-sm text-white mb-2"
+                                placeholder="输入指令..."
+                            />
+
+                            {/* 操作指引 */}
+                            <div className="flex justify-between items-center text-[10px] text-slate-500 px-1 mb-4">
+                                <div className="space-x-3">
+                                    <span>👉 输入 <span className="text-pink-400 font-bold">:</span> 引用导图</span>
+                                    <span>👉 输入 <span className="text-green-400 font-bold">@</span> 引用节点</span>
+                                </div>
+                                <div>
+                                    Shift + Enter 换行
+                                </div>
+                            </div>
+
+                            {/* 智能引用菜单 */}
+                            {aiMenuType && (
+                                <div 
+                                    className="absolute z-[60] bg-slate-800 border border-slate-600 rounded-lg shadow-xl w-64 max-h-60 overflow-y-auto animate-fade-in"
+                                    style={{ top: aiMenuPos.top, left: aiMenuPos.left }}
+                                >
+                                    <div className="px-2 py-1 text-xs text-slate-500 border-b border-slate-700 bg-slate-900 sticky top-0">
+                                        {aiMenuType === 'map' ? '引用导图 (输入筛选)' : '引用节点'}
+                                    </div>
+                                    
+                                    {aiMenuType === 'map' && (
+                                        <>
+                                            {availableMaps.filter(m => m.title.includes(aiFilterText)).map(m => (
+                                                <button key={m.id} onClick={() => insertAiText(`[参考导图:${m.id}:${m.title}]`, aiFilterText.length + 1)} className="w-full text-left px-3 py-1.5 text-sm text-slate-300 hover:bg-pink-600 hover:text-white truncate">
+                                                    🧠 {m.title}
+                                                </button>
+                                            ))}
+                                            {availableMaps.length === 0 && <div className="p-2 text-xs text-slate-500">无其他导图</div>}
+                                        </>
+                                    )}
+
+                                    {aiMenuType === 'node' && (
+                                        <>
+                                            {aiNodeOptions.filter(n => n.label.includes(aiFilterText)).map(n => (
+                                                <button key={n.id} onClick={() => insertAiText(`[引用节点:${aiActiveMapId}:${n.id}:${n.label}]`, aiFilterText.length + 1)} className="w-full text-left px-3 py-1.5 text-sm text-slate-300 hover:bg-green-600 hover:text-white truncate">
+                                                    🏷️ {n.label}
+                                                </button>
+                                            ))}
+                                            {aiNodeOptions.length === 0 && <div className="p-2 text-xs text-slate-500">加载中...</div>}
+                                        </>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                         
                         <div className="flex justify-end gap-2">
                             <Button variant="ghost" onClick={() => setShowAiModal(false)}>取消</Button>

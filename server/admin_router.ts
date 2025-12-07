@@ -202,6 +202,36 @@ protectedApi.get('/logs', (c) => {
     }
 });
 
+// === 系统配置管理接口 (New) ===
+protectedApi.get('/configs', (c) => {
+    const aiModels = db.getSystemConfig('ai_models');
+    const defaultModel = db.getSystemConfig('default_model');
+    return c.json({ 
+        ai_models: aiModels ? JSON.parse(aiModels) : [],
+        default_model: defaultModel
+    });
+});
+
+protectedApi.put('/configs', async (c) => {
+    const { key, value } = await c.req.json();
+    if (!key || value === undefined) return c.json({ error: "Invalid params" }, 400);
+    
+    if (key === 'ai_models') {
+        // 校验 JSON 格式
+        try {
+            const parsed = JSON.parse(value);
+            if (!Array.isArray(parsed)) throw new Error("Must be array");
+            db.setSystemConfig(key, value);
+        } catch(e) {
+            return c.json({ error: "Invalid JSON for ai_models" }, 400);
+        }
+    } else {
+        db.setSystemConfig(key, value);
+    }
+    logger.warn(`Admin updated config: ${key}`);
+    return c.json({ success: true });
+});
+
 // 挂载受保护的路由
 adminRouter.route('/api', protectedApi);
 

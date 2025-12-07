@@ -3,6 +3,19 @@
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
 
+## 版本 v2.9.5 (UI Polish)
+
+### 功能变更
+- **Model Switching**: 后端接口 `/api/generate` 新增可选参数 `model`。思维导图编辑器现允许用户针对复杂的扩展任务选择性能更强的 `Gemini 3 Pro` 模型，而默认为 `Gemini 2.5 Flash` 以保持速度。
+- **User Instruction**: 在 UI 层面显式增加了关于触发智能引用（`:` 和 `@`）以及换行操作的文本提示，降低用户学习成本。
+
+## 版本 v2.9.4 (Context Injection)
+
+### 功能变更
+- **Mind Map AI Context**:
+    - **Local Node Reference**: 在思维导图 AI 扩展弹窗中，输入 `@` 时，如果没有前置的 `[参考导图:...]` 标签，系统将自动加载**当前导图**的所有节点供用户选择。
+    - **Optimization**: 当引用的是当前导图的节点时（`[引用节点:MapID:NodeID]` 中 MapID 等于当前 ID），前端将直接从内存中的 `rootNode` 提取最新结构数据并序列化，避免了 API 请求带来的延迟和数据即时性问题。
+
 ## 版本 v2.9.3 (Interaction Polish)
 
 ### 功能变更

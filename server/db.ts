@@ -80,7 +80,6 @@ export function initDB() {
         CREATE INDEX IF NOT EXISTS idx_mindmaps_project ON mind_maps(project_id);
 
         -- === 提示词库表 (New) ===
-        -- 性能优化：type 建立索引方便快速筛选分类
         CREATE TABLE IF NOT EXISTS user_prompts (
             id TEXT PRIMARY KEY,
             user_id TEXT,
@@ -93,11 +92,48 @@ export function initDB() {
         );
         CREATE INDEX IF NOT EXISTS idx_prompts_user ON user_prompts(user_id);
         CREATE INDEX IF NOT EXISTS idx_prompts_type ON user_prompts(type);
+
+        -- === 系统配置表 (New v2.9.6) ===
+        CREATE TABLE IF NOT EXISTS system_configs (
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            updated_at TEXT
+        );
     `);
+
+    // 初始化默认模型配置
+    const checkConfig = db.prepare('SELECT key FROM system_configs WHERE key = ?').get('ai_models');
+    if (!checkConfig) {
+        const defaultModels = JSON.stringify([
+            { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (快速)' },
+            { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (强推理)' }
+        ]);
+        const now = new Date().toISOString();
+        db.prepare('INSERT INTO system_configs (key, value, updated_at) VALUES (?, ?, ?)').run('ai_models', defaultModels, now);
+        db.prepare('INSERT INTO system_configs (key, value, updated_at) VALUES (?, ?, ?)').run('default_model', 'gemini-2.5-flash', now);
+        console.log('[DB] Initialized default system configurations');
+    }
+
     console.log(`[DB] Database initialized at ${DB_PATH} (WAL mode: ON)`);
 }
 
 // ... existing user, archive, card, project, chapter, mindmap functions ...
+
+// === System Configs ===
+export function getSystemConfig(key: string): string | null {
+    const row = db.prepare('SELECT value FROM system_configs WHERE key = ?').get(key) as { value: string } | undefined;
+    return row ? row.value : null;
+}
+
+export function setSystemConfig(key: string, value: string): void {
+    const now = new Date().toISOString();
+    // UPSERT syntax for SQLite
+    db.prepare(`
+        INSERT INTO system_configs (key, value, updated_at) 
+        VALUES (?, ?, ?) 
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+    `).run(key, value, now);
+}
 
 // === Users ===
 export function createUser(id: string, username: string, passwordHash: string): User {
