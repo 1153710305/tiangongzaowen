@@ -55,6 +55,9 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
     // AI 模型配置状态 (动态)
     const [aiModel, setAiModel] = useState('');
     const [availableModels, setAvailableModels] = useState<{id: string, name: string}[]>([]);
+    // AI 提示词配置状态 (新增)
+    const [aiIdentity, setAiIdentity] = useState('');
+    const [aiConstraints, setAiConstraints] = useState('');
 
     // AI 弹窗上下文菜单状态
     const aiTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -292,7 +295,16 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
     const handleResetView = () => setViewState({ x: 0, y: 0, scale: 1 });
 
     // === AI 逻辑增强 ===
-    const openAiModal = (node: MindMapNode) => { setAiTargetNode(node); setAiPrompt(`基于“${node.label}”，请生成...`); setAiContent(''); setAiError(null); setShowAiModal(true); setAiMenuType(null); };
+    const openAiModal = (node: MindMapNode) => { 
+        setAiTargetNode(node); 
+        setAiPrompt(`基于“${node.label}”，请生成...`); 
+        setAiContent(''); 
+        setAiError(null); 
+        setAiIdentity(''); // Reset
+        setAiConstraints(''); // Reset
+        setShowAiModal(true); 
+        setAiMenuType(null); 
+    };
     
     // 1. AI 输入框光标追踪
     const updateAiCursorCoords = () => {
@@ -421,6 +433,11 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
             // 复制 prompt 防止 regex 状态问题
             const promptText = aiPrompt;
             
+            // 构建带配置的最终 Prompt
+            let finalPrompt = promptText;
+            if (aiIdentity) finalPrompt = `【身份设定】:${aiIdentity}\n` + finalPrompt;
+            if (aiConstraints) finalPrompt = finalPrompt + `\n【强制约束】:${aiConstraints}`;
+
             while ((match = refRegex.exec(promptText)) !== null) {
                 const [fullTag, type, id1, id2, title] = match;
                 
@@ -479,7 +496,7 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                 aiTargetNode.label, 
                 finalReferences, // 传入结构化数据作为上下文
                 (chunk) => setAiContent(p => p + chunk), 
-                promptText,
+                finalPrompt, // 使用带配置的 Prompt
                 aiModel // 传入选择的模型
             ); 
         } catch (e: any) { 
@@ -630,15 +647,15 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                 </div>
             </div>
 
-            {/* AI Modal (Updated for Context Injection) */}
+            {/* AI Modal (Updated for Context Injection & Prompt Configuration) */}
             {showAiModal && aiTargetNode && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm text-slate-200">
                     <div className="bg-slate-800 w-full max-w-2xl rounded-xl shadow-2xl border border-slate-700 p-4 relative animate-fade-in">
                         <h3 className="font-bold text-white mb-4">✨ AI 扩展: {aiTargetNode.label}</h3>
                         
-                        {/* 模型选择与常用指令 */}
-                        <div className="mb-4 flex gap-4">
-                            <div className="w-1/3">
+                        {/* 模型选择与 Prompt 配置区 (Grid 布局) */}
+                        <div className="mb-4 grid grid-cols-2 gap-4">
+                            <div>
                                 <label className="block text-xs text-slate-500 mb-1">选择模型</label>
                                 <select 
                                     value={aiModel} 
@@ -652,8 +669,14 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                                     )}
                                 </select>
                             </div>
-                            <div className="flex-1">
-                                <PromptSelector type="normal" label="插入常用指令" onSelect={(val) => insertAiText(val)} />
+                            <div>
+                                <PromptSelector type="system" label="身份设定 (可选)" onSelect={setAiIdentity} />
+                            </div>
+                            <div>
+                                <PromptSelector type="constraint" label="约束条件 (可选)" onSelect={setAiConstraints} />
+                            </div>
+                            <div>
+                                <PromptSelector type="normal" label="常用指令 (插入到输入框)" onSelect={(val) => insertAiText(val)} />
                             </div>
                         </div>
 
