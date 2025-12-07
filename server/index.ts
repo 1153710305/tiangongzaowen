@@ -71,14 +71,8 @@ app.onError((err, c) => {
 });
 
 // API Key & JWT Secret
-const API_KEY = process.env.API_KEY;
+// 注意：API_KEY 现在在请求处理函数中动态读取，不再作为全局常量初始化 AI 客户端
 const JWT_SECRET = process.env.JWT_SECRET || 'skycraft_secret_key_change_me';
-
-if (!API_KEY) {
-    logger.error("❌ 严重错误: API_KEY 未设置");
-}
-
-const ai = new GoogleGenAI({ apiKey: API_KEY || '' });
 
 // === 挂载后台管理路由 (功能解耦) ===
 app.route('/admin', adminRouter);
@@ -148,12 +142,19 @@ app.use('/api/projects/*', jwt({ secret: JWT_SECRET })); // 新增: Projects API
 
 // AI 生成 (受保护)
 app.post('/api/generate', async (c) => {
-    if (!API_KEY) return c.json({ error: "Server API Key not configured" }, 500);
+    const API_KEY = process.env.API_KEY;
+    if (!API_KEY) {
+        logger.error("❌ 严重错误: API_KEY 未设置");
+        return c.json({ error: "Server API Key not configured" }, 500);
+    }
 
     const payload = c.get('jwtPayload'); 
     logger.info(`[AI生成] 用户: ${payload.username} 请求生成`);
 
     try {
+        // 在请求内初始化 AI 客户端，确保上下文和 Key 都是最新的
+        const ai = new GoogleGenAI({ apiKey: API_KEY });
+
         const body = await c.req.json();
         const { settings, step, context, references } = body as { 
             settings: NovelSettings, 
@@ -218,6 +219,12 @@ app.post('/api/generate', async (c) => {
         });
 
     } catch (error: any) {
+        // 专门处理 fetch failed 网络错误
+        if (error.message && error.message.includes('fetch failed')) {
+            logger.error("Google Gemini API 连接失败 (Network/Timeout)", { error: error.message });
+            return c.json({ error: "无法连接至 AI 服务，请检查网络设置或稍后重试 (Timeout/Fetch Failed)" }, 503);
+        }
+
         logger.error("AI生成请求失败", { error: error.message });
         return c.json({ error: error.message }, 500);
     }

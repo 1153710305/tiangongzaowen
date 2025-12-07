@@ -71,6 +71,10 @@ CREATE TABLE IF NOT EXISTS idea_cards (
 
 ## 📝 版本历史 (Changelog)
 
+**v2.7.3 (Stability Fix: Fetch Error)**
+*   **Server**: 将 `GoogleGenAI` 客户端的初始化移动到 `POST /api/generate` 请求处理函数内部。这遵循了 SDK 的最佳实践，确保每次请求都使用最新的环境配置，解决了部分 Node 环境下因全局单例导致的 `fetch failed` 问题。
+*   **Error Handling**: 增加了针对网络超时和连接失败的具体错误捕获，现在会返回 503 状态码并提示用户检查网络，而不是泛泛的 500 错误。
+
 **v2.7.2 (Bug Fix: Auth/FK)**
 *   **Server**: 修复了“Foreign Key constraint failed”错误。现在所有写入操作（存档、卡片、项目）前都会校验 Token 用户是否真实存在于数据库中，若不存在则返回 401。
 *   **Client**: 增强了对 401 Unauthorized 错误的处理。当后端返回 401 时，前端会自动登出并弹出登录框，解决因服务端数据库重置导致的 Token 失效问题。
