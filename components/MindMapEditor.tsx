@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { MindMap, MindMapNode, WorkflowStep, NovelSettings } from '../types';
 import { apiService } from '../services/geminiService';
@@ -8,7 +9,7 @@ import ReactMarkdown from 'react-markdown';
 interface Props {
     projectId: string;
     mapData: MindMap;
-    onSave: (mapId: string, title: string, dataStr: string) => void;
+    onSave: (mapId: string, title: string, dataStr: string) => Promise<void>;
     novelSettings?: NovelSettings;
     availableMaps?: { id: string, title: string }[]; // 可用的其他思维导图，用于 : 引用
 }
@@ -130,6 +131,7 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
     const [rootNode, setRootNode] = useState<MindMapNode | null>(null);
     const [title, setTitle] = useState(mapData.title);
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [isSaving, setIsSaving] = useState(false); // 保存状态
     
     // AI 弹窗状态
     const [showAiModal, setShowAiModal] = useState(false);
@@ -139,16 +141,15 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
     const [aiContent, setAiContent] = useState('');
     
     // === 引用系统状态 ===
-    // 'node': 本地节点, 'map': 外部导图, 'remote_node': 外部导图的节点
     const [showMentionList, setShowMentionList] = useState<'node' | 'map' | 'remote_node' | null>(null); 
     const [mentionFilter, setMentionFilter] = useState('');
     const [cursorPos, setCursorPos] = useState({ top: 0, left: 0 });
-    const [remoteNodeOptions, setRemoteNodeOptions] = useState<{id: string, label: string}[]>([]); // 缓存加载的外部节点
-    const [remoteMapLoading, setRemoteMapLoading] = useState(false); // 外部导图加载状态
+    const [remoteNodeOptions, setRemoteNodeOptions] = useState<{id: string, label: string}[]>([]); 
+    const [remoteMapLoading, setRemoteMapLoading] = useState(false); 
 
     const promptInputRef = useRef<HTMLTextAreaElement>(null);
-    const mirrorRef = useRef<HTMLDivElement>(null); // 用于模拟光标位置
-    const remoteMapCache = useRef<Map<string, MindMapNode[]>>(new Map()); // 缓存已加载的外部导图数据
+    const mirrorRef = useRef<HTMLDivElement>(null); 
+    const remoteMapCache = useRef<Map<string, MindMapNode[]>>(new Map()); 
 
     // 初始化
     useEffect(() => {
@@ -164,12 +165,6 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
         }
         setTitle(mapData.title);
     }, [mapData]);
-
-    const handleManualSave = () => {
-        if (!rootNode) return;
-        const dataStr = JSON.stringify({ root: rootNode });
-        onSave(mapData.id, title, dataStr);
-    };
 
     // === Utils ===
     const updateNode = (node: MindMapNode, id: string, updater: (n: MindMapNode) => MindMapNode): MindMapNode => {
@@ -189,22 +184,56 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
         return list;
     };
 
+    // === 自动保存逻辑 ===
+    const triggerAutoSave = async (newRoot: MindMapNode, currentTitle: string) => {
+        setIsSaving(true);
+        try {
+            const dataStr = JSON.stringify({ root: newRoot });
+            await onSave(mapData.id, currentTitle, dataStr);
+        } catch (e) {
+            logger.error("Auto save failed", e);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleManualSave = () => {
+        if (!rootNode) return;
+        triggerAutoSave(rootNode, title);
+    };
+
+    const handleTitleBlur = () => {
+        if (!rootNode) return;
+        if (title !== mapData.title) {
+            triggerAutoSave(rootNode, title);
+        }
+    };
+
     const handleAddChild = (parentId: string) => {
         if (!rootNode) return;
         const newChild: MindMapNode = { id: crypto.randomUUID(), label: '新节点', children: [] };
-        setRootNode(updateNode(rootNode, parentId, (n) => ({ ...n, children: [...n.children, newChild] })));
+        // 先计算新状态
+        const newRoot = updateNode(rootNode, parentId, (n) => ({ ...n, children: [...n.children, newChild] }));
+        // 更新 UI
+        setRootNode(newRoot);
+        // 触发保存
+        triggerAutoSave(newRoot, title);
     };
 
     const handleEditNode = (id: string, newLabel: string) => {
         if (!rootNode) return;
-        setRootNode(updateNode(rootNode, id, (n) => ({ ...n, label: newLabel })));
+        const newRoot = updateNode(rootNode, id, (n) => ({ ...n, label: newLabel }));
+        setRootNode(newRoot);
+        triggerAutoSave(newRoot, title);
     };
 
     const handleDeleteNode = (id: string) => {
         if (!rootNode || id === 'root') return;
         if (!confirm("确定删除该节点及其子节点吗？")) return;
-        setRootNode(deleteNode(rootNode, id));
+        const newRoot = deleteNode(rootNode, id);
+        setRootNode(newRoot);
         if (selectedId === id) setSelectedId(null);
+        triggerAutoSave(newRoot, title);
     };
 
     const openAiModal = (node: MindMapNode) => {
@@ -214,22 +243,18 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
         setShowAiModal(true);
     };
 
-    // === 核心逻辑：计算光标位置 ===
+    // ... (光标位置计算和引用逻辑保持不变) ...
     const updateCursorPosition = (val: string, selectionEnd: number) => {
         if (!mirrorRef.current || !promptInputRef.current) return;
-
         const textBeforeCursor = val.substring(0, selectionEnd);
         const textAfterCursor = val.substring(selectionEnd);
-        
         mirrorRef.current.textContent = textBeforeCursor;
         const span = document.createElement('span');
         span.textContent = '|';
         mirrorRef.current.appendChild(span);
         mirrorRef.current.appendChild(document.createTextNode(textAfterCursor));
-        
         const rect = span.getBoundingClientRect();
         const wrapperRect = promptInputRef.current.parentElement?.getBoundingClientRect();
-
         if (wrapperRect) {
             const top = rect.top - wrapperRect.top + 24; 
             const left = rect.left - wrapperRect.left;
@@ -238,23 +263,18 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
     };
 
     const fetchRemoteMapNodes = async (mapTitle: string) => {
-        // 1. 检查缓存
         if (remoteMapCache.current.has(mapTitle)) {
             setRemoteNodeOptions(remoteMapCache.current.get(mapTitle)!);
             return;
         }
-
-        // 2. 查找 ID
         const targetMap = availableMaps.find(m => m.title === mapTitle);
         if (!targetMap) return;
-
         setRemoteMapLoading(true);
         try {
             const detail = await apiService.getMindMapDetail(projectId, targetMap.id);
             const parsed = JSON.parse(detail.data);
             if (parsed.root) {
                 const nodes = getAllNodesFlat(parsed.root);
-                // 存入缓存（简单扁平化用于搜索）
                 remoteMapCache.current.set(mapTitle, nodes);
                 setRemoteNodeOptions(nodes);
             }
@@ -272,28 +292,20 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
         updateCursorPosition(val, selectionEnd);
 
         const textBeforeCursor = val.substring(0, selectionEnd);
-        
-        // 匹配 @ (可能是本地节点，也可能是外部节点)
         const mentionMatch = textBeforeCursor.match(/@([^@\s:\[\]]*)$/);
-        // 匹配 : (导图引用)
         const mapMatch = textBeforeCursor.match(/:([^@\s:\[\]]*)$/);
-
-        // 核心变更：检测级联引用 [参考导图:XXX] @
         const remoteContextMatch = textBeforeCursor.match(/\[参考导图:([^\]]+)\]\s*@([^@\s:\[\]]*)$/);
 
         if (remoteContextMatch) {
-            // 模式：外部节点引用
             const mapName = remoteContextMatch[1];
             const filter = remoteContextMatch[2];
             setShowMentionList('remote_node');
             setMentionFilter(filter);
-            fetchRemoteMapNodes(mapName); // 触发加载外部导图
+            fetchRemoteMapNodes(mapName);
         } else if (mentionMatch) {
-            // 模式：本地节点引用
             setShowMentionList('node');
             setMentionFilter(mentionMatch[1]);
         } else if (mapMatch) {
-            // 模式：导图引用
             setShowMentionList('map');
             setMentionFilter(mapMatch[1]);
         } else {
@@ -305,26 +317,18 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
         const selectionEnd = promptInputRef.current?.selectionEnd || 0;
         const textBeforeCursor = aiPrompt.substring(0, selectionEnd);
         const textAfterCursor = aiPrompt.substring(selectionEnd);
-        
-        // 找到触发符号的位置
         const triggerChar = (type === 'node' || type === 'remote_node') ? '@' : ':';
         const lastTriggerIndex = textBeforeCursor.lastIndexOf(triggerChar);
-        
         if (lastTriggerIndex !== -1) {
             const prefix = aiPrompt.substring(0, lastTriggerIndex);
-            
-            // 无论本地还是外部节点，插入格式统一为 [引用:NodeName]
-            // AI 会根据上下文中的 [参考导图:XXX] 来决定去哪里找这个 Node
             let tag = '';
             if (type === 'map') {
                 tag = `[参考导图:${itemLabel}]`;
             } else {
                 tag = `[引用:${itemLabel}]`;
             }
-            
             const newText = prefix + tag + " " + textAfterCursor;
             setAiPrompt(newText);
-            
             setTimeout(() => {
                 if (promptInputRef.current) {
                     promptInputRef.current.focus();
@@ -336,40 +340,25 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
         setShowMentionList(null);
     };
 
+    // ... (handleAiGenerate 保持不变) ...
     const handleAiGenerate = async () => {
         if (!aiTargetNode || !rootNode) return;
         setIsGenerating(true);
         setAiContent('');
-
-        // 收集需要注入的上下文
         const references: string[] = [];
-        
-        // 1. 扫描所有的 [参考导图:XXX] 并加载
         const mapRegex = /\[参考导图:([^\]]+)\]/g;
         let match;
         const referencedMapTitles = new Set<string>();
-        
-        // 用于存储外部导图的根节点，方便后续查找
         const externalMapsData = new Map<string, MindMapNode>();
-
         while ((match = mapRegex.exec(aiPrompt)) !== null) {
             referencedMapTitles.add(match[1]);
         }
-
-        // 异步加载所有被引用的导图
         const loadPromises = Array.from(referencedMapTitles).map(async (mapTitle) => {
-             // 防止引用自己
              if (mapTitle === mapData.title) return;
-
              const targetMap = availableMaps.find(m => m.title === mapTitle);
              if (targetMap) {
                  try {
-                     // 优先读缓存
                      if (remoteMapCache.current.has(mapTitle)) {
-                         // 缓存里存的是 flat nodes，我们需要结构，这里简单起见，如果缓存有，说明已经 fetch 过了
-                         // 但为了获取结构化数据，可能需要保留 root node。
-                         // 这里做一个简化：重新 fetch 或者优化缓存结构。
-                         // 为保证正确性，这里重新 fetch 详情（Hono SQLite 很快）或者优化为缓存完整 JSON
                          const detail = await apiService.getMindMapDetail(projectId, targetMap.id);
                          const parsed = JSON.parse(detail.data);
                          if (parsed.root) externalMapsData.set(mapTitle, parsed.root);
@@ -378,7 +367,6 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                          const parsed = JSON.parse(detail.data);
                          if (parsed.root) {
                              externalMapsData.set(mapTitle, parsed.root);
-                             // 顺便更新缓存
                              remoteMapCache.current.set(mapTitle, getAllNodesFlat(parsed.root));
                          }
                      }
@@ -387,31 +375,21 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                  }
              }
         });
-
         await Promise.all(loadPromises);
-
-        // 2. 注入外部导图的全局摘要（如果有引用但没有具体指定节点）
         externalMapsData.forEach((root, title) => {
              const summary = root.children.map(c => c.label).join(', ');
              references.push(`参考文件【导图:${title}】: 主题《${root.label}》，包含分支：${summary}。`);
         });
-
-        // 3. 扫描 [引用:XXX] 并定位节点（本地优先，外部次之）
         const nodeRegex = /\[引用:([^\]]+)\]/g;
         const allLocalNodes = getAllNodesFlat(rootNode);
-
         while ((match = nodeRegex.exec(aiPrompt)) !== null) {
             const label = match[1];
-            
-            // A. 查本地
             const localNode = allLocalNodes.find(n => n.label === label);
             if (localNode) {
                 const childrenStr = localNode.children.map(c => c.label).join(', ');
                 references.push(`本地节点详情【${localNode.label}】${childrenStr ? `(包含子项: ${childrenStr})` : '(无子项)'}`);
-                continue; // 找到了就不去外部找了，防止同名冲突
+                continue; 
             }
-
-            // B. 查外部
             let foundInExternal = false;
             for (const [mapTitle, extRoot] of externalMapsData.entries()) {
                 const extNodes = getAllNodesFlat(extRoot);
@@ -423,12 +401,10 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                     break;
                 }
             }
-            
             if (!localNode && !foundInExternal) {
                 references.push(`引用节点【${label}】: (未找到该节点内容)`);
             }
         }
-
         try {
             await apiService.generateStream(
                 novelSettings || {} as any,
@@ -447,21 +423,16 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
 
     const applyAiResult = () => {
         if (!aiTargetNode || !rootNode || !aiContent) return;
-
         const lines = aiContent.split('\n').filter(l => l.trim().length > 0);
         const newChildren: MindMapNode[] = [];
         const stack: { node: MindMapNode, level: number }[] = [];
-
         for (const line of lines) {
             const match = line.match(/^(\s*)[-*]\s+(.+)/);
             if (!match) continue;
-            
             const indent = match[1].length;
             const text = match[2];
             const newNode: MindMapNode = { id: crypto.randomUUID(), label: text, children: [] };
-
             while (stack.length > 0 && stack[stack.length - 1].level >= indent) stack.pop();
-
             if (stack.length === 0) {
                 newChildren.push(newNode);
                 stack.push({ node: newNode, level: indent });
@@ -471,11 +442,13 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                 stack.push({ node: newNode, level: indent });
             }
         }
-
         if (newChildren.length > 0) {
-            setRootNode(updateNode(rootNode, aiTargetNode.id, (n) => ({ ...n, children: [...n.children, ...newChildren] })));
+            // 计算并应用新状态
+            const newRoot = updateNode(rootNode, aiTargetNode.id, (n) => ({ ...n, children: [...n.children, ...newChildren] }));
+            setRootNode(newRoot);
             setShowAiModal(false);
             logger.info("已应用 AI 生成的思维导图节点");
+            triggerAutoSave(newRoot, title);
         } else {
             alert("未能解析出有效的节点结构，请检查 AI 生成内容是否为列表格式。");
         }
@@ -483,10 +456,8 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
 
     if (!rootNode) return <div className="text-white p-4">Loading...</div>;
 
-    // 过滤列表逻辑
     let dropdownItems: { id: string, label: string, type: 'node' | 'map' | 'remote_node' }[] = [];
     let dropdownTitle = '';
-
     if (showMentionList === 'node') {
         dropdownTitle = '引用当前导图节点';
         dropdownItems = getAllNodesFlat(rootNode)
@@ -511,9 +482,25 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                 <input 
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
+                    onBlur={handleTitleBlur} // 标题失焦自动保存
                     className="bg-transparent border-none text-slate-200 font-bold focus:ring-0 outline-none w-64"
+                    placeholder="导图标题"
                 />
-                <Button size="sm" onClick={handleManualSave} variant="primary">💾 保存导图</Button>
+                <div className="flex items-center gap-3">
+                    {isSaving && (
+                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                            <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            自动保存中...
+                        </span>
+                    )}
+                    {!isSaving && <span className="text-xs text-green-500/50">已保存</span>}
+                    <Button size="sm" onClick={handleManualSave} variant="secondary" className="text-xs py-1 h-7">
+                        💾 强制保存
+                    </Button>
+                </div>
             </div>
 
             {/* Canvas */}

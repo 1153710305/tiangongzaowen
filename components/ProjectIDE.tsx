@@ -81,14 +81,22 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
     const handleSaveMindMap = async (mapId: string, title: string, dataStr: string) => {
         try {
             await apiService.updateMindMap(project.id, mapId, title, dataStr);
-            await loadStructure(); 
+            // 自动保存成功不弹窗，只记录日志
+            logger.info(`思维导图已保存: ${title}`);
+            
+            // 为了保持侧边栏标题同步，可以重新加载结构，但要注意避免无限刷新
+            // 这里简单重新获取列表即可，通常很快
+            const newStruct = await apiService.getProjectStructure(project.id);
+            setStructure(newStruct);
+
             // 更新当前 activeFile 标题
             if (activeFile?.id === mapId) {
                 setActiveFile(prev => prev ? { ...prev, title } : null);
             }
-            logger.info("思维导图保存成功");
         } catch (e) {
-            alert("保存失败");
+            logger.error("保存失败", e);
+            alert("保存失败，请检查网络连接");
+            throw e; // 抛出异常让子组件感知
         }
     };
 
