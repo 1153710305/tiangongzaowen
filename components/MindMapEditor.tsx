@@ -26,6 +26,22 @@ const serializeNodeTree = (node: MindMapNode, depth: number = 0): string => {
     return result;
 };
 
+// 辅助函数：从树中递归删除指定 ID 的节点 (健壮版)
+const deleteNodeFromTree = (root: MindMapNode, targetId: string): MindMapNode => {
+    // 安全检查
+    if (!root || !root.children) return root;
+
+    // 1. 过滤掉直接子节点中匹配 ID 的 (删除该节点及其子树)
+    const newChildren = root.children.filter(c => c.id !== targetId);
+    
+    // 2. 递归处理剩余的子节点 (以防目标节点在更深层)
+    // 只有当 newChildren 发生变化或者子节点递归返回新对象时，才需要创建新对象，
+    // 但为了简化不可变数据流，我们统一创建新引用。
+    const finalChildren = newChildren.map(c => deleteNodeFromTree(c, targetId));
+    
+    return { ...root, children: finalChildren };
+};
+
 // 递归渲染节点组件
 const NodeRenderer: React.FC<{
     node: MindMapNode;
@@ -73,7 +89,7 @@ const NodeRenderer: React.FC<{
                     onClick={(e) => { e.stopPropagation(); onSelect(node.id); }}
                     onDoubleClick={handleDoubleClick}
                     className={`
-                        relative px-4 py-2 rounded-lg border-2 transition-all cursor-pointer min-w-[120px] max-w-[300px]
+                        relative px-4 py-2 rounded-lg border-2 transition-all cursor-pointer min-w-[120px] max-w-[300px] z-10
                         ${isSelected
                             ? 'border-pink-500 bg-pink-900/30 text-white shadow-[0_0_10px_rgba(236,72,153,0.3)]' 
                             : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500 hover:bg-slate-750'}
@@ -94,16 +110,44 @@ const NodeRenderer: React.FC<{
 
                     {/* 快捷操作浮层 (仅选中时显示) */}
                     {isSelected && (
-                        <div className="absolute -top-9 left-0 flex gap-1 bg-slate-900 border border-slate-700 rounded p-1 shadow-lg z-20 animate-fade-in">
-                            <button onClick={(e) => { e.stopPropagation(); onAddChild(node.id); }} className="p-1.5 hover:bg-slate-700 rounded text-green-400 transition-colors" title="添加子节点">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                        <div className="absolute -top-11 left-1/2 -translate-x-1/2 flex gap-1 bg-slate-900 border border-slate-600 rounded p-1.5 shadow-xl z-50 animate-fade-in whitespace-nowrap">
+                            <button 
+                                onClick={(e) => { 
+                                    e.stopPropagation(); 
+                                    e.preventDefault();
+                                    onAddChild(node.id); 
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()} // 阻止父级捕获
+                                className="p-1 hover:bg-slate-700 rounded text-green-400 transition-colors cursor-pointer relative z-50" 
+                                title="添加子节点"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
                             </button>
-                            <button onClick={(e) => { e.stopPropagation(); onAiExpand(node); }} className="p-1.5 hover:bg-slate-700 rounded text-pink-400 transition-colors" title="AI 扩展">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            <button 
+                                onClick={(e) => { 
+                                    e.stopPropagation(); 
+                                    e.preventDefault();
+                                    onAiExpand(node); 
+                                }} 
+                                onMouseDown={(e) => e.stopPropagation()} // 阻止父级捕获
+                                className="p-1 hover:bg-slate-700 rounded text-pink-400 transition-colors cursor-pointer relative z-50" 
+                                title="AI 扩展"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                             </button>
                             {depth > 0 && (
-                                <button onClick={(e) => { e.stopPropagation(); onDelete(node.id); }} className="p-1.5 hover:bg-slate-700 rounded text-red-400 transition-colors" title="删除">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                <button 
+                                    onClick={(e) => { 
+                                        e.stopPropagation(); 
+                                        e.preventDefault();
+                                        console.log('Delete requested for node:', node.id); // Console Debug
+                                        onDelete(node.id); 
+                                    }} 
+                                    onMouseDown={(e) => e.stopPropagation()} // 关键：防止点击被视作拖拽或选择
+                                    className="p-1 hover:bg-slate-700 rounded text-red-400 transition-colors cursor-pointer relative z-50" 
+                                    title="删除节点"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                 </button>
                             )}
                         </div>
@@ -111,13 +155,13 @@ const NodeRenderer: React.FC<{
                 </div>
 
                 {/* 连接线 */}
-                {node.children.length > 0 && (
+                {node.children && node.children.length > 0 && (
                     <div className="w-8 h-0.5 bg-slate-700"></div>
                 )}
             </div>
 
             {/* 子节点容器 */}
-            {node.children.length > 0 && (
+            {node.children && node.children.length > 0 && (
                 <div className="flex flex-col ml-8 pl-4 border-l-2 border-slate-800 gap-4 py-2 relative" style={{marginLeft: '2rem'}}>
                      {/* 连接线装饰 */}
                     {node.children.map((child) => (
@@ -186,17 +230,15 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
     // === Utils ===
     const updateNode = (node: MindMapNode, id: string, updater: (n: MindMapNode) => MindMapNode): MindMapNode => {
         if (node.id === id) return updater(node);
-        return { ...node, children: node.children.map(c => updateNode(c, id, updater)) };
-    };
-
-    const deleteNode = (node: MindMapNode, id: string): MindMapNode => {
-        return { ...node, children: node.children.filter(c => c.id !== id).map(c => deleteNode(c, id)) };
+        return { ...node, children: (node.children || []).map(c => updateNode(c, id, updater)) };
     };
 
     const getAllNodesFlat = (node: MindMapNode): MindMapNode[] => {
         let list = [node];
-        for (const child of node.children) {
-            list = [...list, ...getAllNodesFlat(child)];
+        if (node.children) {
+            for (const child of node.children) {
+                list = [...list, ...getAllNodesFlat(child)];
+            }
         }
         return list;
     };
@@ -230,7 +272,7 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
         if (!rootNode) return;
         const newChild: MindMapNode = { id: crypto.randomUUID(), label: '新节点', children: [] };
         // 先计算新状态
-        const newRoot = updateNode(rootNode, parentId, (n) => ({ ...n, children: [...n.children, newChild] }));
+        const newRoot = updateNode(rootNode, parentId, (n) => ({ ...n, children: [...(n.children || []), newChild] }));
         // 更新 UI
         setRootNode(newRoot);
         // 触发保存
@@ -245,12 +287,36 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
     };
 
     const handleDeleteNode = (id: string) => {
-        if (!rootNode || id === 'root') return;
-        if (!confirm("确定删除该节点及其子节点吗？")) return;
-        const newRoot = deleteNode(rootNode, id);
-        setRootNode(newRoot);
-        if (selectedId === id) setSelectedId(null);
-        triggerAutoSave(newRoot, title);
+        console.log("Exec handleDeleteNode", id); // Console Log
+        logger.info("Handling delete node", { id });
+        if (!rootNode) return;
+        if (id === rootNode.id) {
+            alert("根节点不能删除");
+            return;
+        }
+
+        // 使用 confirm 确认删除
+        if (!window.confirm("确定要删除该节点及其所有子节点吗？")) {
+            return;
+        }
+        
+        try {
+            // 使用组件外部的纯函数进行删除操作
+            const newRoot = deleteNodeFromTree(rootNode, id);
+            
+            // 验证是否真的删除了
+            if (newRoot === rootNode) {
+                 logger.warn("Node not found or not deleted", { id });
+            }
+
+            setRootNode(newRoot);
+            if (selectedId === id) setSelectedId(null);
+            triggerAutoSave(newRoot, title);
+            logger.info("Successfully deleted node", { id });
+        } catch (e) {
+            logger.error("Failed to delete node", e);
+            alert("删除节点失败，请重试");
+        }
     };
 
     const openAiModal = (node: MindMapNode) => {
@@ -382,10 +448,6 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                  if (targetMap) {
                      try {
                          if (remoteMapCache.current.has(mapTitle)) {
-                             // 如果缓存只有扁平列表，这里可能需要重新获取完整树结构？
-                             // 实际上我们缓存的是扁平化的 MindMapNode，引用依然指向内存中的树对象。
-                             // 为了安全起见，这里假设缓存是有效的。如果需要树结构，扁平列表中的节点包含 children 引用。
-                             // 但为了稳妥，我们重新 fetch 详情拿到 root。
                              const detail = await apiService.getMindMapDetail(projectId, targetMap.id);
                              const parsed = JSON.parse(detail.data);
                              if (parsed.root) externalMapsData.set(mapTitle, parsed.root);
@@ -406,7 +468,7 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
 
             // 2. 将外部导图摘要加入引用
             externalMapsData.forEach((root, title) => {
-                 const summary = root.children.map(c => c.label).join(', ');
+                 const summary = (root.children || []).map(c => c.label).join(', ');
                  references.push(`参考文件【导图:${title}】: 主题《${root.label}》，包含分支：${summary}。`);
             });
 
@@ -419,7 +481,6 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                 const localNode = allLocalNodes.find(n => n.label === label);
                 
                 if (localNode) {
-                    // 核心修改：使用 serializeNodeTree 递归获取整个子树结构
                     const treeStruct = serializeNodeTree(localNode);
                     references.push(`本地节点详情【${localNode.label}】(完整结构):\n${treeStruct}`);
                     continue; 
@@ -431,7 +492,6 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                     const extNodes = getAllNodesFlat(extRoot);
                     const extNode = extNodes.find(n => n.label === label);
                     if (extNode) {
-                         // 核心修改：使用 serializeNodeTree 递归获取整个子树结构
                         const treeStruct = serializeNodeTree(extNode);
                         references.push(`来自【${mapTitle}】的节点详情【${extNode.label}】(完整结构):\n${treeStruct}`);
                         foundInExternal = true;
@@ -482,8 +542,7 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
             }
         }
         if (newChildren.length > 0) {
-            // 计算并应用新状态
-            const newRoot = updateNode(rootNode, aiTargetNode.id, (n) => ({ ...n, children: [...n.children, ...newChildren] }));
+            const newRoot = updateNode(rootNode, aiTargetNode.id, (n) => ({ ...n, children: [...(n.children || []), ...newChildren] }));
             setRootNode(newRoot);
             setShowAiModal(false);
             logger.info("已应用 AI 生成的思维导图节点");
