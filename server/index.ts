@@ -113,13 +113,25 @@ app.use('/api/projects/*', jwt({ secret: JWT_SECRET }));
 
 // AI 生成
 app.post('/api/generate', async (c) => {
+    const startTime = Date.now();
     const API_KEY = process.env.API_KEY;
     if (!API_KEY) {
         return c.json({ error: "Server API Key not configured" }, 500);
     }
 
+    const apiKeyMasked = `...${API_KEY.slice(-4)}`;
+    const modelName = 'gemini-2.5-flash';
     const payload = c.get('jwtPayload'); 
-    logger.info(`[AI生成] 用户: ${payload.username} 请求生成`);
+    
+    // 准备审计日志对象
+    let auditLog: any = {
+        user: payload.username,
+        model: modelName,
+        apiKey: apiKeyMasked,
+        systemInstruction: SYSTEM_INSTRUCTION,
+        request: {},
+        response: {},
+    };
 
     try {
         const ai = new GoogleGenAI({ apiKey: API_KEY });
@@ -148,15 +160,23 @@ app.post('/api/generate', async (c) => {
                 case WorkflowStep.CHARACTER: prompt = PROMPT_BUILDERS.CHARACTER(settings); break;
                 case WorkflowStep.CHAPTER: prompt = PROMPT_BUILDERS.CHAPTER(settings, context || ''); break;
                 case WorkflowStep.MIND_MAP_NODE:
-                     // references 在这里是一个字符串 (来自其他节点的上下文)
                      prompt = PROMPT_BUILDERS.MIND_MAP_NODE(context || '', extraPrompt || '', typeof references === 'string' ? references : undefined);
                      break;
                 default: return c.json({ error: "Invalid step" }, 400);
             }
         } catch (err) { return c.json({ error: "Prompt build failed" }, 500); }
 
+        // 填充请求日志
+        auditLog.request = {
+            step,
+            fullPrompt: prompt,
+            settings
+        };
+        
+        logger.info(`[AI Start] ${step} by ${payload.username}`);
+
         const responseStream = await ai.models.generateContentStream({
-            model: 'gemini-2.5-flash',
+            model: modelName,
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
@@ -168,12 +188,41 @@ app.post('/api/generate', async (c) => {
         const writer = writable.getWriter();
         const encoder = new TextEncoder();
 
+        // 异步处理流和日志
         (async () => {
+            let fullResponseText = '';
+            let tokenUsage = null;
+            
             try {
                 for await (const chunk of responseStream) {
-                    if (chunk.text) await writer.write(encoder.encode(chunk.text));
+                    if (chunk.text) {
+                        const text = chunk.text;
+                        fullResponseText += text;
+                        await writer.write(encoder.encode(text));
+                    }
+                    if (chunk.usageMetadata) {
+                        tokenUsage = chunk.usageMetadata;
+                    }
                 }
+                
+                // 记录成功日志
+                const duration = Date.now() - startTime;
+                auditLog.response = {
+                    timeCost: `${duration}ms`,
+                    tokenUsage: tokenUsage, // Gemini 返回 { promptTokenCount, candidatesTokenCount, totalTokenCount }
+                    fullText: fullResponseText
+                };
+                
+                logger.info(`[AI Success] ${step} Completed (${duration}ms)`, auditLog);
+
             } catch (err: any) {
+                const duration = Date.now() - startTime;
+                auditLog.response = {
+                    timeCost: `${duration}ms`,
+                    error: err.message,
+                    partialText: fullResponseText
+                };
+                logger.error(`[AI Error] ${step} Failed`, auditLog);
                 await writer.write(encoder.encode(`\n[Error: ${err.message}]`));
             } finally {
                 await writer.close();
@@ -186,9 +235,10 @@ app.post('/api/generate', async (c) => {
 
     } catch (error: any) {
         if (error.message && error.message.includes('fetch failed')) {
-            logger.error("AI 服务连接失败", { error: error.message });
+            logger.error("AI 服务连接失败", { error: error.message, apiKeyMasked });
             return c.json({ error: "AI 服务连接超时" }, 503);
         }
+        logger.error("AI 请求初始化失败", { error: error.message, auditLog });
         return c.json({ error: error.message }, 500);
     }
 });

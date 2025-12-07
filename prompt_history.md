@@ -12,6 +12,9 @@
     - **Global**: 支持通过 `[参考导图:MapName]` 注入项目内其他导图的全局摘要（需要前端异步 Fetch 数据）。
 - **Output Format**: 强制要求输出 Markdown List (`- content` 或 `  - content`)，以便前端正则解析器能将其转化为递归的树状 JSON 结构。
 
+### 审计与调试
+- **Log**: 现已在后台日志中完整记录 `MIND_MAP_NODE` 步骤的完整 Prompt（含注入后的 Context）和 Token 消耗，用于排查“上下文窗口溢出”或“指令不遵循”问题。
+
 ## 版本 v2.7 (IDE Structure Support)
 
 ### 架构变更

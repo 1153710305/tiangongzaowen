@@ -39,6 +39,20 @@
 
 ---
 
+## 📊 日志与监控 (Logging & Monitoring)
+
+### 全链路审计日志 (Audit Log)
+v2.8 版本增强了 AI 生成接口的日志能力。每次 AI 请求（无论成功或失败）都会生成一条详细的日志，包含：
+*   **API Key Masked**: 仅显示后四位，确保安全。
+*   **Token Usage**: 包含 Prompt Token (输入) 和 Candidate Token (输出) 数量，便于成本核算。
+*   **Full Context**: 完整的 System Instruction 和用户 Prompt。
+*   **Full Response**: 完整的 AI 生成结果。
+*   **Latency**: 接口响应总耗时。
+
+这些日志可以在前端“系统日志”面板或 `/admin/logs` 接口查看。
+
+---
+
 ## 🖥 服务器部署详细指南 (Server)
 
 ### 1. 数据库变更 (Schema Migration)
@@ -72,6 +86,9 @@ CREATE TABLE IF NOT EXISTS mind_maps (
 ---
 
 ## 📝 版本历史 (Changelog)
+
+**v2.8.2 (Audit Logs)**
+*   **Backend**: 强化 AI 接口日志，记录完整的请求/响应体、Token 消耗和 API Key 摘要，助力 Prompt 调试。
 
 **v2.8.1 (Context Refinement)**
 *   **UX**: 优化了 AI 扩展输入框的引用体验。使用 Shadow Div 实现了 `@` 和 `:` 菜单的精确跟随。
