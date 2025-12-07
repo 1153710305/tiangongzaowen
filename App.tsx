@@ -4,8 +4,9 @@ import { NovelSettingsForm } from './components/NovelSettingsForm';
 import { Button } from './components/Button';
 import { LogViewer } from './components/LogViewer';
 import { AuthForm } from './components/AuthForm';
-import { IdeaCardDetailModal } from './components/IdeaCardDetailModal'; // 新增
-import { ProjectIDE } from './components/ProjectIDE'; // 新增
+import { IdeaCardDetailModal } from './components/IdeaCardDetailModal'; 
+import { ProjectIDE } from './components/ProjectIDE'; 
+import { ProjectListModal } from './components/ProjectListModal'; // 新增
 import { 
     NovelSettings, 
     WorkflowStep, 
@@ -54,7 +55,8 @@ export default function App() {
     // === V2.7 新增：卡片详情与 IDE 项目状态 ===
     const [selectedCard, setSelectedCard] = useState<IdeaCard | null>(null); // 当前选中的卡片(用于弹窗)
     const [currentProject, setCurrentProject] = useState<Project | null>(null); // 当前打开的 IDE 项目
-    const [projectList, setProjectList] = useState<Project[]>([]); // 项目列表(可选，暂未在UI展示列表，只展示IDE入口)
+    const [projectList, setProjectList] = useState<Project[]>([]); // 项目列表
+    const [showProjectList, setShowProjectList] = useState(false); // 新增：控制项目列表模态框显示
 
     // 自动滚动引用
     const contentEndRef = useRef<HTMLDivElement>(null);
@@ -301,6 +303,17 @@ export default function App() {
         if (currentArchiveId === id) resetArchive();
     };
 
+    // 删除项目
+    const handleDeleteProject = async (projectId: string) => {
+        try {
+            await apiService.deleteProject(projectId);
+            setProjectList(prev => prev.filter(p => p.id !== projectId));
+            logger.info("项目已删除");
+        } catch (e: any) {
+            alert("删除失败: " + e.message);
+        }
+    };
+
     // === 生成操作入口 ===
     const generateIdea = (customContext?: string, references?: ReferenceNovel[]) => {
         if (references && references.length > 0) {
@@ -344,7 +357,6 @@ export default function App() {
     // 处理 IDE 项目创建后的回调
     const handleProjectCreated = async () => {
         await loadProjects();
-        // 自动打开最新的项目
         const projs = await apiService.getProjects();
         if (projs.length > 0) {
             setCurrentProject(projs[0]);
@@ -377,10 +389,20 @@ export default function App() {
                             </button>
                         )}
                     </div>
-                    <p className="text-slate-500 text-xs">V2.7 IDE 环境加强版</p>
+                    <p className="text-slate-500 text-xs">V2.8 IDE 环境加强版</p>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                    
+                    {/* 新增：我的作品入口按钮 */}
+                    <button 
+                        onClick={() => setShowProjectList(true)}
+                        className="w-full bg-gradient-to-r from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 hover:border-indigo-500 text-indigo-200 hover:text-white py-3 rounded-xl flex items-center justify-center gap-2 font-bold transition-all shadow-md group"
+                    >
+                        <span className="text-xl group-hover:scale-110 transition-transform">📂</span>
+                        我的作品库 ({projectList.length})
+                    </button>
+
                     {/* 快捷导航：存档 vs 卡片库 */}
                     <div className="flex space-x-2 bg-dark p-1 rounded-lg">
                         <button 
@@ -400,26 +422,6 @@ export default function App() {
                     {/* 视图 A: 存档列表 + 生成配置 */}
                     {!showCardHistory && (
                         <>
-                            {/* IDE 项目快速入口 (新增) */}
-                            {projectList.length > 0 && (
-                                <div className="mb-4 bg-slate-800 rounded-lg p-3 border border-slate-700">
-                                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">IDE 项目 (最近)</h3>
-                                    <div className="space-y-2">
-                                        {projectList.slice(0, 3).map(p => (
-                                            <div 
-                                                key={p.id} 
-                                                onClick={() => setCurrentProject(p)}
-                                                className="flex items-center gap-2 cursor-pointer hover:bg-slate-700 p-1.5 rounded transition-colors text-sm"
-                                            >
-                                                <span className="text-pink-400">⚡</span>
-                                                <span className="truncate flex-1">{p.title}</span>
-                                                <span className="text-[10px] text-slate-500">进入</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
                             <div>
                                 <div className="flex justify-between items-center mb-2">
                                      <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">对话存档列表</h3>
@@ -451,7 +453,7 @@ export default function App() {
 
                             <div className="border-t border-slate-700 pt-4">
                                 <div className="mb-4">
-                                    <label className="block text-xs text-slate-500 mb-1">当前项目名称</label>
+                                    <label className="block text-xs text-slate-500 mb-1">当前对话存档名称</label>
                                     <div className="flex gap-2">
                                         <input 
                                             value={currentArchiveTitle}
@@ -629,6 +631,19 @@ export default function App() {
                     card={selectedCard} 
                     onClose={() => setSelectedCard(null)} 
                     onProjectCreated={handleProjectCreated}
+                />
+            )}
+
+            {/* 项目列表弹窗 (新增) */}
+            {showProjectList && (
+                <ProjectListModal
+                    projects={projectList}
+                    onClose={() => setShowProjectList(false)}
+                    onSelectProject={(project) => {
+                        setShowProjectList(false);
+                        setCurrentProject(project);
+                    }}
+                    onDeleteProject={handleDeleteProject}
                 />
             )}
 

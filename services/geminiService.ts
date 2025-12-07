@@ -147,6 +147,15 @@ class ApiService {
         return res.ok ? await res.json() : [];
     }
 
+    public async deleteProject(projectId: string): Promise<void> {
+        const authHeaders = authService.getAuthHeader();
+        const res = await fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}`, { 
+            method: 'DELETE',
+            headers: { ...authHeaders } as any 
+        });
+        if (!res.ok) throw new Error("删除项目失败");
+    }
+
     public async getProjectStructure(projectId: string): Promise<ProjectStructure> {
         const authHeaders = authService.getAuthHeader();
         const res = await fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}/structure`, { headers: { ...authHeaders } as any });

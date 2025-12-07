@@ -271,6 +271,15 @@ app.get('/api/projects', (c) => {
     return c.json(db.getProjectsByUser(payload.id));
 });
 
+// 删除项目 (新增)
+app.delete('/api/projects/:id', (c) => {
+    const payload = c.get('jwtPayload');
+    const projectId = c.req.param('id');
+    db.deleteProject(projectId, payload.id);
+    logger.info(`用户删除项目: ${projectId}`);
+    return c.json({ success: true });
+});
+
 app.get('/api/projects/:id/structure', (c) => {
     const projectId = c.req.param('id');
     const chapters = db.getChaptersByProject(projectId);

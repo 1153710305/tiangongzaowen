@@ -10,6 +10,8 @@ const db = new Database(DB_PATH);
 
 // 开启 WAL 模式，显著提升并发读写性能
 db.pragma('journal_mode = WAL');
+// 开启外键约束，确保 ON DELETE CASCADE 生效
+db.pragma('foreign_keys = ON');
 
 // 初始化表结构
 export function initDB() {
@@ -168,6 +170,15 @@ export function getProjectsByUser(userId: string): DbProject[] {
 export function getProjectById(id: string): DbProject | undefined {
     const stmt = db.prepare('SELECT * FROM projects WHERE id = ?');
     return stmt.get(id) as DbProject | undefined;
+}
+
+/**
+ * 删除项目 (级联删除所有章节和思维导图)
+ * 依赖于 FOREIGN KEYS ON 和 ON DELETE CASCADE 定义
+ */
+export function deleteProject(id: string, userId: string): void {
+    const stmt = db.prepare('DELETE FROM projects WHERE id = ? AND user_id = ?');
+    stmt.run(id, userId);
 }
 
 // === Chapters ===
