@@ -12,10 +12,11 @@ interface NodeRendererProps {
     onAiExpand: (node: MindMapNode) => void;
     onDelete: (id: string) => void;
     onNodeDrop: (draggedId: string, targetId: string) => void;
-    onToggleExpand?: (id: string) => void; // 新增：折叠切换回调
+    onToggleExpand?: (id: string) => void;
     depth: number;
     theme: ThemeConfig;
     layout?: LayoutType;
+    editingNodeId?: string | null; // 新增：当前需要自动进入编辑模式的节点ID
 }
 
 export const NodeRenderer: React.FC<NodeRendererProps> = (props) => {
@@ -33,7 +34,7 @@ export const NodeRenderer: React.FC<NodeRendererProps> = (props) => {
  * 专用渲染器：逻辑结构图 (Right Layout)
  */
 const RightLayoutRenderer: React.FC<NodeRendererProps> = ({
-    node, selectedId, onSelect, onEdit, onAddChild, onAiExpand, onDelete, onNodeDrop, onToggleExpand, depth, theme
+    node, selectedId, onSelect, onEdit, onAddChild, onAiExpand, onDelete, onNodeDrop, onToggleExpand, depth, theme, editingNodeId
 }) => {
     const hasChildren = node.children && node.children.length > 0;
     const isRoot = depth === 0;
@@ -53,6 +54,7 @@ const RightLayoutRenderer: React.FC<NodeRendererProps> = ({
                 depth={depth} 
                 theme={theme}
                 isRoot={isRoot}
+                editingNodeId={editingNodeId}
                 onSelect={onSelect} 
                 onEdit={onEdit} 
                 onAddChild={onAddChild} 
@@ -75,11 +77,8 @@ const RightLayoutRenderer: React.FC<NodeRendererProps> = ({
                              title={isExpanded ? "折叠" : "展开"}
                          >
                              {isExpanded ? (
-                                 // 当鼠标悬停在连接线上时，或者展开状态下，可以显示一个小圆点或者减号
-                                 // 为了极简，我们用一个很小的圆点，hover变大
                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400 group-hover:bg-white"></span>
                              ) : (
-                                 // 折叠状态显示数字或加号
                                  <span className="font-bold">{node.children!.length}</span>
                              )}
                          </button>
@@ -134,6 +133,7 @@ const RightLayoutRenderer: React.FC<NodeRendererProps> = ({
                                                 onDelete={onDelete}
                                                 onNodeDrop={onNodeDrop}
                                                 onToggleExpand={onToggleExpand}
+                                                editingNodeId={editingNodeId}
                                             />
                                         </div>
                                     </div>
@@ -148,7 +148,7 @@ const RightLayoutRenderer: React.FC<NodeRendererProps> = ({
 };
 
 // === 节点内容组件 (复用) ===
-const NodeContent: React.FC<any> = ({ node, selectedId, depth, theme, isRoot, onSelect, onEdit, onAddChild, onAiExpand, onDelete, onNodeDrop }) => {
+const NodeContent: React.FC<any> = ({ node, selectedId, editingNodeId, depth, theme, isRoot, onSelect, onEdit, onAddChild, onAiExpand, onDelete, onNodeDrop }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState(node.label);
     const [isDragOver, setIsDragOver] = useState(false);
@@ -156,12 +156,20 @@ const NodeContent: React.FC<any> = ({ node, selectedId, depth, theme, isRoot, on
 
     const isSelected = selectedId === node.id;
 
+    // 监听外部传入的 editingNodeId，如果是当前节点则进入编辑模式
+    useEffect(() => {
+        if (editingNodeId === node.id) {
+            setIsEditing(true);
+        }
+    }, [editingNodeId, node.id]);
+
     useEffect(() => {
         if (isEditing && inputRef.current) {
             inputRef.current.focus();
             inputRef.current.style.height = 'auto';
             inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
-            inputRef.current.setSelectionRange(inputRef.current.value.length, inputRef.current.value.length);
+            // 全选文本，方便直接替换
+            inputRef.current.select();
         }
     }, [isEditing]);
 
@@ -204,8 +212,6 @@ const NodeContent: React.FC<any> = ({ node, selectedId, depth, theme, isRoot, on
     if (isRoot) {
         nodeStyleClasses = `${theme.node.root} rounded-xl px-6 py-3 text-lg font-bold min-w-[120px] z-20 text-center`;
     } else {
-        // 普通节点：默认 min-w-fit 且 whitespace-nowrap 保证单行，内容过长(超过300px)时才允许换行
-        // 使用 !important 或特定组合确保单行显示优先级
         nodeStyleClasses = `
             ${isDragOver ? theme.node.dragTarget : (isSelected ? theme.node.selected : theme.node.base)} 
             px-3 py-1.5 text-sm rounded-md 
@@ -217,7 +223,7 @@ const NodeContent: React.FC<any> = ({ node, selectedId, depth, theme, isRoot, on
     return (
         <div className="relative group z-20 mindmap-node">
             <div 
-                id={`node-content-${node.id}`} // 关键修改：添加具体的内容ID，用于精确聚焦
+                id={`node-content-${node.id}`} // 关键：ID用于自动跳转
                 onClick={(e) => { e.stopPropagation(); onSelect(node.id); }}
                 onDoubleClick={(e) => { e.stopPropagation(); setIsEditing(true); }}
                 draggable={!isRoot && !isEditing}
@@ -255,7 +261,7 @@ const NodeContent: React.FC<any> = ({ node, selectedId, depth, theme, isRoot, on
  * 兼容旧版渲染器 (用于 Down/Timeline/List 布局)
  */
 const LegacyRenderer: React.FC<NodeRendererProps> = (props) => {
-    const { node, depth, theme, layout = 'down' } = props;
+    const { node, depth, theme, layout = 'down', editingNodeId } = props;
     const hasChildren = node.children && node.children.length > 0;
     const isExpanded = node.isExpanded !== false;
     
@@ -291,7 +297,7 @@ const LegacyRenderer: React.FC<NodeRendererProps> = (props) => {
                                         <div className={`absolute left-1/2 top-0 h-full w-px border-l ${theme.lineColor} ${borderStyleClass}`}></div>
                                     </div>
                                 )}
-                                <NodeRenderer {...props} node={child} depth={depth + 1} />
+                                <NodeRenderer {...props} node={child} depth={depth + 1} editingNodeId={editingNodeId} />
                             </div>
                         );
                     })}

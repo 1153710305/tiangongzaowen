@@ -25,6 +25,10 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     
+    // 历史记录状态 (Undo/Redo)
+    const [history, setHistory] = useState<MindMapNode[]>([]);
+    const [future, setFuture] = useState<MindMapNode[]>([]);
+
     // 视图状态
     const [viewState, setViewState] = useState({ x: 0, y: 0, scale: 1 });
     const [isPanning, setIsPanning] = useState(false);
@@ -32,8 +36,9 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
     const canvasRef = useRef<HTMLDivElement>(null);
     const [showShortcuts, setShowShortcuts] = useState(false);
     
-    // 自动聚焦状态
+    // 自动聚焦与编辑状态
     const [focusTargetId, setFocusTargetId] = useState<string | null>(null);
+    const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
 
     // 主题与布局状态
     const [activeThemeId, setActiveThemeId] = useState('dark');
@@ -54,10 +59,16 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
             if (parsed.root) setRootNode(parsed.root);
             else setRootNode({ id: 'root', label: '核心创意', children: [] });
             
+            // 加载新数据时清空历史记录
+            setHistory([]);
+            setFuture([]);
+            
             // 尝试恢复保存的布局偏好 (如果未来支持保存 layout 到 data)
             // if (parsed.layout) setActiveLayout(parsed.layout);
         } catch (e) {
             setRootNode({ id: 'root', label: '核心创意', children: [] });
+            setHistory([]);
+            setFuture([]);
         }
         setTitle(mapData.title);
     }, [mapData]);
@@ -65,44 +76,64 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
     // 监听 focusTargetId 变化，实现自动跳转到新节点
     useEffect(() => {
         if (focusTargetId && canvasRef.current) {
-            // 使用 requestAnimationFrame 确保在下一帧渲染后执行
-            requestAnimationFrame(() => {
-                // 延迟一点点时间，等待 Flexbox 布局完全稳定
-                setTimeout(() => {
-                    // 使用具体的 node-content-ID 来定位，确保中心对准的是文字胶囊而不是整个子树容器
-                    const nodeElement = document.getElementById(`node-content-${focusTargetId}`);
+            let attempts = 0;
+            const maxAttempts = 10; // 最多尝试10次 (约500ms)
+
+            const tryFocus = () => {
+                // 使用具体的 node-content-ID 来定位，确保中心对准的是文字胶囊而不是整个子树容器
+                const nodeElement = document.getElementById(`node-content-${focusTargetId}`);
+                
+                if (nodeElement && canvasRef.current) {
+                    const nodeRect = nodeElement.getBoundingClientRect();
+                    const canvasRect = canvasRef.current.getBoundingClientRect();
                     
-                    if (nodeElement && canvasRef.current) {
-                        const nodeRect = nodeElement.getBoundingClientRect();
-                        const canvasRect = canvasRef.current.getBoundingClientRect();
-                        
-                        // 计算节点中心点相对于视口的绝对坐标
-                        const nodeCenterX = nodeRect.left + nodeRect.width / 2;
-                        const nodeCenterY = nodeRect.top + nodeRect.height / 2;
-                        
-                        // 计算画布容器中心点
-                        const canvasCenterX = canvasRect.left + canvasRect.width / 2;
-                        const canvasCenterY = canvasRect.top + canvasRect.height / 2;
-                        
-                        // 计算需要移动的距离 (画布中心 - 节点中心)
-                        // 将此差值叠加到当前的 transform 坐标上
-                        const deltaX = canvasCenterX - nodeCenterX;
-                        const deltaY = canvasCenterY - nodeCenterY;
-                        
-                        setViewState(prev => ({
-                            ...prev,
-                            x: prev.x + deltaX,
-                            y: prev.y + deltaY
-                        }));
-                        
-                        // 聚焦后清除目标，并确保该节点被选中
-                        setSelectedId(focusTargetId);
+                    // 计算节点中心点相对于视口的绝对坐标
+                    const nodeCenterX = nodeRect.left + nodeRect.width / 2;
+                    const nodeCenterY = nodeRect.top + nodeRect.height / 2;
+                    
+                    // 计算画布容器中心点
+                    const canvasCenterX = canvasRect.left + canvasRect.width / 2;
+                    const canvasCenterY = canvasRect.top + canvasRect.height / 2;
+                    
+                    // 计算需要移动的距离 (画布中心 - 节点中心)
+                    // 将此差值叠加到当前的 transform 坐标上
+                    const deltaX = canvasCenterX - nodeCenterX;
+                    const deltaY = canvasCenterY - nodeCenterY;
+                    
+                    setViewState(prev => ({
+                        ...prev,
+                        x: prev.x + deltaX,
+                        y: prev.y + deltaY
+                    }));
+                    
+                    // 聚焦后清除目标，并确保该节点被选中
+                    setSelectedId(focusTargetId);
+                    setFocusTargetId(null);
+                } else {
+                    // 如果 DOM 还没渲染出来，进行重试
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        setTimeout(tryFocus, 50);
+                    } else {
+                        // 超时放弃
                         setFocusTargetId(null);
                     }
-                }, 50);
-            });
+                }
+            };
+
+            // 稍微延迟一点启动，给 React 渲染留出时间
+            setTimeout(tryFocus, 50);
         }
     }, [focusTargetId]);
+
+    // 统一的数据更新入口，自动处理历史记录和自动保存
+    const updateMapState = (newRoot: MindMapNode) => {
+        if (!rootNode) return;
+        setHistory(prev => [...prev, rootNode]); // 保存当前状态到历史
+        setFuture([]); // 清空未来状态 (一旦有新操作，重做链失效)
+        setRootNode(newRoot);
+        triggerAutoSave(newRoot, title);
+    };
 
     const triggerAutoSave = async (newRoot: MindMapNode, currentTitle: string) => {
         setIsSaving(true);
@@ -116,6 +147,55 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
             setIsSaving(false);
         }
     };
+
+    // 撤销
+    const handleUndo = () => {
+        if (history.length === 0 || !rootNode) return;
+        const previousState = history[history.length - 1];
+        const newHistory = history.slice(0, -1);
+        
+        setFuture(prev => [rootNode, ...prev]); // 当前状态存入 Future
+        setHistory(newHistory);
+        setRootNode(previousState);
+        setEditingNodeId(null); // 撤销时退出编辑模式
+        triggerAutoSave(previousState, title); // 自动保存撤销后的状态
+    };
+
+    // 重做
+    const handleRedo = () => {
+        if (future.length === 0 || !rootNode) return;
+        const nextState = future[0];
+        const newFuture = future.slice(1);
+
+        setHistory(prev => [...prev, rootNode]); // 当前状态存入 History
+        setFuture(newFuture);
+        setRootNode(nextState);
+        setEditingNodeId(null);
+        triggerAutoSave(nextState, title); // 自动保存重做后的状态
+    };
+
+    // 快捷键监听
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement;
+            // 如果正在输入文字，不触发快捷键 (除非是特定的全局快捷键，这里简单处理)
+            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key === 'z') {
+                    e.preventDefault();
+                    if (e.shiftKey) handleRedo();
+                    else handleUndo();
+                } else if (e.key === 'y') {
+                    e.preventDefault();
+                    handleRedo();
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [history, future, rootNode, title]); // 依赖项确保状态最新
 
     const handleTitleBlur = () => rootNode && title !== mapData.title && triggerAutoSave(rootNode, title);
 
@@ -139,37 +219,49 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
         const newRoot = addNodeRecursive(rootNode);
         
         if (found) { 
-            setRootNode(newRoot); 
-            triggerAutoSave(newRoot, title); 
-            // 2. 设置自动聚焦目标
+            // 使用 updateMapState 替代直接 setRootNode
+            updateMapState(newRoot);
+            // 2. 设置自动聚焦和自动编辑目标
             setFocusTargetId(newChildId);
+            setEditingNodeId(newChildId);
         }
     };
 
     const handleEditNode = (id: string, newLabel: string) => {
         if (!rootNode) return;
+        // 如果内容没变，不生成历史记录
+        const targetNode = getAllNodesFlat(rootNode).find(n => n.id === id);
+        if (targetNode && targetNode.label === newLabel) return;
+
         const newRoot = updateNodeInTree(rootNode, id, (n) => ({ ...n, label: newLabel }));
-        setRootNode(newRoot); triggerAutoSave(newRoot, title);
+        updateMapState(newRoot);
+        // 清除自动编辑状态，防止后续意外触发
+        if (editingNodeId === id) setEditingNodeId(null);
     };
 
     const handleDeleteNode = (id: string) => {
         if (!rootNode) return;
         if (id === rootNode.id) return alert("根节点不能删除");
-        try { const newRoot = deleteNodeFromTree(rootNode, id); setRootNode(newRoot); if (selectedId === id) setSelectedId(null); triggerAutoSave(newRoot, title); } catch (e) { alert("删除失败"); }
+        try { 
+            const newRoot = deleteNodeFromTree(rootNode, id); 
+            updateMapState(newRoot);
+            if (selectedId === id) setSelectedId(null); 
+        } catch (e) { alert("删除失败"); }
     };
 
     const handleMoveNode = (draggedId: string, targetId: string) => {
         if (!rootNode) return;
         const newRoot = moveNodeInTree(rootNode, draggedId, targetId);
-        if (newRoot) { setRootNode(newRoot); triggerAutoSave(newRoot, title); }
+        if (newRoot) { 
+            updateMapState(newRoot);
+        }
     };
 
     const handleToggleExpand = (id: string) => {
         if (!rootNode) return;
         const newRoot = toggleNodeExpansion(rootNode, id);
-        setRootNode(newRoot);
-        // 展开/折叠状态属于视图状态，也可以选择保存
-        triggerAutoSave(newRoot, title);
+        // 展开/折叠也记录历史，这样用户可以撤销误触的折叠
+        updateMapState(newRoot);
     };
 
     // === 画布交互 (保持不变) ===
@@ -212,7 +304,8 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                 isExpanded: true, // AI 生成后自动展开
                 children: [...(n.children || []), ...newChildren] 
             }));
-            setRootNode(newRoot); setShowAiModal(false); triggerAutoSave(newRoot, title);
+            updateMapState(newRoot);
+            setShowAiModal(false);
         }
     };
 
@@ -265,6 +358,27 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
 
                 {/* Right: Actions */}
                 <div className="flex items-center gap-3">
+                    {/* Undo / Redo Buttons */}
+                    <div className="flex items-center bg-[#1e1e1e] rounded-lg border border-slate-700 p-0.5">
+                        <button 
+                            onClick={handleUndo} 
+                            disabled={history.length === 0}
+                            className="p-1.5 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition-colors"
+                            title="撤销 (Ctrl+Z)"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg>
+                        </button>
+                        <div className="w-px h-4 bg-slate-700"></div>
+                        <button 
+                            onClick={handleRedo} 
+                            disabled={future.length === 0}
+                            className="p-1.5 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition-colors"
+                            title="重做 (Ctrl+Y)"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6"></path></svg>
+                        </button>
+                    </div>
+
                     <button onClick={() => setShowShortcuts(!showShortcuts)} className="text-xs text-indigo-400 hover:text-indigo-300">
                         快捷键
                     </button>
@@ -276,12 +390,20 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
             {showShortcuts && (
                 <div className="absolute top-14 right-4 z-40 bg-slate-800 border border-slate-600 rounded-lg shadow-xl p-4 w-64 text-slate-200 animate-fade-in">
                    <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-700"><h4 className="font-bold text-sm">快捷键</h4><button onClick={()=>setShowShortcuts(false)}>×</button></div>
-                   <ul className="space-y-1 text-xs text-slate-400"><li>双击: 编辑</li><li>Enter: 保存</li><li>拖拽: 移动节点</li></ul>
+                   <ul className="space-y-1 text-xs text-slate-400">
+                       <li>双击: 编辑节点</li>
+                       <li>Enter: 确认编辑</li>
+                       <li>拖拽: 移动节点</li>
+                       <li>Ctrl+Z: 撤销操作</li>
+                       <li>Ctrl+Y: 重做操作</li>
+                   </ul>
                 </div>
             )}
 
             {/* Canvas */}
-            <div className={`flex-1 overflow-hidden cursor-grab active:cursor-grabbing relative ${activeTheme.bgContainer} ${isPanning ? 'cursor-grabbing' : ''}`}
+            <div 
+                ref={canvasRef}
+                className={`flex-1 overflow-hidden cursor-grab active:cursor-grabbing relative ${activeTheme.bgContainer} ${isPanning ? 'cursor-grabbing' : ''}`}
                 onMouseDown={handleCanvasMouseDown} onMouseMove={handleCanvasMouseMove} onMouseUp={handleCanvasMouseUp} onMouseLeave={handleCanvasMouseUp} onClick={() => setSelectedId(null)}>
                 
                 <div className="absolute inset-0 pointer-events-none opacity-20 canvas-bg" style={{
@@ -296,6 +418,7 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                         onAddChild={handleAddChild} onAiExpand={openAiModal} onDelete={handleDeleteNode} onNodeDrop={handleMoveNode} 
                         onToggleExpand={handleToggleExpand}
                         depth={0} theme={activeTheme} layout={activeLayout} 
+                        editingNodeId={editingNodeId}
                     />
                 </div>
             </div>

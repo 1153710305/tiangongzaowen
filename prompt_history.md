@@ -3,6 +3,19 @@
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
 
+## 版本 v2.9.3 (Interaction Polish)
+
+### 功能变更
+- **Mind Map Undo/Redo**:
+    - 在 `MindMapEditor` 中引入了 `history` (历史栈) 和 `future` (重做栈) 状态管理。
+    - 封装了 `updateMapState` 函数，将所有节点操作（增删改、移动、折叠、AI 生成）统一收口。该函数负责快照当前状态、清空重做栈并触发自动保存。
+    - 实现了撤销 (`handleUndo`) 和重做 (`handleRedo`) 逻辑，且这两个操作也会触发自动保存 (`triggerAutoSave`)，确保后端数据的一致性。
+    - 添加了快捷键支持：`Ctrl+Z` (Undo) 和 `Ctrl+Y` (Redo)，并在工具栏新增了对应的图标按钮。
+- **Mind Map UX**: 
+    - 修复了画布 `canvasRef` 缺失导致自动聚焦失效的 Bug。
+    - 新增 `editingNodeId` 状态流，实现新建节点后自动进入文字编辑模式。
+    - 优化了新建节点的视觉反馈：点击添加 -> 视角平滑移至新节点 -> 自动选中 -> 自动弹出输入框。
+
 ## 版本 v2.9.2 (UX Optimization)
 
 ### 功能变更
