@@ -1,6 +1,6 @@
 
 import { logger } from "./loggerService";
-import { NovelSettings, WorkflowStep, Archive, ChatMessage, ReferenceNovel, IdeaCard, NovelProject } from "../types";
+import { NovelSettings, WorkflowStep, Archive, ChatMessage, ReferenceNovel, IdeaCard, Project, ProjectStructure } from "../types";
 import { API_ENDPOINTS } from "../constants";
 import { authService } from "./authService";
 
@@ -152,7 +152,7 @@ class ApiService {
         }
     }
 
-    // === 脑洞卡片相关 ===
+    // === 脑洞卡片相关 (新增) ===
 
     /**
      * 获取用户脑洞卡片
@@ -204,48 +204,20 @@ class ApiService {
         }
     }
 
-    // === v2.7 项目管理相关 ===
-
-    /**
-     * 获取用户所有项目
-     */
-    public async getProjects(): Promise<NovelProject[]> {
-        const authHeaders = authService.getAuthHeader();
-        try {
-            const res = await fetch(API_ENDPOINTS.PROJECTS, { headers: { ...authHeaders } as any });
-            if (!res.ok) throw new Error("获取项目列表失败");
-            return await res.json();
-        } catch (error) {
-            logger.error("Fetch projects error", error);
-            return [];
-        }
-    }
+    // === IDE 项目相关 (v2.7 新增) ===
 
     /**
      * 从脑洞卡片创建新项目
      */
-    public async createProjectFromCard(card: IdeaCard): Promise<NovelProject> {
+    public async createProjectFromCard(cardId: string, title: string, description: string): Promise<Project> {
         const authHeaders = authService.getAuthHeader();
         try {
-            const ideaData = {
-                title: card.title,
-                intro: card.intro,
-                highlight: card.highlight,
-                explosive_point: card.explosive_point,
-                golden_finger: card.golden_finger
-            };
-
             const res = await fetch(API_ENDPOINTS.PROJECT_CREATE_FROM_CARD, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...authHeaders } as any,
-                body: JSON.stringify({ 
-                    cardId: card.id, 
-                    title: card.title, 
-                    ideaData 
-                })
+                body: JSON.stringify({ cardId, title, description })
             });
-
-            if (!res.ok) throw new Error("立项失败");
+            if (!res.ok) throw new Error("创建项目失败");
             return await res.json();
         } catch (error) {
             logger.error("Create project error", error);
@@ -254,19 +226,32 @@ class ApiService {
     }
 
     /**
-     * 获取项目详情 (包含章节目录和导图列表)
+     * 获取项目列表
      */
-    public async fetchProjectDetail(projectId: string): Promise<NovelProject | null> {
+    public async getProjects(): Promise<Project[]> {
         const authHeaders = authService.getAuthHeader();
         try {
-            const res = await fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}`, { 
-                headers: { ...authHeaders } as any 
-            });
-            if (!res.ok) throw new Error("获取项目详情失败");
+            const res = await fetch(API_ENDPOINTS.PROJECTS, { headers: { ...authHeaders } as any });
+            if (!res.ok) throw new Error("获取项目列表失败");
             return await res.json();
         } catch (error) {
-            logger.error("Fetch project detail error", error);
-            return null;
+            return [];
+        }
+    }
+
+    /**
+     * 获取项目结构 (章节 + 脑图)
+     */
+    public async getProjectStructure(projectId: string): Promise<ProjectStructure> {
+        const authHeaders = authService.getAuthHeader();
+        try {
+            const res = await fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}/structure`, {
+                headers: { ...authHeaders } as any
+            });
+            if (!res.ok) throw new Error("获取项目结构失败");
+            return await res.json();
+        } catch (error) {
+            throw error;
         }
     }
 }

@@ -144,7 +144,7 @@ app.post('/api/auth/login', async (c) => {
 app.use('/api/generate', jwt({ secret: JWT_SECRET }));
 app.use('/api/archives/*', jwt({ secret: JWT_SECRET }));
 app.use('/api/cards/*', jwt({ secret: JWT_SECRET }));
-app.use('/api/projects/*', jwt({ secret: JWT_SECRET })); // 新增
+app.use('/api/projects/*', jwt({ secret: JWT_SECRET })); // 新增: Projects API
 
 // AI 生成 (受保护)
 app.post('/api/generate', async (c) => {
@@ -289,7 +289,6 @@ app.delete('/api/archives/:id', (c) => {
 
 // === 脑洞卡片接口 ===
 
-// 获取脑洞卡片
 app.get('/api/cards', (c) => {
     const payload = c.get('jwtPayload');
     try {
@@ -308,12 +307,10 @@ app.get('/api/cards', (c) => {
         });
         return c.json(result);
     } catch (e: any) {
-        logger.error("获取脑洞卡片失败", { error: e.message });
         return c.json({ error: "获取失败" }, 500);
     }
 });
 
-// 保存脑洞卡片
 app.post('/api/cards', async (c) => {
     const payload = c.get('jwtPayload');
     try {
@@ -321,7 +318,6 @@ app.post('/api/cards', async (c) => {
         const id = crypto.randomUUID();
         const card = db.createIdeaCard(id, payload.id, data);
         logger.info(`用户 ${payload.username} 保存了脑洞卡片: ${data.title}`);
-        
         return c.json({ 
             id: card.id, 
             userId: card.user_id, 
@@ -330,12 +326,10 @@ app.post('/api/cards', async (c) => {
             ...data
         });
     } catch (e: any) {
-        logger.error("保存脑洞卡片失败", { error: e.message });
         return c.json({ error: "保存失败" }, 500);
     }
 });
 
-// 删除脑洞卡片
 app.delete('/api/cards/:id', (c) => {
     const payload = c.get('jwtPayload');
     const id = c.req.param('id');
@@ -347,28 +341,28 @@ app.delete('/api/cards/:id', (c) => {
     }
 });
 
-// === v2.7 Novel Projects (项目管理接口) ===
+// === IDE 项目相关接口 (v2.7 新增) ===
 
-// 1. 从脑洞卡片创建项目
+// 1. 从脑洞卡片创建新项目
 app.post('/api/projects/from-card', async (c) => {
     const payload = c.get('jwtPayload');
     try {
-        const { cardId, title, ideaData } = await c.req.json();
-        
-        if (!title || !ideaData) {
-            return c.json({ error: "缺少必要参数" }, 400);
-        }
-
+        const { cardId, title, description } = await c.req.json();
         const projectId = crypto.randomUUID();
-        const project = db.createProjectFromCard(projectId, payload.id, title, ideaData);
         
-        // 创建空文件夹结构的数据库记录 (无需实体文件夹，逻辑存在即可)
-        // 1. 初始化一个空的 "世界观思维导图"
-        db.createMindMap(projectId, "世界观设定", "structure", { nodes: [], edges: [] });
-        // 2. 初始化第一章空草稿
-        db.createChapter(projectId, "第一章：(待定标题)", "", 1);
+        // 1. 创建项目
+        const project = db.createProject(projectId, payload.id, title, description || '', cardId);
+        
+        // 2. 初始化思维导图 (空)
+        const mapId = crypto.randomUUID();
+        const initialMapData = JSON.stringify({ nodes: [{ id: 'root', label: '核心创意', type: 'root' }] });
+        db.createMindMap(mapId, projectId, '核心架构', initialMapData);
 
-        logger.info(`用户 ${payload.username} 创建了项目: ${title} (from card)`);
+        // 3. 初始化正文第一章 (空)
+        const chapterId = crypto.randomUUID();
+        db.createChapter(chapterId, projectId, '第一章', '', 1);
+
+        logger.info(`用户 ${payload.username} 从卡片创建了项目: ${title}`);
         return c.json(project);
     } catch (e: any) {
         logger.error("创建项目失败", { error: e.message });
@@ -376,44 +370,26 @@ app.post('/api/projects/from-card', async (c) => {
     }
 });
 
-// 2. 获取用户项目列表
+// 2. 获取项目列表
 app.get('/api/projects', (c) => {
     const payload = c.get('jwtPayload');
     try {
         const projects = db.getProjectsByUser(payload.id);
         return c.json(projects);
     } catch (e: any) {
-        logger.error("获取项目列表失败", { error: e.message });
-        return c.json({ error: "获取失败" }, 500);
+        return c.json({ error: "获取项目失败" }, 500);
     }
 });
 
-// 3. 获取项目详情（包含章节目录和导图列表）
-app.get('/api/projects/:id', (c) => {
-    const payload = c.get('jwtPayload');
+// 3. 获取项目结构 (Chapters & MindMaps)
+app.get('/api/projects/:id/structure', (c) => {
     const projectId = c.req.param('id');
     try {
-        const project = db.getProjectById(projectId, payload.id);
-        if (!project) return c.json({ error: "项目不存在" }, 404);
-
         const chapters = db.getChaptersByProject(projectId);
-        const mindMaps = db.getMindMapsByProject(projectId);
-
-        // 解析 idea_snapshot 方便前端使用
-        let ideaSnapshot = null;
-        try { ideaSnapshot = JSON.parse(project.idea_snapshot); } catch(e) {}
-
-        return c.json({
-            ...project,
-            idea_snapshot: ideaSnapshot,
-            folders: {
-                chapters: chapters,
-                mind_maps: mindMaps
-            }
-        });
+        const maps = db.getMindMapsByProject(projectId);
+        return c.json({ chapters, maps });
     } catch (e: any) {
-        logger.error("获取项目详情失败", { error: e.message });
-        return c.json({ error: "获取失败" }, 500);
+        return c.json({ error: "获取结构失败" }, 500);
     }
 });
 

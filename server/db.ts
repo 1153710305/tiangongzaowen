@@ -1,6 +1,6 @@
 
 import Database from 'better-sqlite3';
-import { User, Archive, DbIdeaCard, IdeaCardData, DbNovelProject, DbChapter, DbMindMap } from './types.ts';
+import { User, Archive, DbIdeaCard, IdeaCardData, DbProject, DbChapter, DbMindMap } from './types.ts';
 import fs from 'fs';
 import path from 'path';
 
@@ -11,109 +11,77 @@ const db = new Database(DB_PATH);
 // 开启 WAL 模式，显著提升并发读写性能
 db.pragma('journal_mode = WAL');
 
-// 初始化表结构 (Robust Version)
+// 初始化表结构
 export function initDB() {
-    try {
-        // 1. Users Table
-        db.exec(`
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                username TEXT UNIQUE,
-                password_hash TEXT,
-                created_at TEXT
-            )
-        `);
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            username TEXT UNIQUE,
+            password_hash TEXT,
+            created_at TEXT
+        );
+        CREATE TABLE IF NOT EXISTS archives (
+            id TEXT PRIMARY KEY,
+            user_id TEXT,
+            title TEXT,
+            content TEXT,
+            created_at TEXT,
+            updated_at TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_archives_user ON archives(user_id);
 
-        // 2. Archives Table
-        db.exec(`
-            CREATE TABLE IF NOT EXISTS archives (
-                id TEXT PRIMARY KEY,
-                user_id TEXT,
-                title TEXT,
-                content TEXT,
-                created_at TEXT,
-                updated_at TEXT,
-                FOREIGN KEY(user_id) REFERENCES users(id)
-            )
-        `);
-        try { db.exec(`CREATE INDEX IF NOT EXISTS idx_archives_user ON archives(user_id)`); } catch (e) {}
+        -- 脑洞卡片表
+        CREATE TABLE IF NOT EXISTS idea_cards (
+            id TEXT PRIMARY KEY,
+            user_id TEXT,
+            title TEXT, 
+            content TEXT, 
+            created_at TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_idea_cards_user ON idea_cards(user_id);
 
-        // 3. Idea Cards Table
-        db.exec(`
-            CREATE TABLE IF NOT EXISTS idea_cards (
-                id TEXT PRIMARY KEY,
-                user_id TEXT,
-                title TEXT, 
-                content TEXT, 
-                created_at TEXT,
-                FOREIGN KEY(user_id) REFERENCES users(id)
-            )
-        `);
-        try { db.exec(`CREATE INDEX IF NOT EXISTS idx_idea_cards_user ON idea_cards(user_id)`); } catch (e) {}
+        -- === v2.7 IDE 架构新增表 ===
 
-        // 4. Novel Projects Table (v2.7)
-        db.exec(`
-            CREATE TABLE IF NOT EXISTS novel_projects (
-                id TEXT PRIMARY KEY,
-                user_id TEXT,
-                title TEXT,
-                idea_snapshot TEXT,
-                status TEXT DEFAULT 'draft',
-                created_at TEXT,
-                updated_at TEXT,
-                FOREIGN KEY(user_id) REFERENCES users(id)
-            )
-        `);
-        try { db.exec(`CREATE INDEX IF NOT EXISTS idx_projects_user ON novel_projects(user_id)`); } catch (e) {}
+        -- 1. 项目表 (Projects)
+        CREATE TABLE IF NOT EXISTS projects (
+            id TEXT PRIMARY KEY,
+            user_id TEXT,
+            title TEXT,
+            description TEXT,
+            idea_card_id TEXT,
+            created_at TEXT,
+            updated_at TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
 
-        // 5. Chapters Table (v2.7)
-        db.exec(`
-            CREATE TABLE IF NOT EXISTS chapters (
-                id TEXT PRIMARY KEY,
-                project_id TEXT,
-                title TEXT,
-                content TEXT,
-                order_index INTEGER,
-                created_at TEXT,
-                updated_at TEXT,
-                FOREIGN KEY(project_id) REFERENCES novel_projects(id)
-            )
-        `);
+        -- 2. 章节表 (Chapters)
+        -- 性能优化：content 字段可能很大，单独查询
+        CREATE TABLE IF NOT EXISTS chapters (
+            id TEXT PRIMARY KEY,
+            project_id TEXT,
+            title TEXT,
+            content TEXT,
+            order_index INTEGER,
+            updated_at TEXT,
+            FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_chapters_project ON chapters(project_id);
         
-        // 简单迁移检测：确保 project_id 列存在
-        try {
-            const cols = db.pragma('table_info(chapters)') as any[];
-            const hasProjectId = cols.some(c => c.name === 'project_id');
-            if (!hasProjectId) {
-                console.log("[DB Migration] Adding project_id to chapters table...");
-                db.exec('ALTER TABLE chapters ADD COLUMN project_id TEXT');
-                db.exec('ALTER TABLE chapters ADD COLUMN order_index INTEGER');
-            }
-        } catch (e) { console.warn("[DB Warning] Schema check failed:", e); }
-
-        try { db.exec(`CREATE INDEX IF NOT EXISTS idx_chapters_project ON chapters(project_id)`); } catch (e) {}
-
-        // 6. Mind Maps Table (v2.7)
-        db.exec(`
-            CREATE TABLE IF NOT EXISTS mind_maps (
-                id TEXT PRIMARY KEY,
-                project_id TEXT,
-                title TEXT,
-                type TEXT DEFAULT 'general',
-                content TEXT,
-                created_at TEXT,
-                updated_at TEXT,
-                FOREIGN KEY(project_id) REFERENCES novel_projects(id)
-            )
-        `);
-        try { db.exec(`CREATE INDEX IF NOT EXISTS idx_maps_project ON mind_maps(project_id)`); } catch (e) {}
-
-        console.log(`[DB] Database initialized at ${DB_PATH} (WAL mode: ON)`);
-
-    } catch (error: any) {
-        console.error(`[DB Critical Error] Initialization failed: ${error.message}`);
-        // 不要抛出异常中断进程，允许部分表工作
-    }
+        -- 3. 思维导图表 (MindMaps)
+        CREATE TABLE IF NOT EXISTS mind_maps (
+            id TEXT PRIMARY KEY,
+            project_id TEXT,
+            title TEXT,
+            data TEXT, -- JSON 结构
+            updated_at TEXT,
+            FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_mindmaps_project ON mind_maps(project_id);
+    `);
+    console.log(`[DB] Database initialized at ${DB_PATH} (WAL mode: ON)`);
 }
 
 // === Users ===
@@ -143,7 +111,7 @@ export function updateUserPassword(id: string, newPasswordHash: string): void {
     stmt.run(newPasswordHash, id);
 }
 
-// === Archives ===
+// === Archives (Legacy) ===
 
 export function createArchive(id: string, userId: string, title: string, content: string): Archive {
     const stmt = db.prepare('INSERT INTO archives (id, user_id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
@@ -158,18 +126,11 @@ export function updateArchive(id: string, userId: string, title: string, content
     stmt.run(title, content, now, id, userId);
 }
 
-/**
- * 获取某用户的所有存档（性能优化：按更新时间降序）
- */
 export function getArchivesByUser(userId: string): Archive[] {
     const stmt = db.prepare('SELECT * FROM archives WHERE user_id = ? ORDER BY updated_at DESC');
     return stmt.all(userId) as Archive[];
 }
 
-/**
- * [Performance] 获取单个存档的完整信息
- * 这是一个主键查询，速度极快 (O(1))，适合详情页加载
- */
 export function getArchiveById(id: string): Archive | undefined {
     const stmt = db.prepare('SELECT * FROM archives WHERE id = ?');
     return stmt.get(id) as Archive | undefined;
@@ -200,127 +161,118 @@ export function deleteIdeaCard(id: string, userId: string): void {
     stmt.run(id, userId);
 }
 
-// === v2.7 Novel Projects (新增) ===
+// === Projects (IDE Mode) ===
 
 /**
- * 从脑洞卡片创建项目
+ * 创建新项目 (Novel Project)
  */
-export function createProjectFromCard(id: string, userId: string, title: string, ideaSnapshot: any): DbNovelProject {
-    const stmt = db.prepare('INSERT INTO novel_projects (id, user_id, title, idea_snapshot, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
+export function createProject(id: string, userId: string, title: string, description: string, ideaCardId?: string): DbProject {
+    const stmt = db.prepare('INSERT INTO projects (id, user_id, title, description, idea_card_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
-    stmt.run(id, userId, title, JSON.stringify(ideaSnapshot), now, now);
-    return { id, user_id: userId, title, idea_snapshot: JSON.stringify(ideaSnapshot), status: 'draft', created_at: now, updated_at: now };
+    stmt.run(id, userId, title, description, ideaCardId || null, now, now);
+    return { id, user_id: userId, title, description, idea_card_id: ideaCardId, created_at: now, updated_at: now };
 }
 
 /**
- * 获取用户项目列表
+ * 获取项目列表
  */
-export function getProjectsByUser(userId: string): DbNovelProject[] {
-    const stmt = db.prepare('SELECT id, user_id, title, status, created_at, updated_at FROM novel_projects WHERE user_id = ? ORDER BY updated_at DESC');
-    return stmt.all(userId) as DbNovelProject[]; // 注意：不返回 idea_snapshot，列表页轻量化
+export function getProjectsByUser(userId: string): DbProject[] {
+    const stmt = db.prepare('SELECT * FROM projects WHERE user_id = ? ORDER BY updated_at DESC');
+    return stmt.all(userId) as DbProject[];
 }
 
 /**
- * 获取项目详情
+ * 获取单个项目详情
  */
-export function getProjectById(id: string, userId: string): DbNovelProject | undefined {
-    const stmt = db.prepare('SELECT * FROM novel_projects WHERE id = ? AND user_id = ?');
-    return stmt.get(id, userId) as DbNovelProject | undefined;
+export function getProjectById(id: string): DbProject | undefined {
+    const stmt = db.prepare('SELECT * FROM projects WHERE id = ?');
+    return stmt.get(id) as DbProject | undefined;
 }
+
+// === Chapters ===
 
 /**
  * 创建章节
  */
-export function createChapter(projectId: string, title: string, content: string, order: number): DbChapter {
-    const id = crypto.randomUUID();
+export function createChapter(id: string, projectId: string, title: string, content: string, orderIndex: number): DbChapter {
+    const stmt = db.prepare('INSERT INTO chapters (id, project_id, title, content, order_index, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
-    const stmt = db.prepare('INSERT INTO chapters (id, project_id, title, content, order_index, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    stmt.run(id, projectId, title, content, order, now, now);
-    return { id, project_id: projectId, title, content, order_index: order, created_at: now, updated_at: now };
+    stmt.run(id, projectId, title, content, orderIndex, now);
+    return { id, project_id: projectId, title, content, order_index: orderIndex, updated_at: now };
 }
 
 /**
- * 获取项目章节列表 (轻量级，不含 content)
+ * 获取项目的所有章节列表
+ * [PERFORMANCE]: 不读取 content 字段，仅读取元数据，保证大部头小说加载速度
  */
-export function getChaptersByProject(projectId: string): Partial<DbChapter>[] {
-    const stmt = db.prepare('SELECT id, title, order_index, updated_at FROM chapters WHERE project_id = ? ORDER BY order_index ASC');
-    return stmt.all(projectId) as Partial<DbChapter>[];
+export function getChaptersByProject(projectId: string): Omit<DbChapter, 'content'>[] {
+    const stmt = db.prepare('SELECT id, project_id, title, order_index, updated_at FROM chapters WHERE project_id = ? ORDER BY order_index ASC');
+    return stmt.all(projectId) as Omit<DbChapter, 'content'>[];
 }
 
 /**
- * 获取单章内容 (包含 content)
+ * 获取单个章节完整内容
  */
-export function getChapterDetail(id: string, projectId: string): DbChapter | undefined {
-    const stmt = db.prepare('SELECT * FROM chapters WHERE id = ? AND project_id = ?');
-    return stmt.get(id, projectId) as DbChapter | undefined;
+export function getChapterById(id: string): DbChapter | undefined {
+    const stmt = db.prepare('SELECT * FROM chapters WHERE id = ?');
+    return stmt.get(id) as DbChapter | undefined;
 }
+
+// === Mind Maps ===
 
 /**
  * 创建思维导图
  */
-export function createMindMap(projectId: string, title: string, type: string, content: any): DbMindMap {
-    const id = crypto.randomUUID();
+export function createMindMap(id: string, projectId: string, title: string, data: string): DbMindMap {
+    const stmt = db.prepare('INSERT INTO mind_maps (id, project_id, title, data, updated_at) VALUES (?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
-    const stmt = db.prepare('INSERT INTO mind_maps (id, project_id, title, type, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    stmt.run(id, projectId, title, type, JSON.stringify(content), now, now);
-    return { id, project_id: projectId, title, type, content: JSON.stringify(content), created_at: now, updated_at: now };
+    stmt.run(id, projectId, title, data, now);
+    return { id, project_id: projectId, title, data, updated_at: now };
 }
 
 /**
- * 获取项目思维导图列表
+ * 获取项目的思维导图列表
  */
 export function getMindMapsByProject(projectId: string): DbMindMap[] {
-    const stmt = db.prepare('SELECT * FROM mind_maps WHERE project_id = ? ORDER BY created_at DESC');
+    const stmt = db.prepare('SELECT * FROM mind_maps WHERE project_id = ? ORDER BY updated_at DESC');
     return stmt.all(projectId) as DbMindMap[];
 }
 
 // === Admin Functions ===
 
-/**
- * 获取系统统计信息
- */
 export function getSystemStats() {
-    // 使用 try-catch 保护，防止某个表不存在时整个统计失败
-    try {
-        const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
-        const archiveCount = db.prepare('SELECT COUNT(*) as count FROM archives').get() as { count: number };
-        const cardCount = db.prepare('SELECT COUNT(*) as count FROM idea_cards').get() as { count: number };
-        const projectCount = db.prepare('SELECT COUNT(*) as count FROM novel_projects').get() as { count: number };
-        const lastActive = db.prepare('SELECT updated_at FROM archives ORDER BY updated_at DESC LIMIT 1').get() as { updated_at: string } | undefined;
+    const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
+    const archiveCount = db.prepare('SELECT COUNT(*) as count FROM archives').get() as { count: number };
+    const cardCount = db.prepare('SELECT COUNT(*) as count FROM idea_cards').get() as { count: number };
+    const projectCount = db.prepare('SELECT COUNT(*) as count FROM projects').get() as { count: number }; // 新增统计
+    const lastActive = db.prepare('SELECT updated_at FROM archives ORDER BY updated_at DESC LIMIT 1').get() as { updated_at: string } | undefined;
 
-        return {
-            totalUsers: userCount.count,
-            totalArchives: archiveCount.count,
-            totalCards: cardCount.count,
-            totalProjects: projectCount.count,
-            lastActiveTime: lastActive?.updated_at || '无数据'
-        };
-    } catch (e) {
-        return { totalUsers: 0, totalArchives: 0, totalCards: 0, totalProjects: 0, lastActiveTime: 'DB Error' };
-    }
+    return {
+        totalUsers: userCount.count,
+        totalArchives: archiveCount.count,
+        totalCards: cardCount.count,
+        totalProjects: projectCount.count,
+        lastActiveTime: lastActive?.updated_at || '无数据'
+    };
 }
 
-/**
- * 获取所有用户列表（后台用）
- */
 export function getAllUsers(): User[] {
     return db.prepare('SELECT id, username, created_at FROM users ORDER BY created_at DESC').all() as User[];
 }
 
 /**
- * 删除用户及其所有数据 (级联删除)
+ * 级联删除用户所有数据
  */
 export function deleteUserFull(userId: string) {
     const deleteArchives = db.prepare('DELETE FROM archives WHERE user_id = ?');
     const deleteCards = db.prepare('DELETE FROM idea_cards WHERE user_id = ?');
-    const deleteProjects = db.prepare('DELETE FROM novel_projects WHERE user_id = ?'); 
-    // 注意：真实环境应先删除 project 关联的 chapters/maps，此处依赖外键约束或后续清理
+    const deleteProjects = db.prepare('DELETE FROM projects WHERE user_id = ?'); // 会级联删除 chapters, mind_maps
     const deleteUser = db.prepare('DELETE FROM users WHERE id = ?');
     
     const transaction = db.transaction(() => {
         deleteArchives.run(userId);
         deleteCards.run(userId);
-        deleteProjects.run(userId);
+        deleteProjects.run(userId); 
         deleteUser.run(userId);
     });
     

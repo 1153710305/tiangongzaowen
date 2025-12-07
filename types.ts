@@ -36,36 +36,22 @@ export interface IdeaCard {
     created_at: string;
 }
 
-// === v2.7 新增：小说项目结构 ===
-export interface NovelProject {
+// === IDE 项目相关接口 (新增) ===
+export interface Project {
     id: string;
-    userId: string;
+    user_id: string;
     title: string;
-    idea_snapshot: IdeaCardData; // 完整的脑洞数据快照
-    status: string;
+    description: string;
+    idea_card_id?: string;
     created_at: string;
     updated_at: string;
-    // 下面两个字段通常在获取详情时才会有
-    folders?: {
-        chapters: Partial<Chapter>[]; // 轻量级章节列表
-        mind_maps: MindMap[];
-    };
-}
-
-// 脑洞数据结构 (复用卡片的核心字段)
-export interface IdeaCardData {
-    title: string;
-    intro: string;
-    highlight: string;
-    explosive_point: string;
-    golden_finger: string;
 }
 
 export interface Chapter {
     id: string;
     project_id: string;
     title: string;
-    content: string; // 可能为空（列表模式）
+    content?: string; // 列表中可能不包含
     order_index: number;
     updated_at: string;
 }
@@ -74,9 +60,13 @@ export interface MindMap {
     id: string;
     project_id: string;
     title: string;
-    type: string;
-    content: string; // JSON string
+    data: string; // JSON String
     updated_at: string;
+}
+
+export interface ProjectStructure {
+    chapters: Chapter[];
+    maps: MindMap[];
 }
 
 // 聊天/生成记录接口

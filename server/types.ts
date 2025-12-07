@@ -76,37 +76,35 @@ export interface DbIdeaCard {
     created_at: string;
 }
 
-// === v2.7 新增：项目系统 DB 模型 ===
+// === 新增：IDE 项目相关模型 (v2.7) ===
 
-// 小说项目
-export interface DbNovelProject {
+// 1. 项目主表：相当于一个具体的“小说工程”
+export interface DbProject {
     id: string;
     user_id: string;
     title: string;
-    idea_snapshot: string; // JSON string (IdeaCardData)
-    status: string; // 'draft', 'published'
+    description: string;
+    idea_card_id?: string; // 关联的脑洞卡片ID（可选）
     created_at: string;
     updated_at: string;
 }
 
-// 章节
+// 2. 章节表：存储正文内容
+// 性能设计：Listing时不要查询 content 字段
 export interface DbChapter {
     id: string;
     project_id: string;
     title: string;
-    content: string; // Large Text
-    order_index: number;
-    created_at: string;
+    content: string; // 大文本，只有编辑时才加载
+    order_index: number; // 排序索引
     updated_at: string;
 }
 
-// 思维导图
+// 3. 思维导图表：存储架构信息
 export interface DbMindMap {
     id: string;
     project_id: string;
     title: string;
-    type: string; // 'structure', 'character', etc.
-    content: string; // JSON string (Nodes/Edges)
-    created_at: string;
+    data: string; // JSON string 存储节点结构 { root: { ... } }
     updated_at: string;
 }

@@ -1,7 +1,15 @@
 
+
+
 # 提示词历史记录 (Prompt History)
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
+
+## 版本 v2.7 (IDE Structure Support)
+
+### 架构变更
+- 引入了 `createProjectFromCard` 接口，虽然目前没有修改 AI Prompt，但后端数据库结构已调整为支持 IDE 模式。
+- 后续版本 (v2.8+) 将引入针对 IDE 内 `MindMap` 和 `Chapter` 的精细化 AI 编辑 Prompt。
 
 ## 版本 v2.6 (Idea Cards Structure)
 

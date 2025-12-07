@@ -1,5 +1,6 @@
 
 
+
 import { NovelSettings } from "./types";
 
 /**
@@ -44,13 +45,13 @@ export const API_ENDPOINTS = {
     AUTH_LOGIN: `${API_BASE_URL}/api/auth/login`,
     AUTH_REGISTER: `${API_BASE_URL}/api/auth/register`,
     
-    // === 存档接口 ===
+    // === 存档接口 (旧版) ===
     ARCHIVES: `${API_BASE_URL}/api/archives`,
     
     // === 脑洞卡片接口 ===
     CARDS: `${API_BASE_URL}/api/cards`,
 
-    // === 项目管理接口 (v2.7) ===
+    // === 项目/IDE 接口 (新版) ===
     PROJECTS: `${API_BASE_URL}/api/projects`,
-    PROJECT_CREATE_FROM_CARD: `${API_BASE_URL}/api/projects/from-card`
+    PROJECT_CREATE_FROM_CARD: `${API_BASE_URL}/api/projects/from-card`,
 };
