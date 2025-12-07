@@ -1,11 +1,11 @@
 
-# 天工造文 (SkyCraft Novel AI) - 企业级前后端分离版 (v2.6)
+# 天工造文 (SkyCraft Novel AI) - 企业级前后端分离版 (v2.7)
 
 > **架构理念**: 响应速度优先 (SQLite WAL + Hono + Streaming) | 稳定性优先 (Server Logger + Robust Error Handling) | 解耦优先 (Modular Router) | 资产化沉淀 (Structured Cards)
 
 本项目是一个专业的 AI 爆款网文生成系统，已从原型升级为可部署的前后端分离架构，并支持多用户登录、云端存档和全链路监控。
 
-**v2.6 更新：引入“脑洞卡片 (Idea Cards)”系统，将创意生成过程结构化，支持收藏、管理和历史回溯。**
+**v2.7 更新：引入“项目管理 (Project System)”体系，支持从脑洞一键立项，生成思维导图与正文目录。**
 
 ---
 
@@ -28,44 +28,38 @@
 *   **核心框架**: **Hono**。极速 Web 标准框架，TTFB (首字节时间) 极低。
 *   **数据库**: **SQLite (better-sqlite3)**。
     *   **Archive Table**: 存储完整的小说生成历史。
-    *   **IdeaCard Table [NEW]**: 存储结构化的脑洞创意（Title, Intro, Highlights）。
+    *   **IdeaCard Table**: 存储结构化的脑洞创意。
+    *   **Project Tables**: 规范化存储小说项目、章节、导图，支持高并发读写。
 *   **Prompt Engineering**: 强制模型输出 JSON 格式，便于前端解析。
 
 ### 2. 客户端 (Frontend) - 根目录
 *   **UI 框架**: React 18 + Tailwind CSS。
-*   **State**: 增加 `draftCards` 和 `savedCards` 状态管理。
+*   **State**: 增加 `ProjectWorkspace` 视图和 `IdeaCardDetailModal` 组件。
 
 ---
 
 ## 🖥 服务器部署详细指南 (Server)
 
 ### 1. 数据库变更 (Schema Migration)
-v2.6 自动新增 `idea_cards` 表：
-
-```sql
-CREATE TABLE IF NOT EXISTS idea_cards (
-    id TEXT PRIMARY KEY,
-    user_id TEXT,
-    title TEXT, 
-    content TEXT, -- JSON String: {intro, highlight, explosive_point, golden_finger}
-    created_at TEXT,
-    FOREIGN KEY(user_id) REFERENCES users(id)
-);
-```
-此表设计优先考虑读取性能，将结构化详情打包为 JSON 存储，减少 Join 操作。
+v2.7 引入了自动迁移机制 (`initDB` in `server/db.ts`)。
+*   启动服务时会自动检测表结构。
+*   如果 `chapters` 表缺少 `project_id` 字段，系统会自动执行 `ALTER TABLE` 进行修复，无需手动干预。
 
 ---
 
 ## 📖 使用说明书 (User Manual)
 
-### 1. 创意生成与收藏 (NEW)
-1.  在左侧选择“参数配置”、“脑洞发散”或“爆款仿写”模式点击生成。
-2.  AI 会流式输出生成的 JSON 过程。
-3.  生成结束后，系统自动解析并展示为 **“脑洞卡片”**。
-4.  点击卡片下方的 **“收藏此脑洞”** 按钮，将其保存到云端。
+### 1. 创意生成与收藏
+1.  选择“参数配置”、“脑洞发散”或“爆款仿写”模式生成创意。
+2.  点击卡片下方的 **“收藏此脑洞”** 按钮。
 
-### 2. 查看历史卡片
-在左侧边栏顶部，点击 **“脑洞卡片库”** 切换视图，即可查看所有收藏的历史创意。
+### 2. 立项与写作 (NEW)
+1.  在“脑洞卡片库”中点击任意卡片查看详情。
+2.  点击 **“以此脑洞立项”**。
+3.  系统将自动创建项目文件夹，包含两个空子文件夹：
+    *   **思维导图文件夹**: 存放人物关系、剧情树等。
+    *   **正文草稿文件夹**: 存放各章节正文。
+4.  进入项目后，可对章节和导图进行增删改查（CRUD）。
 
 ---
 
@@ -79,14 +73,8 @@ CREATE TABLE IF NOT EXISTS idea_cards (
     *   新增项目工作台视图（包含正文和思维导图文件夹）。
 
 **v2.6 (Idea Cards)**
-*   **Feature**: 创意生成结果结构化，不再是纯文本。
+*   **Feature**: 创意生成结果结构化。
 *   **DB**: 新增 `idea_cards` 表。
-*   **UI**: 新增待选卡片展示区和侧边栏卡片库视图。
-
-**v2.5.1 (Analysis Mode)**
-*   **Feature**: 新增“爆款仿写/分析模式”。
-
-*Powered by Google Gemini & Hono & SQLite*
 
 ---
 
@@ -109,6 +97,7 @@ CREATE TABLE IF NOT EXISTS idea_cards (
 
 ### 2. 正文章节表 (`chapters`)
 > **性能考量**: 单独建表，避免在查询项目列表时加载沉重的正文内容。支持按 `order_index` 排序。
+> **读取优化**: 列表接口只查询 `id, title, order_index`，单章接口才查询 `content`。
 
 | 字段名 | 类型 | 描述 |
 | :--- | :--- | :--- |

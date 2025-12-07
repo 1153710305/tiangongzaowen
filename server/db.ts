@@ -11,78 +11,109 @@ const db = new Database(DB_PATH);
 // 开启 WAL 模式，显著提升并发读写性能
 db.pragma('journal_mode = WAL');
 
-// 初始化表结构
+// 初始化表结构 (Robust Version)
 export function initDB() {
-    db.exec(`
-        CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY,
-            username TEXT UNIQUE,
-            password_hash TEXT,
-            created_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS archives (
-            id TEXT PRIMARY KEY,
-            user_id TEXT,
-            title TEXT,
-            content TEXT,
-            created_at TEXT,
-            updated_at TEXT,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        );
-        CREATE INDEX IF NOT EXISTS idx_archives_user ON archives(user_id);
+    try {
+        // 1. Users Table
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                username TEXT UNIQUE,
+                password_hash TEXT,
+                created_at TEXT
+            )
+        `);
 
-        CREATE TABLE IF NOT EXISTS idea_cards (
-            id TEXT PRIMARY KEY,
-            user_id TEXT,
-            title TEXT, 
-            content TEXT, 
-            created_at TEXT,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        );
-        CREATE INDEX IF NOT EXISTS idx_idea_cards_user ON idea_cards(user_id);
+        // 2. Archives Table
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS archives (
+                id TEXT PRIMARY KEY,
+                user_id TEXT,
+                title TEXT,
+                content TEXT,
+                created_at TEXT,
+                updated_at TEXT,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+        `);
+        try { db.exec(`CREATE INDEX IF NOT EXISTS idx_archives_user ON archives(user_id)`); } catch (e) {}
 
-        -- === v2.7 新增：小说项目体系 ===
+        // 3. Idea Cards Table
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS idea_cards (
+                id TEXT PRIMARY KEY,
+                user_id TEXT,
+                title TEXT, 
+                content TEXT, 
+                created_at TEXT,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+        `);
+        try { db.exec(`CREATE INDEX IF NOT EXISTS idx_idea_cards_user ON idea_cards(user_id)`); } catch (e) {}
 
-        -- 1. 项目主表
-        CREATE TABLE IF NOT EXISTS novel_projects (
-            id TEXT PRIMARY KEY,
-            user_id TEXT,
-            title TEXT,
-            idea_snapshot TEXT, -- 脑洞快照
-            status TEXT DEFAULT 'draft',
-            created_at TEXT,
-            updated_at TEXT,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        );
-        CREATE INDEX IF NOT EXISTS idx_projects_user ON novel_projects(user_id);
+        // 4. Novel Projects Table (v2.7)
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS novel_projects (
+                id TEXT PRIMARY KEY,
+                user_id TEXT,
+                title TEXT,
+                idea_snapshot TEXT,
+                status TEXT DEFAULT 'draft',
+                created_at TEXT,
+                updated_at TEXT,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+        `);
+        try { db.exec(`CREATE INDEX IF NOT EXISTS idx_projects_user ON novel_projects(user_id)`); } catch (e) {}
 
-        -- 2. 章节表 (正文)
-        CREATE TABLE IF NOT EXISTS chapters (
-            id TEXT PRIMARY KEY,
-            project_id TEXT,
-            title TEXT,
-            content TEXT, -- 大文本字段
-            order_index INTEGER,
-            created_at TEXT,
-            updated_at TEXT,
-            FOREIGN KEY(project_id) REFERENCES novel_projects(id)
-        );
-        CREATE INDEX IF NOT EXISTS idx_chapters_project ON chapters(project_id);
+        // 5. Chapters Table (v2.7)
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS chapters (
+                id TEXT PRIMARY KEY,
+                project_id TEXT,
+                title TEXT,
+                content TEXT,
+                order_index INTEGER,
+                created_at TEXT,
+                updated_at TEXT,
+                FOREIGN KEY(project_id) REFERENCES novel_projects(id)
+            )
+        `);
+        
+        // 简单迁移检测：确保 project_id 列存在
+        try {
+            const cols = db.pragma('table_info(chapters)') as any[];
+            const hasProjectId = cols.some(c => c.name === 'project_id');
+            if (!hasProjectId) {
+                console.log("[DB Migration] Adding project_id to chapters table...");
+                db.exec('ALTER TABLE chapters ADD COLUMN project_id TEXT');
+                db.exec('ALTER TABLE chapters ADD COLUMN order_index INTEGER');
+            }
+        } catch (e) { console.warn("[DB Warning] Schema check failed:", e); }
 
-        -- 3. 思维导图表
-        CREATE TABLE IF NOT EXISTS mind_maps (
-            id TEXT PRIMARY KEY,
-            project_id TEXT,
-            title TEXT,
-            type TEXT DEFAULT 'general',
-            content TEXT, -- JSON
-            created_at TEXT,
-            updated_at TEXT,
-            FOREIGN KEY(project_id) REFERENCES novel_projects(id)
-        );
-        CREATE INDEX IF NOT EXISTS idx_maps_project ON mind_maps(project_id);
-    `);
-    console.log(`[DB] Database initialized at ${DB_PATH} (WAL mode: ON)`);
+        try { db.exec(`CREATE INDEX IF NOT EXISTS idx_chapters_project ON chapters(project_id)`); } catch (e) {}
+
+        // 6. Mind Maps Table (v2.7)
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS mind_maps (
+                id TEXT PRIMARY KEY,
+                project_id TEXT,
+                title TEXT,
+                type TEXT DEFAULT 'general',
+                content TEXT,
+                created_at TEXT,
+                updated_at TEXT,
+                FOREIGN KEY(project_id) REFERENCES novel_projects(id)
+            )
+        `);
+        try { db.exec(`CREATE INDEX IF NOT EXISTS idx_maps_project ON mind_maps(project_id)`); } catch (e) {}
+
+        console.log(`[DB] Database initialized at ${DB_PATH} (WAL mode: ON)`);
+
+    } catch (error: any) {
+        console.error(`[DB Critical Error] Initialization failed: ${error.message}`);
+        // 不要抛出异常中断进程，允许部分表工作
+    }
 }
 
 // === Users ===
@@ -249,19 +280,24 @@ export function getMindMapsByProject(projectId: string): DbMindMap[] {
  * 获取系统统计信息
  */
 export function getSystemStats() {
-    const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
-    const archiveCount = db.prepare('SELECT COUNT(*) as count FROM archives').get() as { count: number };
-    const cardCount = db.prepare('SELECT COUNT(*) as count FROM idea_cards').get() as { count: number };
-    const projectCount = db.prepare('SELECT COUNT(*) as count FROM novel_projects').get() as { count: number }; // 新增
-    const lastActive = db.prepare('SELECT updated_at FROM archives ORDER BY updated_at DESC LIMIT 1').get() as { updated_at: string } | undefined;
+    // 使用 try-catch 保护，防止某个表不存在时整个统计失败
+    try {
+        const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
+        const archiveCount = db.prepare('SELECT COUNT(*) as count FROM archives').get() as { count: number };
+        const cardCount = db.prepare('SELECT COUNT(*) as count FROM idea_cards').get() as { count: number };
+        const projectCount = db.prepare('SELECT COUNT(*) as count FROM novel_projects').get() as { count: number };
+        const lastActive = db.prepare('SELECT updated_at FROM archives ORDER BY updated_at DESC LIMIT 1').get() as { updated_at: string } | undefined;
 
-    return {
-        totalUsers: userCount.count,
-        totalArchives: archiveCount.count,
-        totalCards: cardCount.count,
-        totalProjects: projectCount.count,
-        lastActiveTime: lastActive?.updated_at || '无数据'
-    };
+        return {
+            totalUsers: userCount.count,
+            totalArchives: archiveCount.count,
+            totalCards: cardCount.count,
+            totalProjects: projectCount.count,
+            lastActiveTime: lastActive?.updated_at || '无数据'
+        };
+    } catch (e) {
+        return { totalUsers: 0, totalArchives: 0, totalCards: 0, totalProjects: 0, lastActiveTime: 'DB Error' };
+    }
 }
 
 /**
@@ -277,7 +313,8 @@ export function getAllUsers(): User[] {
 export function deleteUserFull(userId: string) {
     const deleteArchives = db.prepare('DELETE FROM archives WHERE user_id = ?');
     const deleteCards = db.prepare('DELETE FROM idea_cards WHERE user_id = ?');
-    const deleteProjects = db.prepare('DELETE FROM novel_projects WHERE user_id = ?'); // 简化处理，真实环境需要先删chapter/mindmap
+    const deleteProjects = db.prepare('DELETE FROM novel_projects WHERE user_id = ?'); 
+    // 注意：真实环境应先删除 project 关联的 chapters/maps，此处依赖外键约束或后续清理
     const deleteUser = db.prepare('DELETE FROM users WHERE id = ?');
     
     const transaction = db.transaction(() => {
