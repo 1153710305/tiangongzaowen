@@ -28,17 +28,20 @@ export const SYSTEM_INSTRUCTION = `
  * 接收参数并返回格式化后的 Prompt
  */
 export const PROMPT_BUILDERS = {
-    // 创意脑暴 (JSON 结构化版)
+    // 创意脑暴 (JSON 结构化版 - 严格模式)
     IDEA: (settings: NovelSettings, context?: string) => {
         const baseReq = `
 请生成 3 个具有"爆款潜质"的小说开篇创意。
-必须严格按照 JSON 数组格式返回，不要包含任何 Markdown 代码块标记（如 \`\`\`json），直接返回 JSON 字符串。
-数组中每个对象必须包含以下字段：
-- title: 书名 (String)
-- intro: 一句话简介，吸引点击 (String)
-- highlight: 核心爽点 (String)
-- explosive_point: 开篇爆点/冲突 (String)
-- golden_finger: 金手指设定 (String)
+**非常重要：必须严格只返回一个合法的 JSON 数组字符串。**
+不要包含 \`\`\`json 或其他任何 Markdown 标记。
+不要有前言后语，直接以 '[' 开头，以 ']' 结尾。
+
+数组中每个对象必须包含以下 5 个字段：
+1. "title": 书名 (String)
+2. "intro": 一句话简介，吸引点击 (String)
+3. "highlight": 核心爽点 (String)
+4. "explosive_point": 开篇爆点/冲突 (String)
+5. "golden_finger": 金手指设定 (String)
 `;
 
         if (context && context.trim().length > 0) {
@@ -69,7 +72,7 @@ ${baseReq}
 `;
     },
 
-    // 爆款分析与仿写 (JSON 结构化版)
+    // 爆款分析与仿写 (JSON 结构化版 - 严格模式)
     ANALYSIS_IDEA: (settings: NovelSettings, references: ReferenceNovel[]) => {
         const refsText = references.map((r, i) => `
 案例 ${i + 1}:
@@ -88,14 +91,17 @@ ${refsText}
 2. 结合设定（受众：${settings.targetAudience === 'male' ? '男频' : '女频'}，基调：${settings.tone}）进行创意裂变。
 3. **不要照抄**，要换题材或背景。
 
-**返回格式**：
-必须严格按照 JSON 数组格式返回，不要包含任何 Markdown 代码块标记，直接返回 JSON 字符串。
-数组中每个对象包含：
-- title: 书名 (String)
-- intro: 一句话简介 (String)
-- highlight: 核心爽点/爆火基因分析 (String)
-- explosive_point: 黄金三章走向/爆点 (String)
-- golden_finger: 金手指/特殊能力 (String)
+**返回格式要求**：
+**非常重要：必须严格只返回一个合法的 JSON 数组字符串。**
+不要包含 \`\`\`json 或其他任何 Markdown 标记。
+不要有前言后语，直接以 '[' 开头，以 ']' 结尾。
+
+数组中每个对象包含 5 个字段：
+1. "title": 书名 (String)
+2. "intro": 一句话简介 (String)
+3. "highlight": 核心爽点/爆火基因分析 (String)
+4. "explosive_point": 黄金三章走向/爆点 (String)
+5. "golden_finger": 金手指/特殊能力 (String)
 `;
     },
 

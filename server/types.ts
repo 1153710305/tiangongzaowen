@@ -15,7 +15,7 @@ export interface NovelSettings {
     tone: string; // 基调
 }
 
-// 参考小说接口
+// 参考小说接口 (用于爆款分析模式)
 export interface ReferenceNovel {
     title: string;
     intro: string;
@@ -68,6 +68,7 @@ export interface Archive {
 }
 
 // 新增：脑洞卡片 DB 模型
+// 性能设计：将详情存为 JSON 字符串，减少列数，读取时一次性 parse
 export interface DbIdeaCard {
     id: string;
     user_id: string;

@@ -32,7 +32,7 @@ export function initDB() {
         CREATE INDEX IF NOT EXISTS idx_archives_user ON archives(user_id);
 
         -- 新增：脑洞卡片表
-        -- 性能优化：content 存储为 JSON 字符串，避免字段过多导致扩展困难
+        -- 性能优化：content 存储为 JSON 字符串，避免字段过多导致扩展困难，且支持更复杂的嵌套结构
         CREATE TABLE IF NOT EXISTS idea_cards (
             id TEXT PRIMARY KEY,
             user_id TEXT,
