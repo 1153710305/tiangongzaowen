@@ -32,14 +32,17 @@ export const THEMES: Record<string, ThemeConfig> = {
         name: '🌌 暗夜赛博',
         bgContainer: 'bg-[#121212]',
         bgGridColor: '#333',
-        lineColor: 'border-slate-600',
+        lineColor: 'border-slate-700', // 线条颜色变淡
         node: {
-            root: 'bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow-[0_0_20px_rgba(236,72,153,0.4)] border-none',
-            base: 'bg-slate-800 border-slate-600 text-slate-300 shadow-lg',
-            selected: 'ring-2 ring-pink-500 bg-slate-700 text-white',
+            // 根节点保持醒目
+            root: 'bg-gradient-to-r from-pink-600/80 to-purple-600/80 text-white shadow-[0_0_20px_rgba(236,72,153,0.3)] border-none backdrop-blur-sm',
+            // 普通节点：去除背景，极简边框，文字为主
+            base: 'bg-transparent border-b border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition-colors',
+            // 选中：加背景强调
+            selected: 'bg-slate-800 text-white border-b-2 border-pink-500 shadow-lg',
             text: 'text-slate-300',
-            input: 'text-white',
-            dragTarget: 'ring-2 ring-yellow-400 bg-slate-700'
+            input: 'text-white bg-slate-800/50',
+            dragTarget: 'ring-1 ring-yellow-400 bg-slate-800/50'
         }
     },
     light: {
@@ -47,14 +50,14 @@ export const THEMES: Record<string, ThemeConfig> = {
         name: '📄 纯净白纸',
         bgContainer: 'bg-[#f8fafc]',
         bgGridColor: '#e2e8f0',
-        lineColor: 'border-slate-400',
+        lineColor: 'border-slate-300',
         node: {
-            root: 'bg-gradient-to-r from-indigo-500 to-blue-500 text-white shadow-xl border-none',
-            base: 'bg-white border-slate-300 text-slate-700 shadow-sm',
-            selected: 'ring-2 ring-indigo-500 bg-indigo-50 text-indigo-800',
+            root: 'bg-gradient-to-r from-indigo-500 to-blue-500 text-white shadow-lg border-none',
+            base: 'bg-transparent border-b border-slate-300 text-slate-700 hover:text-indigo-600 hover:border-indigo-400 transition-colors',
+            selected: 'bg-white text-indigo-700 border-b-2 border-indigo-500 shadow-md',
             text: 'text-slate-700',
-            input: 'text-slate-900',
-            dragTarget: 'ring-2 ring-yellow-500 bg-yellow-50'
+            input: 'text-slate-900 bg-white/80',
+            dragTarget: 'ring-1 ring-yellow-500 bg-yellow-50'
         }
     },
     ocean: {
@@ -62,14 +65,14 @@ export const THEMES: Record<string, ThemeConfig> = {
         name: '🌊 深海沉浸',
         bgContainer: 'bg-[#0f172a]',
         bgGridColor: '#1e293b',
-        lineColor: 'border-cyan-800',
+        lineColor: 'border-cyan-900',
         node: {
-            root: 'bg-gradient-to-r from-cyan-600 to-blue-700 text-white shadow-[0_0_20px_rgba(6,182,212,0.4)] border-none',
-            base: 'bg-[#1e293b] border-cyan-900 text-cyan-100 shadow-lg',
-            selected: 'ring-2 ring-cyan-400 bg-cyan-900/50',
+            root: 'bg-gradient-to-r from-cyan-600/80 to-blue-700/80 text-white shadow-[0_0_20px_rgba(6,182,212,0.3)] border-none backdrop-blur-sm',
+            base: 'bg-transparent border-b border-cyan-900 text-cyan-200 hover:text-cyan-50 hover:border-cyan-600',
+            selected: 'bg-cyan-900/40 text-cyan-50 border-b-2 border-cyan-400',
             text: 'text-cyan-100',
-            input: 'text-white',
-            dragTarget: 'ring-2 ring-yellow-400 bg-cyan-900'
+            input: 'text-white bg-cyan-900/50',
+            dragTarget: 'ring-1 ring-yellow-400 bg-cyan-900/50'
         }
     },
     nature: {
@@ -77,14 +80,14 @@ export const THEMES: Record<string, ThemeConfig> = {
         name: '🌿 林间绿意',
         bgContainer: 'bg-[#f0fdf4]',
         bgGridColor: '#dcfce7',
-        lineColor: 'border-green-400',
+        lineColor: 'border-green-200',
         node: {
-            root: 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-xl border-none',
-            base: 'bg-white border-green-200 text-green-800 shadow-sm',
-            selected: 'ring-2 ring-green-500 bg-green-50',
+            root: 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg border-none',
+            base: 'bg-transparent border-b border-green-200 text-green-800 hover:text-green-900 hover:border-green-400',
+            selected: 'bg-green-50 text-green-900 border-b-2 border-green-500 shadow-sm',
             text: 'text-green-800',
-            input: 'text-green-900',
-            dragTarget: 'ring-2 ring-yellow-500 bg-green-50'
+            input: 'text-green-900 bg-white/80',
+            dragTarget: 'ring-1 ring-yellow-500 bg-green-50'
         }
     },
     retro: {
@@ -92,30 +95,29 @@ export const THEMES: Record<string, ThemeConfig> = {
         name: '📜 复古羊皮',
         bgContainer: 'bg-[#fdf6e3]',
         bgGridColor: '#eee8d5',
-        lineColor: 'border-stone-400',
+        lineColor: 'border-[#d3cbb8]',
         node: {
-            root: 'bg-[#cb4b16] text-[#fdf6e3] shadow-lg border-none',
-            base: 'bg-[#eee8d5] border-[#b58900] text-[#586e75] shadow-sm font-serif',
-            selected: 'ring-2 ring-[#d33682] bg-[#fdf6e3]',
+            root: 'bg-[#cb4b16] text-[#fdf6e3] shadow-md border-none font-serif',
+            base: 'bg-transparent border-b border-[#d3cbb8] text-[#586e75] font-serif hover:text-[#073642] hover:border-[#b58900]',
+            selected: 'bg-[#eee8d5] text-[#073642] border-b-2 border-[#d33682]',
             text: 'text-[#586e75]',
-            input: 'text-[#657b83]',
-            dragTarget: 'ring-2 ring-[#859900] bg-[#fdf6e3]'
+            input: 'text-[#657b83] bg-[#eee8d5]',
+            dragTarget: 'ring-1 ring-[#859900] bg-[#eee8d5]'
         }
     },
     cyberpunk: {
         id: 'cyberpunk',
         name: '🤖 赛博霓虹',
         bgContainer: 'bg-black',
-        bgGridColor: '#333',
-        lineColor: 'border-none bg-gradient-to-b from-cyan-500 to-purple-500 w-[2px]', 
-        // 注意：Cyberpunk 的线条比较特殊，这里还是用 class 控制，我们在 Renderer 里特殊处理一下线宽
+        bgGridColor: '#222',
+        lineColor: 'border-none bg-gradient-to-b from-cyan-900 to-purple-900 w-[1px]', // 线条更细更暗
         node: {
-            root: 'bg-black border border-cyan-400 text-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.8)]',
-            base: 'bg-black border border-purple-500 text-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.4)]',
-            selected: 'ring-2 ring-yellow-400 bg-gray-900 text-yellow-300',
+            root: 'bg-black border border-cyan-500 text-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.6)]',
+            base: 'bg-transparent border-b border-purple-900 text-purple-400 hover:text-purple-200 hover:border-purple-500',
+            selected: 'bg-gray-900/80 text-yellow-300 border-b border-yellow-400 shadow-[0_0_10px_rgba(234,179,8,0.3)]',
             text: 'text-purple-300',
-            input: 'text-cyan-300',
-            dragTarget: 'ring-2 ring-green-400 bg-gray-900'
+            input: 'text-cyan-300 bg-black',
+            dragTarget: 'ring-1 ring-green-400 bg-gray-900'
         }
     }
 };

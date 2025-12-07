@@ -6,7 +6,7 @@ import { Button } from './Button';
 import { logger } from '../services/loggerService';
 import ReactMarkdown from 'react-markdown';
 import { THEMES, LAYOUTS, LayoutType } from './mindmap/themes';
-import { serializeNodeTree, deleteNodeFromTree, moveNodeInTree, updateNodeInTree, getAllNodesFlat } from './mindmap/utils';
+import { serializeNodeTree, deleteNodeFromTree, moveNodeInTree, updateNodeInTree, getAllNodesFlat, toggleNodeExpansion } from './mindmap/utils';
 import { NodeRenderer } from './mindmap/NodeRenderer';
 import { PromptSelector } from './PromptSelector';
 
@@ -31,6 +31,9 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
     const [startPan, setStartPan] = useState({ x: 0, y: 0 });
     const canvasRef = useRef<HTMLDivElement>(null);
     const [showShortcuts, setShowShortcuts] = useState(false);
+    
+    // 自动聚焦状态
+    const [focusTargetId, setFocusTargetId] = useState<string | null>(null);
 
     // 主题与布局状态
     const [activeThemeId, setActiveThemeId] = useState('dark');
@@ -45,15 +48,6 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
     const [aiContent, setAiContent] = useState('');
     const [aiError, setAiError] = useState<string | null>(null);
     
-    // 引用系统状态
-    const [showMentionList, setShowMentionList] = useState<'node' | 'map' | 'remote_node' | null>(null); 
-    const [mentionFilter, setMentionFilter] = useState('');
-    const [cursorPos, setCursorPos] = useState({ top: 0, left: 0 });
-    const [remoteNodeOptions, setRemoteNodeOptions] = useState<{id: string, label: string}[]>([]);
-    
-    // 镜像 Input 用于光标定位 (省略代码，逻辑保持不变)
-    const mirrorRef = useRef<HTMLDivElement>(null);
-
     useEffect(() => {
         try {
             const parsed = JSON.parse(mapData.data);
@@ -67,6 +61,43 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
         }
         setTitle(mapData.title);
     }, [mapData]);
+
+    // 监听 focusTargetId 变化，实现自动跳转到新节点
+    useEffect(() => {
+        if (focusTargetId && canvasRef.current) {
+            // 延迟一点点时间，等待 DOM 渲染完成
+            setTimeout(() => {
+                const nodeElement = document.querySelector(`[data-node-id="${focusTargetId}"]`);
+                if (nodeElement && canvasRef.current) {
+                    const nodeRect = nodeElement.getBoundingClientRect();
+                    const canvasRect = canvasRef.current.getBoundingClientRect();
+                    
+                    // 计算节点中心点相对于视口的偏移
+                    const nodeCenterX = nodeRect.left + nodeRect.width / 2;
+                    const nodeCenterY = nodeRect.top + nodeRect.height / 2;
+                    
+                    // 计算画布中心点
+                    const canvasCenterX = canvasRect.left + canvasRect.width / 2;
+                    const canvasCenterY = canvasRect.top + canvasRect.height / 2;
+                    
+                    // 计算需要移动的距离 (当前偏移 + 差值)
+                    // 注意：因为 viewState.x 是 transform 的一部分，我们需要反向计算
+                    const deltaX = canvasCenterX - nodeCenterX;
+                    const deltaY = canvasCenterY - nodeCenterY;
+                    
+                    setViewState(prev => ({
+                        ...prev,
+                        x: prev.x + deltaX,
+                        y: prev.y + deltaY
+                    }));
+                    
+                    // 聚焦后清除目标，选中该节点
+                    setSelectedId(focusTargetId);
+                    setFocusTargetId(null);
+                }
+            }, 100);
+        }
+    }, [focusTargetId]);
 
     const triggerAutoSave = async (newRoot: MindMapNode, currentTitle: string) => {
         setIsSaving(true);
@@ -83,33 +114,57 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
 
     const handleTitleBlur = () => rootNode && title !== mapData.title && triggerAutoSave(rootNode, title);
 
-    // === 节点操作逻辑 (保持不变) ===
+    // === 节点操作逻辑 ===
     const handleAddChild = (parentId: string) => {
         if (!rootNode) return;
-        const newChild: MindMapNode = { id: crypto.randomUUID(), label: '新节点', children: [] };
+        const newChildId = crypto.randomUUID();
+        const newChild: MindMapNode = { id: newChildId, label: '新节点', children: [] };
+        
+        // 1. 添加子节点
         let found = false;
         const addNodeRecursive = (node: MindMapNode): MindMapNode => {
-            if (node.id === parentId) { found = true; return { ...node, children: [...(node.children || []), newChild] }; }
+            if (node.id === parentId) { 
+                found = true; 
+                // 确保父节点是展开状态，否则看不到新节点
+                return { ...node, isExpanded: true, children: [...(node.children || []), newChild] }; 
+            }
             if (node.children) return { ...node, children: node.children.map(addNodeRecursive) };
             return node;
         };
         const newRoot = addNodeRecursive(rootNode);
-        if (found) { setRootNode(newRoot); triggerAutoSave(newRoot, title); }
+        
+        if (found) { 
+            setRootNode(newRoot); 
+            triggerAutoSave(newRoot, title); 
+            // 2. 设置自动聚焦目标
+            setFocusTargetId(newChildId);
+        }
     };
+
     const handleEditNode = (id: string, newLabel: string) => {
         if (!rootNode) return;
         const newRoot = updateNodeInTree(rootNode, id, (n) => ({ ...n, label: newLabel }));
         setRootNode(newRoot); triggerAutoSave(newRoot, title);
     };
+
     const handleDeleteNode = (id: string) => {
         if (!rootNode) return;
         if (id === rootNode.id) return alert("根节点不能删除");
         try { const newRoot = deleteNodeFromTree(rootNode, id); setRootNode(newRoot); if (selectedId === id) setSelectedId(null); triggerAutoSave(newRoot, title); } catch (e) { alert("删除失败"); }
     };
+
     const handleMoveNode = (draggedId: string, targetId: string) => {
         if (!rootNode) return;
         const newRoot = moveNodeInTree(rootNode, draggedId, targetId);
         if (newRoot) { setRootNode(newRoot); triggerAutoSave(newRoot, title); }
+    };
+
+    const handleToggleExpand = (id: string) => {
+        if (!rootNode) return;
+        const newRoot = toggleNodeExpansion(rootNode, id);
+        setRootNode(newRoot);
+        // 展开/折叠状态属于视图状态，也可以选择保存
+        triggerAutoSave(newRoot, title);
     };
 
     // === 画布交互 (保持不变) ===
@@ -126,11 +181,11 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
 
     // === AI 逻辑 (保持不变) ===
     const openAiModal = (node: MindMapNode) => { setAiTargetNode(node); setAiPrompt(`基于“${node.label}”，请生成...`); setAiContent(''); setAiError(null); setShowAiModal(true); };
-    const handleAiGenerate = async () => { /* ...existing logic... */ 
+    const handleAiGenerate = async () => { 
         if (!aiTargetNode || !rootNode) return; setIsGenerating(true); setAiContent(''); setAiError(null);
         try { await apiService.generateStream(novelSettings || {} as any, WorkflowStep.MIND_MAP_NODE, aiTargetNode.label, '', (chunk) => setAiContent(p => p + chunk), aiPrompt); } catch (e: any) { setAiError(e.message); } finally { setIsGenerating(false); }
     };
-    const applyAiResult = () => { /* ...existing logic... */ 
+    const applyAiResult = () => { 
         if (!aiTargetNode || !rootNode || !aiContent) return;
         const lines = aiContent.split('\n').filter(l => l.trim().length > 0);
         const newChildren: MindMapNode[] = [];
@@ -147,7 +202,11 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
             stack.push({ node: newNode, level: indent });
         }
         if (newChildren.length > 0) {
-            const newRoot = updateNodeInTree(rootNode, aiTargetNode.id, (n) => ({ ...n, children: [...(n.children || []), ...newChildren] }));
+            const newRoot = updateNodeInTree(rootNode, aiTargetNode.id, (n) => ({ 
+                ...n, 
+                isExpanded: true, // AI 生成后自动展开
+                children: [...(n.children || []), ...newChildren] 
+            }));
             setRootNode(newRoot); setShowAiModal(false); triggerAutoSave(newRoot, title);
         }
     };
@@ -217,7 +276,7 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
             )}
 
             {/* Canvas */}
-            <div ref={canvasRef} className={`flex-1 overflow-hidden cursor-grab active:cursor-grabbing relative ${activeTheme.bgContainer} ${isPanning ? 'cursor-grabbing' : ''}`}
+            <div className={`flex-1 overflow-hidden cursor-grab active:cursor-grabbing relative ${activeTheme.bgContainer} ${isPanning ? 'cursor-grabbing' : ''}`}
                 onMouseDown={handleCanvasMouseDown} onMouseMove={handleCanvasMouseMove} onMouseUp={handleCanvasMouseUp} onMouseLeave={handleCanvasMouseUp} onClick={() => setSelectedId(null)}>
                 
                 <div className="absolute inset-0 pointer-events-none opacity-20 canvas-bg" style={{
@@ -230,6 +289,7 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                     <NodeRenderer 
                         node={rootNode} selectedId={selectedId} onSelect={setSelectedId} onEdit={handleEditNode}
                         onAddChild={handleAddChild} onAiExpand={openAiModal} onDelete={handleDeleteNode} onNodeDrop={handleMoveNode} 
+                        onToggleExpand={handleToggleExpand}
                         depth={0} theme={activeTheme} layout={activeLayout} 
                     />
                 </div>

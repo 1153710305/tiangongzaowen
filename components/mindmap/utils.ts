@@ -69,6 +69,20 @@ export const updateNodeInTree = (node: MindMapNode, id: string, updater: (n: Min
     return { ...node, children: (node.children || []).map(c => updateNodeInTree(c, id, updater)) };
 };
 
+// 切换节点的展开/折叠状态
+export const toggleNodeExpansion = (node: MindMapNode, id: string): MindMapNode => {
+    if (node.id === id) {
+        // 如果 isExpanded 未定义，默认为 true，切换则为 false
+        // 如果已定义，取反
+        const current = node.isExpanded !== undefined ? node.isExpanded : true;
+        return { ...node, isExpanded: !current };
+    }
+    if (node.children) {
+        return { ...node, children: node.children.map(c => toggleNodeExpansion(c, id)) };
+    }
+    return node;
+};
+
 // 获取所有节点的扁平数组
 export const getAllNodesFlat = (node: MindMapNode): MindMapNode[] => {
     let list = [node];
