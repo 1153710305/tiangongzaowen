@@ -38,11 +38,14 @@ export const ADMIN_HTML = `
         <div class="w-64 bg-slate-950 border-r border-slate-800 flex flex-col flex-shrink-0">
             <div class="p-6 border-b border-slate-800">
                 <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-pink-500">SkyCraft Admin</h1>
-                <p class="text-xs text-slate-500 mt-1">v2.9.2 Monitor System</p>
+                <p class="text-xs text-slate-500 mt-1">v3.0 Key Pool System</p>
             </div>
             <nav class="flex-1 p-4 space-y-2">
                 <button @click="switchTab('dashboard')" :class="{'bg-indigo-600/20 text-indigo-300': currentTab === 'dashboard'}" class="w-full text-left px-4 py-3 rounded-lg text-slate-400 hover:text-white transition-colors flex items-center gap-2">
                     <span>📊</span> 概览
+                </button>
+                <button @click="switchTab('keys')" :class="{'bg-indigo-600/20 text-indigo-300': currentTab === 'keys'}" class="w-full text-left px-4 py-3 rounded-lg text-slate-400 hover:text-white transition-colors flex items-center gap-2">
+                    <span>🔑</span> 密钥管理
                 </button>
                 <button @click="switchTab('users')" :class="{'bg-indigo-600/20 text-indigo-300': currentTab === 'users'}" class="w-full text-left px-4 py-3 rounded-lg text-slate-400 hover:text-white transition-colors flex items-center gap-2">
                     <span>👥</span> 用户管理
@@ -52,9 +55,6 @@ export const ADMIN_HTML = `
                 </button>
                 <button @click="switchTab('logs')" :class="{'bg-indigo-600/20 text-indigo-300': currentTab === 'logs'}" class="w-full text-left px-4 py-3 rounded-lg text-slate-400 hover:text-white transition-colors flex items-center gap-2">
                     <span>📜</span> 系统日志
-                </button>
-                <button @click="switchTab('api_tester')" :class="{'bg-indigo-600/20 text-indigo-300': currentTab === 'api_tester'}" class="w-full text-left px-4 py-3 rounded-lg text-slate-400 hover:text-white transition-colors flex items-center gap-2">
-                    <span>🧪</span> API 实验室
                 </button>
             </nav>
             <div class="p-4 border-t border-slate-800">
@@ -69,12 +69,12 @@ export const ADMIN_HTML = `
                 <h2 class="text-2xl font-bold mb-6 text-white">系统概览</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                     <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-                        <div class="text-slate-400 text-sm font-medium mb-2">总用户数</div>
-                        <div class="text-3xl font-bold text-white" x-text="stats.totalUsers">0</div>
+                        <div class="text-slate-400 text-sm font-medium mb-2">活跃 API Keys</div>
+                        <div class="text-3xl font-bold text-yellow-400" x-text="stats.activeKeys">0</div>
                     </div>
                     <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-                        <div class="text-slate-400 text-sm font-medium mb-2">总存档数</div>
-                        <div class="text-3xl font-bold text-pink-500" x-text="stats.totalArchives">0</div>
+                        <div class="text-slate-400 text-sm font-medium mb-2">总用户数</div>
+                        <div class="text-3xl font-bold text-white" x-text="stats.totalUsers">0</div>
                     </div>
                      <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                         <div class="text-slate-400 text-sm font-medium mb-2">脑洞卡片数</div>
@@ -85,9 +85,57 @@ export const ADMIN_HTML = `
                         <div class="text-3xl font-bold text-green-500" x-text="stats.totalProjects">0</div>
                     </div>
                 </div>
-                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
-                     <div class="text-slate-400 text-sm font-medium mb-1">最近活跃时间</div>
-                     <div class="text-xl text-white font-mono" x-text="formatDate(stats.lastActiveTime)"></div>
+            </div>
+
+            <!-- API Key 管理 (New) -->
+            <div x-show="currentTab === 'keys'" class="animate-fade-in">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-white">API Key 池管理</h2>
+                    <button @click="showAddKeyModal=true" class="bg-yellow-600 hover:bg-yellow-500 px-4 py-2 rounded text-white text-sm font-bold shadow-lg transition-colors flex items-center gap-2">
+                        <span>+</span> 添加 Key
+                    </button>
+                </div>
+                <div class="bg-slate-800 rounded-xl overflow-hidden border border-slate-700 shadow-xl">
+                    <table class="w-full text-left text-sm text-slate-400">
+                        <thead class="bg-slate-950 text-slate-200 font-bold">
+                            <tr>
+                                <th class="p-4">Key (Masked)</th>
+                                <th class="p-4">状态</th>
+                                <th class="p-4 text-center">调用次数</th>
+                                <th class="p-4 text-center">Token 消耗</th>
+                                <th class="p-4 text-center">平均时延</th>
+                                <th class="p-4 text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-700">
+                            <template x-for="k in apiKeys" :key="k.id">
+                                <tr class="hover:bg-slate-700/50 transition-colors">
+                                    <td class="p-4 font-mono text-xs text-white" x-text="k.key"></td>
+                                    <td class="p-4">
+                                        <button @click="toggleKeyStatus(k)" 
+                                            :class="k.is_active ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'"
+                                            class="px-2 py-1 rounded text-xs border transition-colors font-bold">
+                                            <span x-text="k.is_active ? '启用中' : '已禁用'"></span>
+                                        </button>
+                                    </td>
+                                    <td class="p-4 text-center" x-text="k.usage_count"></td>
+                                    <td class="p-4 text-center font-mono text-yellow-100/70" x-text="k.total_tokens.toLocaleString()"></td>
+                                    <td class="p-4 text-center text-xs">
+                                        <span x-text="k.usage_count > 0 ? Math.round(k.total_latency_ms / k.usage_count) + 'ms' : '-'"></span>
+                                    </td>
+                                    <td class="p-4 text-right">
+                                        <button @click="deleteKey(k.id)" class="text-red-400 hover:text-red-300 text-xs font-bold bg-red-900/20 px-2 py-1 rounded">删除</button>
+                                    </td>
+                                </tr>
+                            </template>
+                             <tr x-show="apiKeys.length === 0">
+                                <td colspan="6" class="p-8 text-center text-slate-500">暂无 API Key，请添加以启用服务。</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="p-4 bg-slate-900/50 text-xs text-slate-500 border-t border-slate-700">
+                        * 系统采用 LRU (最久未使用) 策略进行轮询，优先使用活跃且空闲的 Key。
+                    </div>
                 </div>
             </div>
 
@@ -122,9 +170,6 @@ export const ADMIN_HTML = `
                                     </td>
                                 </tr>
                             </template>
-                            <tr x-show="users.length === 0">
-                                <td colspan="4" class="p-8 text-center text-slate-500">暂无用户数据</td>
-                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -139,15 +184,27 @@ export const ADMIN_HTML = `
                             <h3 class="font-bold text-indigo-400">默认 AI 模型</h3>
                             <button @click="saveDefaultModel" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded transition-colors">保存配置</button>
                         </div>
-                        <p class="text-xs text-slate-500 mb-2">当用户未指定模型时使用的默认模型ID。</p>
-                        <input x-model="config.defaultModel" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white outline-none focus:border-indigo-500 mb-4" placeholder="例如: gemini-2.5-flash">
+                        <input x-model="config.defaultModel" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white outline-none focus:border-indigo-500 mb-6" placeholder="例如: gemini-2.5-flash">
                         
-                        <h3 class="font-bold text-indigo-400 mb-2 mt-6">模型列表配置 (JSON)</h3>
-                        <p class="text-xs text-slate-500 mb-2">配置前端可选的模型列表。格式为 [{"id":"...","name":"..."}]。</p>
-                        <textarea x-model="config.aiModelsJson" class="w-full h-48 bg-slate-900 border border-slate-600 rounded p-2 text-xs font-mono text-slate-300 outline-none focus:border-indigo-500 resize-none"></textarea>
-                        <div class="mt-2 text-right">
-                             <button @click="saveAiModels" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded transition-colors">保存列表</button>
+                        <div class="flex justify-between items-center mb-2">
+                             <h3 class="font-bold text-indigo-400">模型列表配置</h3>
+                             <button @click="saveAiModels" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded transition-colors">应用变更</button>
                         </div>
+                        <p class="text-xs text-slate-500 mb-4">勾选启用的模型将在前端显示。</p>
+                        
+                        <div class="space-y-2 max-h-60 overflow-y-auto">
+                            <template x-for="(model, idx) in config.parsedModels" :key="idx">
+                                <div class="flex items-center gap-3 bg-slate-900/50 p-3 rounded border border-slate-700">
+                                    <input type="checkbox" x-model="model.isActive" class="w-4 h-4 rounded border-slate-600 text-indigo-600 focus:ring-indigo-500 bg-slate-800">
+                                    <div class="flex-1 grid grid-cols-1 gap-1">
+                                        <input x-model="model.name" class="bg-transparent text-sm text-white font-bold outline-none border-b border-transparent focus:border-indigo-500" placeholder="显示名称">
+                                        <input x-model="model.id" class="bg-transparent text-xs text-slate-500 font-mono outline-none border-b border-transparent focus:border-indigo-500" placeholder="Model ID">
+                                    </div>
+                                    <button @click="config.parsedModels = config.parsedModels.filter((_, i) => i !== idx)" class="text-slate-600 hover:text-red-400">×</button>
+                                </div>
+                            </template>
+                        </div>
+                        <button @click="config.parsedModels.push({id:'', name:'', isActive: true})" class="mt-4 w-full py-2 border border-dashed border-slate-600 text-slate-400 hover:text-white hover:border-slate-400 rounded text-sm transition-colors">+ 添加模型</button>
                     </div>
                 </div>
             </div>
@@ -188,59 +245,6 @@ export const ADMIN_HTML = `
                             </div>
                         </div>
                     </template>
-                    <div x-show="filteredLogs.length === 0" class="text-center text-slate-600 italic py-10">暂无匹配日志</div>
-                </div>
-            </div>
-
-            <!-- API Tester -->
-            <div x-show="currentTab === 'api_tester'" class="h-full flex flex-col animate-fade-in">
-                <h2 class="text-2xl font-bold mb-4 text-white flex-shrink-0">API 实验室</h2>
-                <div class="flex gap-4 flex-1 overflow-hidden">
-                    <div class="w-1/2 bg-slate-800 p-4 rounded-xl flex flex-col gap-4 border border-slate-700 shadow-lg">
-                        <div>
-                            <label class="block text-xs text-slate-400 mb-1">预设模板</label>
-                            <select x-model="selectedApiEndpoint" @change="loadApiTemplate" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white outline-none focus:border-indigo-500">
-                                <option value="">-- 选择接口模板 --</option>
-                                <option value="pool">Get Config Pool (Public)</option>
-                                <option value="users">Get Users (Admin)</option>
-                                <option value="stats">Get Stats (Admin)</option>
-                                <option value="generate_idea">Generate Idea (User Auth Needed)</option>
-                            </select>
-                        </div>
-                        <div class="flex gap-2">
-                            <div class="w-1/4">
-                                <label class="block text-xs text-slate-400 mb-1">Method</label>
-                                <select x-model="apiRequest.method" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm font-mono font-bold text-indigo-400">
-                                    <option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option>
-                                </select>
-                            </div>
-                            <div class="flex-1">
-                                <label class="block text-xs text-slate-400 mb-1">URL</label>
-                                <input x-model="apiRequest.url" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm font-mono text-white focus:border-indigo-500 outline-none">
-                            </div>
-                        </div>
-                        <div class="flex-1 flex flex-col">
-                            <label class="block text-xs text-slate-400 mb-1">Headers (JSON)</label>
-                            <textarea x-model="apiRequest.headers" class="w-full h-24 bg-slate-900 border border-slate-600 rounded p-2 text-xs font-mono text-slate-300 focus:border-indigo-500 outline-none resize-none mb-2"></textarea>
-                            
-                            <label class="block text-xs text-slate-400 mb-1">Body (JSON)</label>
-                            <textarea x-model="apiRequest.body" class="w-full flex-1 bg-slate-900 border border-slate-600 rounded p-2 text-xs font-mono text-slate-300 focus:border-indigo-500 outline-none resize-none"></textarea>
-                        </div>
-                        <button @click="sendApiRequest" :disabled="apiLoading" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded transition-colors disabled:opacity-50">
-                            <span x-show="!apiLoading">发送请求</span><span x-show="apiLoading">发送中...</span>
-                        </button>
-                    </div>
-                    
-                    <div class="w-1/2 bg-[#0d1117] p-4 rounded-xl border border-slate-700 shadow-lg flex flex-col overflow-hidden">
-                        <div class="flex justify-between items-center mb-2 pb-2 border-b border-slate-800 text-xs text-slate-500">
-                            <span>Response</span>
-                            <span x-show="apiResponse">Status: <strong :class="apiResponse?.status >= 400 ? 'text-red-400' : 'text-green-400'" x-text="apiResponse?.status"></strong> | Time: <span x-text="apiResponse?.time + 'ms'"></span></span>
-                        </div>
-                        <div class="flex-1 overflow-auto">
-                            <pre x-show="apiResponse" class="text-xs font-mono text-green-400 whitespace-pre-wrap break-words" x-text="apiResponse?.body"></pre>
-                            <div x-show="!apiResponse" class="h-full flex items-center justify-center text-slate-600 italic text-sm">等待请求...</div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -248,6 +252,23 @@ export const ADMIN_HTML = `
 
     <!-- Modals -->
     
+    <!-- 添加 Key Modal -->
+    <div x-show="showAddKeyModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-800 p-6 rounded-xl w-96 border border-slate-700 shadow-2xl">
+            <h3 class="font-bold text-white mb-4 text-lg">添加 API Key</h3>
+            <div class="space-y-3">
+                <input x-model="newKey.key" placeholder="输入 Google Gemini API Key" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white outline-none focus:border-yellow-500">
+                <select x-model="newKey.provider" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white outline-none">
+                    <option value="google">Google Gemini</option>
+                </select>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+                <button @click="showAddKeyModal=false" class="px-4 py-2 text-slate-400 hover:text-white text-sm">取消</button>
+                <button @click="createKey" class="bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded text-sm font-bold">添加</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 新增用户 Modal -->
     <div x-show="showAddUserModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" x-cloak>
         <div class="bg-slate-800 p-6 rounded-xl w-96 border border-slate-700 shadow-2xl">
@@ -290,7 +311,6 @@ export const ADMIN_HTML = `
                             <div class="text-sm font-bold text-white mb-1" x-text="a.title || '无标题'"></div>
                             <div class="text-xs text-slate-500">
                                 更新于: <span x-text="formatDate(a.updated_at)"></span>
-                                <span x-show="a.settings" class="ml-2 bg-slate-700 px-1 rounded text-[10px]" x-text="a.settings?.genre"></span>
                             </div>
                         </div>
                         <button @click="viewArchiveDetail(a.id)" class="text-xs bg-indigo-900/50 text-indigo-300 border border-indigo-500/30 px-2 py-1 rounded hover:bg-indigo-600 hover:text-white transition-colors">查看详情</button>

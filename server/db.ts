@@ -1,6 +1,6 @@
 
 import Database from 'better-sqlite3';
-import { User, Archive, DbIdeaCard, IdeaCardData, DbProject, DbChapter, DbMindMap, DbUserPrompt, PromptType } from './types.ts';
+import { User, Archive, DbIdeaCard, IdeaCardData, DbProject, DbChapter, DbMindMap, DbUserPrompt, PromptType, ApiKey, SystemModelConfig } from './types.ts';
 import fs from 'fs';
 import path from 'path';
 
@@ -79,7 +79,7 @@ export function initDB() {
         );
         CREATE INDEX IF NOT EXISTS idx_mindmaps_project ON mind_maps(project_id);
 
-        -- === 提示词库表 (New) ===
+        -- === 提示词库表 ===
         CREATE TABLE IF NOT EXISTS user_prompts (
             id TEXT PRIMARY KEY,
             user_id TEXT,
@@ -93,32 +93,118 @@ export function initDB() {
         CREATE INDEX IF NOT EXISTS idx_prompts_user ON user_prompts(user_id);
         CREATE INDEX IF NOT EXISTS idx_prompts_type ON user_prompts(type);
 
-        -- === 系统配置表 (New v2.9.6) ===
+        -- === 系统配置表 ===
         CREATE TABLE IF NOT EXISTS system_configs (
             key TEXT PRIMARY KEY,
             value TEXT,
             updated_at TEXT
         );
+
+        -- === API Keys 表 (New) ===
+        CREATE TABLE IF NOT EXISTS api_keys (
+            id TEXT PRIMARY KEY,
+            key TEXT UNIQUE,
+            provider TEXT DEFAULT 'google',
+            is_active INTEGER DEFAULT 1, -- 1: true, 0: false
+            last_used_at TEXT,
+            usage_count INTEGER DEFAULT 0,
+            total_tokens INTEGER DEFAULT 0,
+            total_latency_ms INTEGER DEFAULT 0,
+            created_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_api_keys_active ON api_keys(is_active);
+        CREATE INDEX IF NOT EXISTS idx_api_keys_last_used ON api_keys(last_used_at);
     `);
 
-    // 初始化默认模型配置
+    // 初始化默认模型配置 (包含 isActive 字段)
     const checkConfig = db.prepare('SELECT key FROM system_configs WHERE key = ?').get('ai_models');
     if (!checkConfig) {
-        const defaultModels = JSON.stringify([
-            { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (标准/快速)' },
-            { id: 'gemini-2.5-flash-lite-preview-02-05', name: 'Gemini 2.5 Flash Lite (极速/省流)' },
-            { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (强逻辑/深度)' }
-        ]);
+        const defaultModels: SystemModelConfig[] = [
+            { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (标准/快速)', isActive: true },
+            { id: 'gemini-2.5-flash-lite-preview-02-05', name: 'Gemini 2.5 Flash Lite (极速/省流)', isActive: true },
+            { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (强逻辑/深度)', isActive: true }
+        ];
         const now = new Date().toISOString();
-        db.prepare('INSERT INTO system_configs (key, value, updated_at) VALUES (?, ?, ?)').run('ai_models', defaultModels, now);
+        db.prepare('INSERT INTO system_configs (key, value, updated_at) VALUES (?, ?, ?)').run('ai_models', JSON.stringify(defaultModels), now);
         db.prepare('INSERT INTO system_configs (key, value, updated_at) VALUES (?, ?, ?)').run('default_model', 'gemini-2.5-flash', now);
         console.log('[DB] Initialized default system configurations');
+    }
+
+    // 自动导入环境变量中的 API KEY (如果是首次运行)
+    const envKey = process.env.API_KEY;
+    if (envKey) {
+        const existing = db.prepare('SELECT id FROM api_keys WHERE key = ?').get(envKey);
+        if (!existing) {
+            const id = crypto.randomUUID();
+            const now = new Date().toISOString();
+            // last_used_at 设置为较早时间，确保优先被选中
+            db.prepare(`
+                INSERT INTO api_keys (id, key, provider, is_active, last_used_at, created_at) 
+                VALUES (?, ?, 'google', 1, '1970-01-01T00:00:00.000Z', ?)
+            `).run(id, envKey, now);
+            console.log('[DB] Automatically imported API_KEY from environment variables.');
+        }
     }
 
     console.log(`[DB] Database initialized at ${DB_PATH} (WAL mode: ON)`);
 }
 
-// ... existing user, archive, card, project, chapter, mindmap functions ...
+// ... existing functions ...
+
+// === API Key Management (New) ===
+
+/**
+ * 获取下一个可用的 API Key
+ * 策略：选择 active=1 且 last_used_at 最早的 Key (LRU - Least Recently Used)
+ * 这实现了简单的轮询和负载均衡
+ */
+export function getNextAvailableApiKey(): ApiKey | undefined {
+    // 优先选择从未使用的 (last_used_at 最早)
+    const stmt = db.prepare('SELECT * FROM api_keys WHERE is_active = 1 ORDER BY last_used_at ASC LIMIT 1');
+    return stmt.get() as ApiKey | undefined;
+}
+
+/**
+ * 更新 Key 的使用统计
+ */
+export function updateApiKeyStats(id: string, latencyMs: number, tokenCount: number = 0): void {
+    const now = new Date().toISOString();
+    const stmt = db.prepare(`
+        UPDATE api_keys 
+        SET last_used_at = ?, 
+            usage_count = usage_count + 1, 
+            total_tokens = total_tokens + ?, 
+            total_latency_ms = total_latency_ms + ?
+        WHERE id = ?
+    `);
+    stmt.run(now, tokenCount, latencyMs, id);
+}
+
+export function getAllApiKeys(): ApiKey[] {
+    const stmt = db.prepare('SELECT * FROM api_keys ORDER BY created_at DESC');
+    return stmt.all() as ApiKey[];
+}
+
+export function createApiKey(key: string, provider: string = 'google'): void {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const stmt = db.prepare(`
+        INSERT INTO api_keys (id, key, provider, is_active, last_used_at, created_at) 
+        VALUES (?, ?, ?, 1, '1970-01-01T00:00:00.000Z', ?)
+    `);
+    stmt.run(id, key, provider, now);
+}
+
+export function deleteApiKey(id: string): void {
+    const stmt = db.prepare('DELETE FROM api_keys WHERE id = ?');
+    stmt.run(id);
+}
+
+export function toggleApiKeyStatus(id: string, isActive: boolean): void {
+    const val = isActive ? 1 : 0;
+    const stmt = db.prepare('UPDATE api_keys SET is_active = ? WHERE id = ?');
+    stmt.run(val, id);
+}
 
 // === System Configs ===
 export function getSystemConfig(key: string): string | null {
@@ -288,7 +374,7 @@ export function deleteMindMap(id: string, projectId: string): void {
     stmt.run(id, projectId);
 }
 
-// === Prompts (New) ===
+// === Prompts ===
 export function createUserPrompt(id: string, userId: string, type: PromptType, title: string, content: string): DbUserPrompt {
     const stmt = db.prepare('INSERT INTO user_prompts (id, user_id, type, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
@@ -318,6 +404,7 @@ export function getSystemStats() {
     const archiveCount = db.prepare('SELECT COUNT(*) as count FROM archives').get() as { count: number };
     const cardCount = db.prepare('SELECT COUNT(*) as count FROM idea_cards').get() as { count: number };
     const projectCount = db.prepare('SELECT COUNT(*) as count FROM projects').get() as { count: number };
+    const keyCount = db.prepare('SELECT COUNT(*) as count FROM api_keys WHERE is_active = 1').get() as { count: number };
     const lastActive = db.prepare('SELECT updated_at FROM archives ORDER BY updated_at DESC LIMIT 1').get() as { updated_at: string } | undefined;
 
     return {
@@ -325,6 +412,7 @@ export function getSystemStats() {
         totalArchives: archiveCount.count,
         totalCards: cardCount.count,
         totalProjects: projectCount.count,
+        activeKeys: keyCount.count,
         lastActiveTime: lastActive?.updated_at || '无数据'
     };
 }

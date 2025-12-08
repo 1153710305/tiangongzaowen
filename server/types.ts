@@ -108,3 +108,23 @@ export interface DbUserPrompt {
     created_at: string;
     updated_at: string;
 }
+
+// === API Key 管理 (New) ===
+export interface ApiKey {
+    id: string;
+    key: string;            // 实际 Key
+    provider: string;       // 提供商 (google, openai...)
+    is_active: number;      // 0 or 1
+    last_used_at: string;   // 用于轮询排序
+    usage_count: number;    // 调用次数
+    total_tokens: number;   // 消耗 Token 总数
+    total_latency_ms: number; // 总耗时 (用于计算平均时延)
+    created_at: string;
+}
+
+// 系统模型配置扩展
+export interface SystemModelConfig {
+    id: string;
+    name: string;
+    isActive?: boolean; // 新增：是否启用
+}

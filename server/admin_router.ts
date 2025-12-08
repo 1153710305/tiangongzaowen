@@ -74,17 +74,14 @@ protectedApi.get('/users', (c) => {
     }
 });
 
-// 获取指定用户的存档列表 (Admin) - 新增接口
+// 获取指定用户的存档列表 (Admin)
 protectedApi.get('/users/:id/archives', (c) => {
     const id = c.req.param('id');
     try {
         const archives = db.getArchivesByUser(id);
-        // 解析 content JSON，以便前端直接展示 settings 等信息
         const result = archives.map(a => {
             try {
                 const content = JSON.parse(a.content);
-                // 解构 content 提取 settings，并将 content 字段移除以减小体积
-                // 我们不返回 history，因为通常太大了，列表页不需要
                 return { 
                     id: a.id,
                     title: a.title,
@@ -93,7 +90,6 @@ protectedApi.get('/users/:id/archives', (c) => {
                     updated_at: a.updated_at 
                 };
             } catch (e) {
-                // 如果解析失败，返回基础信息
                 return { 
                     id: a.id, 
                     title: a.title, 
@@ -110,7 +106,7 @@ protectedApi.get('/users/:id/archives', (c) => {
     }
 });
 
-// 获取单个存档详情 (Admin) - 新增接口
+// 获取单个存档详情 (Admin)
 protectedApi.get('/archives/:id', (c) => {
     const id = c.req.param('id');
     try {
@@ -120,7 +116,6 @@ protectedApi.get('/archives/:id', (c) => {
         }
 
         try {
-            // 解析完整 JSON 内容，包含 history
             const content = JSON.parse(archive.content);
             return c.json({
                 id: archive.id,
@@ -153,7 +148,7 @@ protectedApi.post('/users', async (c) => {
         if (existing) return c.json({ error: '用户名已存在' }, 400);
 
         const userId = crypto.randomUUID();
-        db.createUser(userId, username, password); // 注意：生产环境应Hash
+        db.createUser(userId, username, password); 
         logger.info(`管理员手动创建了用户: ${username}`);
         return c.json({ success: true, userId });
     } catch (e: any) {
@@ -169,7 +164,7 @@ protectedApi.put('/users/:id/password', async (c) => {
         const { password } = await c.req.json();
         if (!password || password.length < 6) return c.json({ error: '密码过短' }, 400);
         
-        db.updateUserPassword(id, password); // 注意：生产环境应Hash
+        db.updateUserPassword(id, password);
         logger.warn(`管理员重置了用户 ${id} 的密码`);
         return c.json({ success: true });
     } catch (e: any) {
@@ -202,7 +197,7 @@ protectedApi.get('/logs', (c) => {
     }
 });
 
-// === 系统配置管理接口 (New) ===
+// === 系统配置管理接口 ===
 protectedApi.get('/configs', (c) => {
     const aiModels = db.getSystemConfig('ai_models');
     const defaultModel = db.getSystemConfig('default_model');
@@ -230,6 +225,56 @@ protectedApi.put('/configs', async (c) => {
     }
     logger.warn(`Admin updated config: ${key}`);
     return c.json({ success: true });
+});
+
+// === API Key 管理接口 (New) ===
+protectedApi.get('/keys', (c) => {
+    try {
+        const keys = db.getAllApiKeys();
+        // 隐藏 Key 的中间部分
+        const safeKeys = keys.map(k => ({
+            ...k,
+            key: `${k.key.substring(0, 4)}...${k.key.substring(k.key.length - 4)}`
+        }));
+        return c.json(safeKeys);
+    } catch (e: any) {
+        logger.error("获取 API Keys 失败", { error: e.message });
+        return c.json({ error: "获取失败" }, 500);
+    }
+});
+
+protectedApi.post('/keys', async (c) => {
+    const { key, provider } = await c.req.json();
+    if (!key) return c.json({ error: "API Key is required" }, 400);
+    try {
+        db.createApiKey(key, provider || 'google');
+        logger.info("管理员添加了新的 API Key");
+        return c.json({ success: true });
+    } catch (e: any) {
+        return c.json({ error: "添加失败，可能 Key 已存在" }, 500);
+    }
+});
+
+protectedApi.put('/keys/:id', async (c) => {
+    const id = c.req.param('id');
+    const { is_active } = await c.req.json();
+    try {
+        db.toggleApiKeyStatus(id, !!is_active);
+        return c.json({ success: true });
+    } catch (e: any) {
+        return c.json({ error: "更新失败" }, 500);
+    }
+});
+
+protectedApi.delete('/keys/:id', (c) => {
+    const id = c.req.param('id');
+    try {
+        db.deleteApiKey(id);
+        logger.warn(`管理员删除了 API Key: ${id}`);
+        return c.json({ success: true });
+    } catch (e: any) {
+        return c.json({ error: "删除失败" }, 500);
+    }
 });
 
 // 挂载受保护的路由

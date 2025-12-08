@@ -6,7 +6,7 @@ import { sign } from 'hono/jwt';
 import { GoogleGenAI } from '@google/genai';
 import { SYSTEM_INSTRUCTION, PROMPT_BUILDERS } from './prompts.ts';
 import { RANDOM_DATA_POOL } from './data.ts';
-import { NovelSettings, WorkflowStep, ReferenceNovel } from './types.ts';
+import { NovelSettings, WorkflowStep, ReferenceNovel, SystemModelConfig } from './types.ts';
 import { logger } from './logger.ts';
 import { adminRouter } from './admin_router.ts';
 import * as db from './db.ts';
@@ -69,13 +69,20 @@ app.route('/admin', adminRouter);
 app.get('/', (c) => c.text('SkyCraft AI Backend (Auth Enabled) is Running! 🚀'));
 app.get('/api/config/pool', (c) => c.json(RANDOM_DATA_POOL));
 
-// 获取可用模型列表 (New)
+// 获取可用模型列表
 app.get('/api/config/models', (c) => {
     try {
         const modelsStr = db.getSystemConfig('ai_models');
         const defaultModel = db.getSystemConfig('default_model');
-        const models = modelsStr ? JSON.parse(modelsStr) : [];
-        return c.json({ models, defaultModel: defaultModel || 'gemini-2.5-flash' });
+        const allModels: SystemModelConfig[] = modelsStr ? JSON.parse(modelsStr) : [];
+        
+        // 过滤掉未激活的模型
+        const activeModels = allModels.filter(m => m.isActive !== false);
+
+        return c.json({ 
+            models: activeModels, 
+            defaultModel: defaultModel || 'gemini-2.5-flash' 
+        });
     } catch (e: any) {
         logger.error("获取模型配置失败", { error: e.message });
         // 兜底默认值
@@ -132,14 +139,18 @@ app.use('/api/prompts/*', jwt({ secret: JWT_SECRET }));
 // AI 生成
 app.post('/api/generate', async (c) => {
     const startTime = Date.now();
-    const API_KEY = process.env.API_KEY;
-    if (!API_KEY) {
-        return c.json({ error: "Server API Key not configured" }, 500);
+    
+    // 轮询获取数据库中的 API Key
+    const apiKeyData = db.getNextAvailableApiKey();
+    if (!apiKeyData) {
+        logger.error("无可用 API Key");
+        return c.json({ error: "系统繁忙：暂无可用 AI 资源，请联系管理员" }, 503);
     }
 
+    const API_KEY = apiKeyData.key;
     const apiKeyMasked = `...${API_KEY.slice(-4)}`;
+    const apiKeyId = apiKeyData.id;
     
-    // 从请求体获取 model 参数，默认使用 flash
     const body = await c.req.json();
     const { settings, step, context, references, extraPrompt, model } = body as { 
         settings: NovelSettings, 
@@ -152,7 +163,7 @@ app.post('/api/generate', async (c) => {
 
     const payload = c.get('jwtPayload'); 
     
-    // 确定使用的模型：优先使用请求参数 -> 其次使用数据库配置 -> 最后兜底 Flash
+    // 确定使用的模型
     let modelName = model;
     if (!modelName) {
         const dbDefault = db.getSystemConfig('default_model');
@@ -164,6 +175,7 @@ app.post('/api/generate', async (c) => {
         user: payload.username,
         model: modelName,
         apiKey: apiKeyMasked,
+        keyId: apiKeyId,
         systemInstruction: SYSTEM_INSTRUCTION,
         request: {},
         response: {},
@@ -187,7 +199,6 @@ app.post('/api/generate', async (c) => {
                 case WorkflowStep.OUTLINE: prompt = PROMPT_BUILDERS.OUTLINE(settings, context || ''); break;
                 case WorkflowStep.CHARACTER: prompt = PROMPT_BUILDERS.CHARACTER(settings); break;
                 case WorkflowStep.CHAPTER: 
-                    // 处理 Context 和 References
                     prompt = PROMPT_BUILDERS.CHAPTER(settings, context || '', typeof references === 'string' ? references : undefined); 
                     break;
                 case WorkflowStep.MIND_MAP_NODE:
@@ -197,22 +208,20 @@ app.post('/api/generate', async (c) => {
             }
         } catch (err) { return c.json({ error: "Prompt build failed" }, 500); }
 
-        // 如果有额外的 Prompt (来自用户提示词库), 附加到 prompt 末尾
         if (extraPrompt && step !== WorkflowStep.MIND_MAP_NODE) {
             prompt += `\n\n【用户额外指令/约束】:\n${extraPrompt}`;
         }
 
-        // 填充请求日志
         auditLog.request = {
             step,
             fullPrompt: prompt,
             settings
         };
         
-        logger.info(`[AI Start] ${step} by ${payload.username} using ${modelName}`);
+        logger.info(`[AI Start] ${step} by ${payload.username} using ${modelName} (KeyID: ${apiKeyId})`);
 
         const responseStream = await ai.models.generateContentStream({
-            model: modelName!, // modelName is ensured to be string above
+            model: modelName!, 
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
@@ -227,7 +236,8 @@ app.post('/api/generate', async (c) => {
         // 异步处理流和日志
         (async () => {
             let fullResponseText = '';
-            let tokenUsage = null;
+            let tokenUsage: any = null;
+            let totalTokens = 0;
             
             try {
                 for await (const chunk of responseStream) {
@@ -238,6 +248,7 @@ app.post('/api/generate', async (c) => {
                     }
                     if (chunk.usageMetadata) {
                         tokenUsage = chunk.usageMetadata;
+                        totalTokens = (tokenUsage.promptTokenCount || 0) + (tokenUsage.candidatesTokenCount || 0);
                     }
                 }
                 
@@ -250,6 +261,9 @@ app.post('/api/generate', async (c) => {
                 };
                 
                 logger.info(`[AI Success] ${step} Completed (${duration}ms)`, auditLog);
+                
+                // === 异步更新 Key 的统计数据 ===
+                db.updateApiKeyStats(apiKeyId, duration, totalTokens);
 
             } catch (err: any) {
                 const duration = Date.now() - startTime;
@@ -259,6 +273,10 @@ app.post('/api/generate', async (c) => {
                     partialText: fullResponseText
                 };
                 logger.error(`[AI Error] ${step} Failed`, auditLog);
+                
+                // 失败也要更新 Key 状态 (至少记录时间，避免死锁在坏 Key 上)
+                db.updateApiKeyStats(apiKeyId, duration, 0);
+
                 await writer.write(encoder.encode(`\n[Error: ${err.message}]`));
             } finally {
                 await writer.close();
@@ -357,7 +375,7 @@ app.get('/api/projects', (c) => {
     return c.json(db.getProjectsByUser(payload.id));
 });
 
-// 删除项目 (新增)
+// 删除项目
 app.delete('/api/projects/:id', (c) => {
     const payload = c.get('jwtPayload');
     const projectId = c.req.param('id');
@@ -436,7 +454,7 @@ app.delete('/api/projects/:pid/chapters/:cid', (c) => {
     return c.json({ success: true });
 });
 
-// === Prompts CRUD (New) ===
+// === Prompts CRUD ===
 app.get('/api/prompts', (c) => {
     const payload = c.get('jwtPayload');
     const prompts = db.getUserPrompts(payload.id);

@@ -23,10 +23,15 @@ export const ADMIN_SCRIPT = `
             isLoading: false,
             loginError: '',
             currentTab: 'dashboard',
-            stats: { totalUsers: 0, totalArchives: 0, totalCards: 0, totalProjects: 0, lastActiveTime: '' },
+            stats: { totalUsers: 0, totalArchives: 0, totalCards: 0, totalProjects: 0, activeKeys: 0 },
             users: [],
             logs: [],
+            apiKeys: [],
             
+            // Key Modals
+            showAddKeyModal: false,
+            newKey: { key: '', provider: 'google' },
+
             // User Modals State
             showAddUserModal: false,
             newUser: { username: '', password: '' },
@@ -40,13 +45,7 @@ export const ADMIN_SCRIPT = `
             showDetailModal: false,
             detailLoading: false,
             detailData: null,
-            detailTab: 'settings', // settings, history, raw
-            
-            // API Tester State
-            selectedApiEndpoint: '',
-            apiLoading: false,
-            apiRequest: { method: 'GET', url: '/api/config/pool', headers: '{\\n  "Content-Type": "application/json"\\n}', body: '' },
-            apiResponse: null,
+            detailTab: 'settings', 
             
             // Logs State
             logSearch: '',
@@ -57,6 +56,7 @@ export const ADMIN_SCRIPT = `
             // Config State
             config: {
                 aiModelsJson: '[]',
+                parsedModels: [], // For editable UI
                 defaultModel: ''
             },
 
@@ -80,7 +80,6 @@ export const ADMIN_SCRIPT = `
 
             switchTab(tab) {
                 this.currentTab = tab;
-                // Clear interval when leaving logs tab
                 if (tab !== 'logs' && this.logInterval) { 
                     clearInterval(this.logInterval); 
                     this.logInterval = null; 
@@ -89,10 +88,10 @@ export const ADMIN_SCRIPT = `
                 
                 if (tab === 'dashboard') this.fetchStats();
                 if (tab === 'users') this.fetchUsers();
+                if (tab === 'keys') this.fetchKeys();
                 if (tab === 'settings') this.fetchConfig();
                 if (tab === 'logs') { 
                     this.fetchLogs(); 
-                    // Auto enable refresh for logs
                     if (!this.isAutoRefresh) this.toggleAutoRefresh(); 
                 }
             },
@@ -132,8 +131,49 @@ export const ADMIN_SCRIPT = `
             async fetchStats() { 
                 try { 
                     const res = await this.authedFetch('/admin/api/stats'); 
-                    this.stats = res || { totalUsers: 0, totalArchives: 0, totalCards: 0, totalProjects: 0, lastActiveTime: '' }; 
+                    this.stats = res || this.stats; 
                 } catch (e) { console.error(e); } 
+            },
+
+            // === Keys (New) ===
+            async fetchKeys() {
+                try {
+                    const res = await this.authedFetch('/admin/api/keys');
+                    this.apiKeys = Array.isArray(res) ? res : [];
+                } catch(e) { this.apiKeys = []; }
+            },
+            async createKey() {
+                if(!this.newKey.key) return alert("请输入Key");
+                try {
+                    const res = await fetch('/admin/api/keys', { 
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.adminToken }, 
+                        body: JSON.stringify(this.newKey) 
+                    });
+                    if(res.ok) {
+                        alert("Key 添加成功");
+                        this.showAddKeyModal = false;
+                        this.newKey.key = '';
+                        this.fetchKeys();
+                    } else { alert("添加失败"); }
+                } catch(e) { alert("请求失败"); }
+            },
+            async toggleKeyStatus(key) {
+                try {
+                    await fetch('/admin/api/keys/' + key.id, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.adminToken },
+                        body: JSON.stringify({ is_active: !key.is_active })
+                    });
+                    this.fetchKeys();
+                } catch(e) { alert("更新状态失败"); }
+            },
+            async deleteKey(id) {
+                if(!confirm("确定删除此 Key 吗？")) return;
+                try {
+                    await fetch('/admin/api/keys/' + id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + this.adminToken } });
+                    this.fetchKeys();
+                } catch(e) { alert("删除失败"); }
             },
 
             // === Users ===
@@ -174,20 +214,26 @@ export const ADMIN_SCRIPT = `
                 try {
                     const res = await this.authedFetch('/admin/api/configs');
                     this.config.aiModelsJson = JSON.stringify(res.ai_models, null, 2);
+                    this.config.parsedModels = res.ai_models || [];
                     this.config.defaultModel = res.default_model;
                 } catch(e) { console.error(e); }
             },
             async saveAiModels() {
                 try {
-                    // Try parsing first to check validity
-                    JSON.parse(this.config.aiModelsJson);
+                    // Filter out empty rows
+                    const validModels = this.config.parsedModels.filter(m => m.id && m.name);
+                    const jsonStr = JSON.stringify(validModels);
+                    
                     const res = await fetch('/admin/api/configs', {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.adminToken },
-                        body: JSON.stringify({ key: 'ai_models', value: this.config.aiModelsJson })
+                        body: JSON.stringify({ key: 'ai_models', value: jsonStr })
                     });
-                    if (res.ok) alert('模型列表已更新'); else alert('更新失败');
-                } catch(e) { alert('JSON 格式错误: ' + e.message); }
+                    if (res.ok) { 
+                        alert('模型列表已更新');
+                        this.fetchConfig();
+                    } else alert('更新失败');
+                } catch(e) { alert('Error: ' + e.message); }
             },
             async saveDefaultModel() {
                 try {
@@ -212,67 +258,6 @@ export const ADMIN_SCRIPT = `
                     this.fetchLogs(); 
                     this.logInterval = setInterval(() => this.fetchLogs(), 2000); 
                 } 
-            },
-
-            // === API Tester ===
-            loadApiTemplate() {
-                const t = this.selectedApiEndpoint; 
-                const h = '{\\n  "Content-Type": "application/json"\\n}';
-                
-                if (t === 'pool') {
-                    this.apiRequest = { method: 'GET', url: '/api/config/pool', headers: h, body: '' };
-                } else if (t === 'users') {
-                    this.apiRequest = { method: 'GET', url: '/admin/api/users', headers: h, body: '' };
-                } else if (t === 'stats') {
-                    this.apiRequest = { method: 'GET', url: '/admin/api/stats', headers: h, body: '' };
-                } else if (t === 'generate_idea') {
-                    this.apiRequest = { 
-                        method: 'POST', 
-                        url: '/api/generate', 
-                        headers: h, 
-                        body: JSON.stringify({
-                            step: 'idea',
-                            settings: { genre: 'Test', trope: 'Test', protagonistType: 'Test', goldenFinger: 'Test', tone: 'Test', pacing: 'fast', targetAudience: 'male' }
-                        }, null, 2)
-                    };
-                }
-            },
-            async sendApiRequest() {
-                this.apiLoading = true; 
-                this.apiResponse = null;
-                const start = Date.now();
-                
-                // 自动注入 Admin Token (如果是请求 admin 接口且未提供 auth)
-                let headersObj = {};
-                try { headersObj = JSON.parse(this.apiRequest.headers || '{}'); } catch(e) {}
-                
-                if (this.apiRequest.url.includes('/admin/api/') && !headersObj['Authorization']) {
-                    headersObj['Authorization'] = 'Bearer ' + this.adminToken;
-                }
-                
-                try {
-                    const opts = { 
-                        method: this.apiRequest.method, 
-                        headers: headersObj, 
-                        body: ['POST','PUT'].includes(this.apiRequest.method) ? this.apiRequest.body : undefined 
-                    };
-                    const res = await fetch(this.apiRequest.url, opts);
-                    const text = await res.text();
-                    
-                    // 尝试格式化 JSON
-                    let displayBody = text;
-                    try { displayBody = JSON.stringify(JSON.parse(text), null, 2); } catch(e) {}
-
-                    this.apiResponse = { 
-                        status: res.status, 
-                        time: Date.now() - start, 
-                        body: displayBody 
-                    };
-                } catch (e) { 
-                    this.apiResponse = { status: 0, time: 0, body: e.message }; 
-                } finally { 
-                    this.apiLoading = false; 
-                }
             },
 
             // Formatters
