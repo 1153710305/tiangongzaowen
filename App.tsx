@@ -9,6 +9,7 @@ import { DEFAULT_NOVEL_SETTINGS } from './constants';
 import { apiService } from './services/geminiService';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { useAuthSession } from './hooks/useAuthSession';
+import { SecurityGuard } from './components/SecurityGuard'; // 引入安全组件
 
 export default function App() {
     // 使用自定义 Hook 管理 Session 和基础数据
@@ -115,63 +116,65 @@ export default function App() {
     if (isCheckingAuth) return null;
 
     return (
-        <SettingsProvider>
-            <div className="flex h-screen bg-dark text-slate-900 dark:text-slate-200 transition-colors duration-300">
-                {currentProject ? (
-                    <ProjectIDE 
-                        project={currentProject} 
-                        onBack={() => { setCurrentProject(null); loadUserData(); }} 
-                    />
-                ) : (
-                    <Dashboard 
-                        user={user}
-                        archives={archives}
-                        savedCards={savedCards}
-                        projectList={projectList}
-                        settings={settings}
-                        setSettings={setSettings}
-                        currentArchiveId={currentArchiveId}
-                        currentArchiveTitle={currentArchiveTitle}
-                        setCurrentArchiveTitle={setCurrentArchiveTitle}
-                        history={history}
-                        generatedContent={generatedContent}
-                        draftCards={draftCards}
-                        isGenerating={isGenerating}
-                        currentStep={currentStep}
-                        
-                        showCardHistory={showCardHistory}
-                        setShowCardHistory={setShowCardHistory}
-                        showProjectList={showProjectList}
-                        setShowProjectList={setShowProjectList}
-                        selectedCard={selectedCard}
-                        setSelectedCard={setSelectedCard}
+        <SecurityGuard>
+            <SettingsProvider>
+                <div className="flex h-screen bg-dark text-slate-900 dark:text-slate-200 transition-colors duration-300">
+                    {currentProject ? (
+                        <ProjectIDE 
+                            project={currentProject} 
+                            onBack={() => { setCurrentProject(null); loadUserData(); }} 
+                        />
+                    ) : (
+                        <Dashboard 
+                            user={user}
+                            archives={archives}
+                            savedCards={savedCards}
+                            projectList={projectList}
+                            settings={settings}
+                            setSettings={setSettings}
+                            currentArchiveId={currentArchiveId}
+                            currentArchiveTitle={currentArchiveTitle}
+                            setCurrentArchiveTitle={setCurrentArchiveTitle}
+                            history={history}
+                            generatedContent={generatedContent}
+                            draftCards={draftCards}
+                            isGenerating={isGenerating}
+                            currentStep={currentStep}
+                            
+                            showCardHistory={showCardHistory}
+                            setShowCardHistory={setShowCardHistory}
+                            showProjectList={showProjectList}
+                            setShowProjectList={setShowProjectList}
+                            selectedCard={selectedCard}
+                            setSelectedCard={setSelectedCard}
 
-                        onLogout={handleLogout}
-                        onShowAuthModal={() => setShowAuthModal(true)}
-                        onLoadArchive={loadArchive}
-                        onDeleteArchive={async (id, e) => { e.stopPropagation(); await apiService.deleteArchive(id); setArchives(prev => prev.filter(a => a.id !== id)); }}
-                        onResetArchive={resetArchive}
-                        onSaveArchive={() => saveArchive(currentArchiveId, currentArchiveTitle)}
-                        isSavingArchive={isSavingArchive}
-                        
-                        onGenerateIdea={(c, r, m) => handleGeneration(r ? WorkflowStep.ANALYSIS_IDEA : WorkflowStep.IDEA, r ? "分析生成" : "创意脑洞", c, r, m)}
-                        onGenerateOutline={() => handleGeneration(WorkflowStep.OUTLINE, "生成大纲", history.slice(-1)[0]?.content)}
-                        onGenerateCharacter={() => handleGeneration(WorkflowStep.CHARACTER, "生成人设")}
-                        onGenerateChapter={() => handleGeneration(WorkflowStep.CHAPTER, "撰写正文", history.slice(-1)[0]?.content)}
-                        
-                        onSelectCard={setSelectedCard}
-                        onDeleteCard={handleDeleteCard}
-                        onSaveCard={handleSaveCard}
-                        
-                        onProjectCreated={async () => { await loadUserData(); const projs = await apiService.getProjects(); if (projs.length) setCurrentProject(projs[0]); }}
-                        onSelectProject={(p) => { setShowProjectList(false); setCurrentProject(p); }}
-                        onDeleteProject={handleDeleteProject}
-                    />
-                )}
+                            onLogout={handleLogout}
+                            onShowAuthModal={() => setShowAuthModal(true)}
+                            onLoadArchive={loadArchive}
+                            onDeleteArchive={async (id, e) => { e.stopPropagation(); await apiService.deleteArchive(id); setArchives(prev => prev.filter(a => a.id !== id)); }}
+                            onResetArchive={resetArchive}
+                            onSaveArchive={() => saveArchive(currentArchiveId, currentArchiveTitle)}
+                            isSavingArchive={isSavingArchive}
+                            
+                            onGenerateIdea={(c, r, m) => handleGeneration(r ? WorkflowStep.ANALYSIS_IDEA : WorkflowStep.IDEA, r ? "分析生成" : "创意脑洞", c, r, m)}
+                            onGenerateOutline={() => handleGeneration(WorkflowStep.OUTLINE, "生成大纲", history.slice(-1)[0]?.content)}
+                            onGenerateCharacter={() => handleGeneration(WorkflowStep.CHARACTER, "生成人设")}
+                            onGenerateChapter={() => handleGeneration(WorkflowStep.CHAPTER, "撰写正文", history.slice(-1)[0]?.content)}
+                            
+                            onSelectCard={setSelectedCard}
+                            onDeleteCard={handleDeleteCard}
+                            onSaveCard={handleSaveCard}
+                            
+                            onProjectCreated={async () => { await loadUserData(); const projs = await apiService.getProjects(); if (projs.length) setCurrentProject(projs[0]); }}
+                            onSelectProject={(p) => { setShowProjectList(false); setCurrentProject(p); }}
+                            onDeleteProject={handleDeleteProject}
+                        />
+                    )}
 
-                {showAuthModal && <AuthForm onLoginSuccess={(u) => { handleLoginSuccess(u); setShowAuthModal(false); }} onClose={() => setShowAuthModal(false)} />}
-                <LogViewer />
-            </div>
-        </SettingsProvider>
+                    {showAuthModal && <AuthForm onLoginSuccess={(u) => { handleLoginSuccess(u); setShowAuthModal(false); }} onClose={() => setShowAuthModal(false)} />}
+                    {process.env.NODE_ENV !== 'production' && <LogViewer />}
+                </div>
+            </SettingsProvider>
+        </SecurityGuard>
     );
 }
