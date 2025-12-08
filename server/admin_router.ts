@@ -51,11 +51,23 @@ protectedApi.post('/users', async (c) => { const {username,password}=await c.req
 protectedApi.put('/users/:id/password', async (c) => { db.updateUserPassword(c.req.param('id'), (await c.req.json()).password); return c.json({success:true}); });
 protectedApi.delete('/users/:id', (c) => { db.deleteUserFull(c.req.param('id')); return c.json({success:true}); });
 
+// Update User (Admin only)
+protectedApi.put('/users/:id', async (c) => {
+    const { tokens, vip_expiry } = await c.req.json();
+    db.updateUserAdmin(c.req.param('id'), tokens, vip_expiry);
+    return c.json({ success: true });
+});
+
 // Logs
 protectedApi.get('/logs', (c) => c.json(logger.getRecentLogs()));
 
 // Configs
-protectedApi.get('/configs', (c) => c.json({ ai_models: JSON.parse(db.getSystemConfig('ai_models')||'[]'), default_model: db.getSystemConfig('default_model'), product_plans: JSON.parse(db.getSystemConfig('product_plans')||'[]') }));
+protectedApi.get('/configs', (c) => c.json({ 
+    ai_models: JSON.parse(db.getSystemConfig('ai_models')||'[]'), 
+    default_model: db.getSystemConfig('default_model'), 
+    product_plans: JSON.parse(db.getSystemConfig('product_plans')||'[]'),
+    initial_user_tokens: db.getSystemConfig('initial_user_tokens') || '1000'
+}));
 protectedApi.put('/configs', async (c) => { const {key,value}=await c.req.json(); db.setSystemConfig(key, value); return c.json({success:true}); });
 
 // Keys

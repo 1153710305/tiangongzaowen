@@ -43,6 +43,10 @@ export const ADMIN_SCRIPT = `
             currentArchiveUser: '',
             currentUserArchives: [],
             
+            // Edit User Modal (New)
+            showEditUserModal: false,
+            editUserData: { id: '', username: '', tokens: 0, vip_expiry: '' },
+
             // Announcement Modal
             showAnnouncementModal: false,
             annForm: { id: null, title: '', content: '', is_published: true },
@@ -63,7 +67,9 @@ export const ADMIN_SCRIPT = `
             config: {
                 aiModelsJson: '[]',
                 parsedModels: [], 
-                defaultModel: ''
+                defaultModel: '',
+                productPlansJson: '[]',
+                initialTokens: 1000
             },
 
             get filteredLogs() {
@@ -258,6 +264,41 @@ export const ADMIN_SCRIPT = `
                     this.detailData = await this.authedFetch('/admin/api/archives/' + id); 
                 } catch(e) {} finally { this.detailLoading = false; } 
             },
+            
+            // Edit User (Tokens & VIP)
+            editUser(user) {
+                this.editUserData = {
+                    id: user.id,
+                    username: user.username,
+                    tokens: user.tokens,
+                    vip_expiry: user.vip_expiry || ''
+                };
+                this.showEditUserModal = true;
+            },
+            setVipDays(days) {
+                const now = new Date();
+                const current = this.editUserData.vip_expiry ? new Date(this.editUserData.vip_expiry) : new Date();
+                const base = current > now ? current : now;
+                base.setDate(base.getDate() + days);
+                this.editUserData.vip_expiry = base.toISOString();
+            },
+            async saveUserChanges() {
+                try {
+                    const res = await fetch('/admin/api/users/' + this.editUserData.id, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.adminToken },
+                        body: JSON.stringify({ 
+                            tokens: parseInt(this.editUserData.tokens),
+                            vip_expiry: this.editUserData.vip_expiry || null
+                        })
+                    });
+                    if (res.ok) {
+                        alert('更新成功');
+                        this.showEditUserModal = false;
+                        this.fetchUsers();
+                    } else alert('更新失败');
+                } catch(e) { alert('请求失败'); }
+            },
 
             // === Configs ===
             async fetchConfig() {
@@ -266,6 +307,8 @@ export const ADMIN_SCRIPT = `
                     this.config.aiModelsJson = JSON.stringify(res.ai_models, null, 2);
                     this.config.parsedModels = res.ai_models || [];
                     this.config.defaultModel = res.default_model;
+                    this.config.productPlansJson = JSON.stringify(res.product_plans, null, 2);
+                    this.config.initialTokens = res.initial_user_tokens || 1000;
                 } catch(e) { console.error(e); }
             },
             async saveAiModels() {
@@ -275,6 +318,20 @@ export const ADMIN_SCRIPT = `
                     const res = await fetch('/admin/api/configs', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.adminToken }, body: JSON.stringify({ key: 'ai_models', value: jsonStr }) });
                     if (res.ok) { alert('模型列表已更新'); this.fetchConfig(); } else alert('更新失败');
                 } catch(e) { alert('Error: ' + e.message); }
+            },
+            async saveProductPlans() {
+                 try {
+                    // Validate JSON
+                    const parsed = JSON.parse(this.config.productPlansJson);
+                    const res = await fetch('/admin/api/configs', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.adminToken }, body: JSON.stringify({ key: 'product_plans', value: JSON.stringify(parsed) }) });
+                    if (res.ok) { alert('商品配置已保存'); this.fetchConfig(); } else alert('更新失败');
+                } catch(e) { alert('JSON 格式错误: ' + e.message); }
+            },
+            async saveInitialTokens() {
+                try {
+                    const res = await fetch('/admin/api/configs', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.adminToken }, body: JSON.stringify({ key: 'initial_user_tokens', value: String(this.config.initialTokens) }) });
+                    if (res.ok) { alert('初始代币配置已保存'); } else alert('更新失败');
+                } catch(e) { alert('Error'); }
             },
 
             // === Logs ===
@@ -293,7 +350,7 @@ export const ADMIN_SCRIPT = `
 
             // Formatters
             formatDate(s) { 
-                if(!s || s === '无数据') return s;
+                if(!s || s === '无数据') return '';
                 try { return new Date(s).toLocaleString('zh-CN'); } catch(e) { return s; } 
             },
             formatTime(s) { 

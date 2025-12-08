@@ -37,7 +37,7 @@ export const ADMIN_HTML = `
         <div class="w-64 bg-slate-950 border-r border-slate-800 flex flex-col flex-shrink-0">
             <div class="p-6 border-b border-slate-800">
                 <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-pink-500">SkyCraft Admin</h1>
-                <p class="text-xs text-slate-500 mt-1">v3.1 Membership & Community</p>
+                <p class="text-xs text-slate-500 mt-1">v3.2 Membership & Config</p>
             </div>
             <nav class="flex-1 p-4 space-y-2">
                 <button @click="switchTab('dashboard')" :class="{'bg-indigo-600/20 text-indigo-300': currentTab === 'dashboard'}" class="w-full text-left px-4 py-3 rounded-lg text-slate-400 hover:text-white transition-colors flex items-center gap-2">
@@ -92,7 +92,7 @@ export const ADMIN_HTML = `
                 </div>
             </div>
 
-            <!-- 公告管理 (New) -->
+            <!-- 公告管理 -->
             <div x-show="currentTab === 'announcements'" class="animate-fade-in">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-2xl font-bold text-white">公告管理</h2>
@@ -119,7 +119,7 @@ export const ADMIN_HTML = `
                 </div>
             </div>
 
-            <!-- 留言回复 (New) -->
+            <!-- 留言回复 -->
             <div x-show="currentTab === 'messages'" class="animate-fade-in">
                  <h2 class="text-2xl font-bold mb-6 text-white">用户留言反馈</h2>
                  <div class="space-y-4">
@@ -216,9 +216,14 @@ export const ADMIN_HTML = `
                                 <tr class="hover:bg-slate-700/50 transition-colors">
                                     <td class="p-4 text-white font-medium" x-text="u.username"></td>
                                     <td class="p-4 font-mono text-yellow-500" x-text="u.tokens.toLocaleString()"></td>
-                                    <td class="p-4 text-xs" x-text="formatDate(u.vip_expiry)"></td>
+                                    <td class="p-4 text-xs">
+                                        <span :class="u.vip_expiry && new Date(u.vip_expiry) > new Date() ? 'text-yellow-400 font-bold' : 'text-slate-500'">
+                                            <span x-text="formatDate(u.vip_expiry) || '无'"></span>
+                                        </span>
+                                    </td>
                                     <td class="p-4 flex justify-end gap-3">
-                                        <button @click="viewUserArchives(u)" class="text-indigo-400 hover:text-indigo-300 text-xs font-bold">查看存档</button>
+                                        <button @click="editUser(u)" class="text-blue-400 hover:text-blue-300 text-xs font-bold">编辑</button>
+                                        <button @click="viewUserArchives(u)" class="text-indigo-400 hover:text-indigo-300 text-xs font-bold">存档</button>
                                         <button @click="deleteUser(u.id)" class="text-red-400 hover:text-red-300 text-xs font-bold">删除</button>
                                     </td>
                                 </tr>
@@ -229,8 +234,24 @@ export const ADMIN_HTML = `
             </div>
             
             <!-- 系统设置 -->
-            <div x-show="currentTab === 'settings'" class="animate-fade-in">
+            <div x-show="currentTab === 'settings'" class="animate-fade-in space-y-8">
                 <h2 class="text-2xl font-bold text-white mb-6">系统设置</h2>
+                
+                <!-- 1. 基础配置 -->
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-indigo-400">基础参数配置</h3>
+                        <button @click="saveInitialTokens" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded transition-colors">保存参数</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <div>
+                            <label class="block text-sm text-slate-500 mb-1">新用户初始 Tokens</label>
+                            <input x-model="config.initialTokens" type="number" class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. AI 模型配置 -->
                 <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="font-bold text-indigo-400">AI 模型配置</h3>
@@ -239,18 +260,32 @@ export const ADMIN_HTML = `
                     <div class="space-y-2 max-h-60 overflow-y-auto">
                         <template x-for="(model, idx) in config.parsedModels" :key="idx">
                             <div class="flex items-center gap-3 bg-slate-900/50 p-3 rounded border border-slate-700">
-                                <input type="checkbox" x-model="model.isActive" class="w-4 h-4 rounded border-slate-600 text-indigo-600 bg-slate-800">
+                                <input type="checkbox" x-model="model.isActive" class="w-4 h-4 rounded border-slate-600 text-indigo-600 bg-slate-800" title="是否启用">
                                 <div class="flex-1 grid grid-cols-1 gap-1">
-                                    <input x-model="model.name" class="bg-transparent text-sm text-white font-bold outline-none border-b border-transparent focus:border-indigo-500">
-                                    <div class="flex gap-2 text-xs">
-                                        <span class="text-slate-500" x-text="model.id"></span>
-                                        <label class="flex items-center gap-1 text-yellow-500"><input type="checkbox" x-model="model.isVip"> VIP专属</label>
+                                    <input x-model="model.name" class="bg-transparent text-sm text-white font-bold outline-none border-b border-transparent focus:border-indigo-500" placeholder="显示名称">
+                                    <div class="flex gap-2 text-xs items-center">
+                                        <input x-model="model.id" class="bg-transparent text-slate-500 w-32 outline-none border-b border-transparent focus:border-slate-500" placeholder="Model ID">
+                                        <label class="flex items-center gap-1 cursor-pointer select-none px-2 py-0.5 rounded bg-slate-800 border border-slate-700" :class="model.isVip ? 'border-yellow-500/50 text-yellow-500' : 'text-slate-400'">
+                                            <input type="checkbox" x-model="model.isVip" class="hidden"> 
+                                            <span x-text="model.isVip ? '★ VIP专属' : '☆ 免费可用'"></span>
+                                        </label>
                                     </div>
                                 </div>
+                                <button @click="config.parsedModels.splice(idx, 1)" class="text-red-400 hover:text-white px-2">×</button>
                             </div>
                         </template>
                     </div>
-                    <button @click="config.parsedModels.push({id:'', name:'', isActive: true, isVip: false})" class="mt-4 w-full py-2 border border-dashed border-slate-600 text-slate-400 hover:text-white hover:border-slate-400 rounded text-sm">+ 添加模型</button>
+                    <button @click="config.parsedModels.push({id:'', name:'New Model', isActive: true, isVip: false})" class="mt-4 w-full py-2 border border-dashed border-slate-600 text-slate-400 hover:text-white hover:border-slate-400 rounded text-sm">+ 添加模型</button>
+                </div>
+
+                <!-- 3. 付费商品配置 (JSON) -->
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-indigo-400">付费商品配置 (JSON)</h3>
+                        <button @click="saveProductPlans" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded transition-colors">保存配置</button>
+                    </div>
+                    <p class="text-xs text-slate-500 mb-2">配置月卡、季卡、加油包等商品信息。请确保 JSON 格式正确。</p>
+                    <textarea x-model="config.productPlansJson" class="w-full h-64 bg-slate-900 border border-slate-600 rounded p-3 text-xs font-mono text-green-400 outline-none focus:border-indigo-500"></textarea>
                 </div>
             </div>
 
@@ -290,7 +325,31 @@ export const ADMIN_HTML = `
         </div>
     </div>
     
-    <!-- 其他 Modals (Key, User...) 保持不变，在 admin_assets.ts 中通过 x-data 控制 -->
+    <!-- 用户编辑 Modal -->
+    <div x-show="showEditUserModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-800 p-6 rounded-xl w-[400px] border border-slate-700 shadow-2xl">
+            <h3 class="font-bold text-white mb-4">编辑用户: <span x-text="editUserData.username" class="text-indigo-400"></span></h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs text-slate-500 mb-1">Tokens 余额</label>
+                    <input x-model="editUserData.tokens" type="number" class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-500 mb-1">会员过期时间 (YYYY-MM-DD 或 ISO)</label>
+                    <input x-model="editUserData.vip_expiry" placeholder="留空为非会员" class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white outline-none focus:border-indigo-500">
+                    <div class="flex gap-2 mt-1">
+                        <button @click="setVipDays(30)" class="text-[10px] bg-slate-700 px-2 py-1 rounded hover:bg-slate-600">+30天</button>
+                        <button @click="setVipDays(365)" class="text-[10px] bg-slate-700 px-2 py-1 rounded hover:bg-slate-600">+1年</button>
+                        <button @click="editUserData.vip_expiry = ''" class="text-[10px] bg-red-900/30 text-red-400 px-2 py-1 rounded hover:bg-red-900/50">取消会员</button>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+                <button @click="showEditUserModal=false" class="px-4 py-2 text-slate-400 hover:text-white text-sm">取消</button>
+                <button @click="saveUserChanges" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded text-sm font-bold">保存修改</button>
+            </div>
+        </div>
+    </div>
     
     <script>${ADMIN_SCRIPT}</script>
 </body>

@@ -171,13 +171,14 @@ export function initDB() {
 }
 
 function initDefaultConfigs() {
+    const now = new Date().toISOString();
+
     const checkConfig = db.prepare('SELECT key FROM system_configs WHERE key = ?').get('ai_models');
     if (!checkConfig) {
         const defaultModels: SystemModelConfig[] = [
             { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (标准/免费)', isActive: true, isVip: false },
             { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (深度/VIP)', isActive: true, isVip: true }
         ];
-        const now = new Date().toISOString();
         db.prepare('INSERT INTO system_configs (key, value, updated_at) VALUES (?, ?, ?)').run('ai_models', JSON.stringify(defaultModels), now);
         db.prepare('INSERT INTO system_configs (key, value, updated_at) VALUES (?, ?, ?)').run('default_model', 'gemini-2.5-flash', now);
     }
@@ -188,8 +189,12 @@ function initDefaultConfigs() {
             { id: 'plan_monthly', type: ProductType.SUBSCRIPTION, name: '月度会员', description: '30天会员 + 5万代币/天', price: 2900, tokens: 50000, days: 30, is_popular: true },
             { id: 'pack_small', type: ProductType.TOKEN_PACK, name: '灵感加油包 (小)', description: '增加 10万代币', price: 990, tokens: 100000, days: 0 }
         ];
-        const now = new Date().toISOString();
         db.prepare('INSERT INTO system_configs (key, value, updated_at) VALUES (?, ?, ?)').run('product_plans', JSON.stringify(defaultPlans), now);
+    }
+
+    const checkInitTokens = db.prepare('SELECT key FROM system_configs WHERE key = ?').get('initial_user_tokens');
+    if (!checkInitTokens) {
+        db.prepare('INSERT INTO system_configs (key, value, updated_at) VALUES (?, ?, ?)').run('initial_user_tokens', '1000', now);
     }
 }
 
@@ -199,8 +204,16 @@ export function createUser(id: string, username: string, passwordHash: string): 
     const stmt = db.prepare('INSERT INTO users (id, username, password_hash, tokens, referral_code, created_at) VALUES (?, ?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
     const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-    stmt.run(id, username, passwordHash, 1000, referralCode, now); 
-    return { id, username, password_hash: passwordHash, tokens: 1000, vip_expiry: null, referral_code: referralCode, created_at: now };
+    
+    // 获取系统配置的初始 Token
+    let initialTokens = 1000;
+    try {
+        const conf = getSystemConfig('initial_user_tokens');
+        if (conf) initialTokens = parseInt(conf, 10) || 1000;
+    } catch (e) { console.error("Error reading initial tokens config", e); }
+
+    stmt.run(id, username, passwordHash, initialTokens, referralCode, now); 
+    return { id, username, password_hash: passwordHash, tokens: initialTokens, vip_expiry: null, referral_code: referralCode, created_at: now };
 }
 
 export function getUserByUsername(username: string): User | undefined {
@@ -216,6 +229,12 @@ export function getUserById(id: string): User | undefined {
 export function updateUserPassword(id: string, newPasswordHash: string): void {
     const stmt = db.prepare('UPDATE users SET password_hash = ? WHERE id = ?');
     stmt.run(newPasswordHash, id);
+}
+
+// 管理员更新用户信息 (Tokens, VIP)
+export function updateUserAdmin(id: string, tokens: number, vipExpiry: string | null): void {
+    const stmt = db.prepare('UPDATE users SET tokens = ?, vip_expiry = ? WHERE id = ?');
+    stmt.run(tokens, vipExpiry, id);
 }
 
 export function deductUserTokens(userId: string, amount: number, description: string): void {

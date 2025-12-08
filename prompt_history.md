@@ -3,6 +3,17 @@
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
 
+## 版本 v3.2.1 (Admin Power-Up)
+
+### 功能变更
+- **User Management**:
+    - **Edit User**: 管理员可以直接修改用户的 Tokens 数量。
+    - **VIP Control**: 管理员可以设置用户的 VIP 过期时间（支持 +30天 / +1年 快捷操作），或取消 VIP。
+- **System Configurations**:
+    - **Initial Tokens**: 在后台“系统设置”中配置新用户注册时默认赠送的 Tokens 数量。
+    - **Product Plans**: 提供 JSON 编辑器直接配置 `product_plans`，支持灵活调整月卡、季卡、加油包等商品属性。
+    - **VIP Models**: 在模型配置中显式标记 `isVip`，控制哪些模型仅供会员使用。
+
 ## 版本 v3.2.0 (Community & Safety)
 
 ### 功能变更
