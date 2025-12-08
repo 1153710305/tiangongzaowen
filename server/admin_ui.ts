@@ -351,6 +351,88 @@ export const ADMIN_HTML = `
         </div>
     </div>
     
+    <!-- Add Key Modal -->
+    <div x-show="showAddKeyModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-800 p-6 rounded-xl w-[500px] border border-slate-700 shadow-2xl">
+            <h3 class="font-bold text-white mb-4 text-lg">添加 API Key</h3>
+            <div class="space-y-4">
+                <input x-model="newKey.key" placeholder="sk-..." class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white outline-none focus:border-indigo-500">
+                <select x-model="newKey.provider" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white outline-none">
+                    <option value="google">Google Gemini</option>
+                    <option value="openai">OpenAI (Compatible)</option>
+                </select>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+                <button @click="showAddKeyModal=false" class="px-4 py-2 text-slate-400 hover:text-white text-sm">取消</button>
+                <button @click="createKey" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded text-sm font-bold">添加</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add User Modal -->
+    <div x-show="showAddUserModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-800 p-6 rounded-xl w-[400px] border border-slate-700 shadow-2xl">
+            <h3 class="font-bold text-white mb-4 text-lg">新增用户</h3>
+            <div class="space-y-4">
+                <input x-model="newUser.username" placeholder="用户名" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white outline-none focus:border-indigo-500">
+                <input x-model="newUser.password" type="password" placeholder="密码 (至少6位)" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white outline-none focus:border-indigo-500">
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+                <button @click="showAddUserModal=false" class="px-4 py-2 text-slate-400 hover:text-white text-sm">取消</button>
+                <button @click="createUser" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded text-sm font-bold">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Archives List Modal -->
+    <div x-show="showArchivesModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-800 p-6 rounded-xl w-[600px] max-h-[80vh] flex flex-col border border-slate-700 shadow-2xl">
+            <div class="flex justify-between items-center mb-4 shrink-0">
+                <h3 class="font-bold text-white text-lg">用户存档: <span x-text="currentArchiveUser" class="text-indigo-400"></span></h3>
+                <button @click="showArchivesModal=false" class="text-slate-400 hover:text-white">✕</button>
+            </div>
+            <div class="flex-1 overflow-y-auto space-y-2 pr-2">
+                <template x-for="arc in currentUserArchives" :key="arc.id">
+                    <div class="bg-slate-900 border border-slate-700 rounded p-3 flex justify-between items-center hover:border-slate-500 transition-colors">
+                        <div>
+                            <div class="font-bold text-white text-sm" x-text="arc.title"></div>
+                            <div class="text-xs text-slate-500" x-text="formatDate(arc.updated_at)"></div>
+                        </div>
+                        <button @click="viewArchiveDetail(arc.id)" class="text-xs bg-indigo-900/50 text-indigo-300 px-2 py-1 rounded hover:bg-indigo-600 hover:text-white">查看详情</button>
+                    </div>
+                </template>
+                <div x-show="currentUserArchives.length === 0" class="text-center text-slate-500 py-4">无存档数据</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Archive Detail Modal -->
+    <div x-show="showDetailModal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm" x-cloak>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl w-[800px] h-[80vh] flex flex-col shadow-2xl overflow-hidden relative">
+            <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
+                <h3 class="font-bold text-white" x-text="detailData ? detailData.title : '加载中...'"></h3>
+                <button @click="showDetailModal=false" class="text-slate-400 hover:text-white">✕</button>
+            </div>
+            <div class="flex-1 overflow-auto p-6 bg-[#0f172a]">
+                <div x-show="detailLoading" class="text-center text-slate-500 mt-10">加载中...</div>
+                <div x-show="!detailLoading && detailData">
+                    <h4 class="text-indigo-400 font-bold mb-2">小说设定</h4>
+                    <pre class="bg-black/30 p-3 rounded text-xs text-slate-300 overflow-x-auto mb-6" x-text="JSON.stringify(detailData?.settings, null, 2)"></pre>
+                    
+                    <h4 class="text-indigo-400 font-bold mb-2">对话历史</h4>
+                    <div class="space-y-3">
+                        <template x-for="msg in (detailData?.history || [])" :key="msg.id">
+                            <div class="p-3 rounded border" :class="msg.role === 'user' ? 'bg-indigo-900/20 border-indigo-500/30 ml-8' : 'bg-slate-800 border-slate-700 mr-8'">
+                                <div class="text-[10px] uppercase font-bold mb-1 opacity-50" x-text="msg.role"></div>
+                                <div class="text-sm text-slate-300 whitespace-pre-wrap" x-text="msg.content"></div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>${ADMIN_SCRIPT}</script>
 </body>
 </html>`;
