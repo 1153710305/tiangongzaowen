@@ -589,9 +589,9 @@ export const ADMIN_HTML = `
     ${ADMIN_SCRIPT}
     
     // 扩展 AdminApp 逻辑以支持 API 实验室
-    const originalInit = adminApp().init;
+    const originalAdminApp = adminApp;
     adminApp = function() {
-        const base = adminApp(); // 获取原始对象
+        const base = originalAdminApp(); // 获取原始对象
         // 扩展数据和方法
         return {
             ...base,
