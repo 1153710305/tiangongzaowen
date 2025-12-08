@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useSettings } from '../contexts/SettingsContext';
-import { AppLanguage, AppTheme, AppFont } from '../types';
+import { AppLanguage } from '../types';
 import { Button } from './Button';
 
 interface Props {
@@ -12,25 +12,14 @@ export const UserSettingsModal: React.FC<Props> = ({ onClose }) => {
     const { settings, updateSettings, t } = useSettings();
 
     const languages: { id: AppLanguage; label: string; flag: string }[] = [
-        { id: 'en-US', label: 'English (US)', flag: '🇺🇸' },
-        { id: 'zh-CN', label: '简体中文 (中国)', flag: '🇨🇳' },
-        { id: 'pt-BR', label: 'Português (Brasil)', flag: '🇧🇷' },
-        { id: 'es-MX', label: 'Español (México)', flag: '🇲🇽' },
-        { id: 'th-TH', label: 'ไทย (Thailand)', flag: '🇹🇭' },
-        { id: 'vi-VN', label: 'Tiếng Việt (Vietnam)', flag: '🇻🇳' },
-        { id: 'id-ID', label: 'Bahasa (Indonesia)', flag: '🇮🇩' },
-    ];
-
-    const themes: { id: AppTheme; color: string }[] = [
-        { id: 'dark', color: 'bg-slate-900' },
-        { id: 'light', color: 'bg-slate-100' },
-        { id: 'midnight', color: 'bg-[#020617]' }, // Deep Blue
-        { id: 'forest', color: 'bg-[#052e16]' }, // Deep Green
+        { id: 'en-US', label: 'English', flag: '🇺🇸' },
+        { id: 'zh-CN', label: '简体中文', flag: '🇨🇳' },
+        { id: 'ja-JP', label: '日本語', flag: '🇯🇵' },
     ];
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">
-            <div className="bg-paper border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden relative">
+            <div className="bg-paper border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden relative">
                 {/* Header */}
                 <div className="p-6 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
                     <h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -47,58 +36,25 @@ export const UserSettingsModal: React.FC<Props> = ({ onClose }) => {
                     {/* 1. Language Section */}
                     <div>
                         <label className="block text-sm font-bold text-slate-400 mb-3">{t('settings.lang')}</label>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="flex flex-col gap-2">
                             {languages.map(lang => (
                                 <button
                                     key={lang.id}
                                     onClick={() => updateSettings({ language: lang.id })}
-                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all ${
+                                    className={`flex items-center gap-3 px-4 py-3 rounded-lg border text-sm transition-all ${
                                         settings.language === lang.id 
                                         ? 'bg-indigo-600 border-indigo-500 text-white shadow-md' 
-                                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500'
+                                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500 hover:bg-slate-700'
                                     }`}
                                 >
-                                    <span className="text-lg">{lang.flag}</span>
-                                    <span>{lang.label}</span>
+                                    <span className="text-xl">{lang.flag}</span>
+                                    <span className="font-medium">{lang.label}</span>
+                                    {settings.language === lang.id && (
+                                        <svg className="w-5 h-5 ml-auto text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                                    )}
                                 </button>
                             ))}
                         </div>
-                    </div>
-
-                    {/* 2. Theme Section */}
-                    <div>
-                        <label className="block text-sm font-bold text-slate-400 mb-3">{t('settings.theme')}</label>
-                        <div className="flex gap-4">
-                            {themes.map(theme => (
-                                <button
-                                    key={theme.id}
-                                    onClick={() => updateSettings({ theme: theme.id })}
-                                    className={`flex-1 h-16 rounded-lg border-2 flex flex-col items-center justify-center gap-1 transition-all ${
-                                        settings.theme === theme.id 
-                                        ? 'border-indigo-500 ring-2 ring-indigo-500/30' 
-                                        : 'border-slate-700 hover:border-slate-500'
-                                    }`}
-                                >
-                                    <div className={`w-full h-full rounded-md ${theme.color} opacity-80`}></div>
-                                    <span className="text-xs text-slate-400 mt-1">{t(`settings.theme.${theme.id}`)}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* 3. Font Section */}
-                    <div>
-                        <label className="block text-sm font-bold text-slate-400 mb-3">{t('settings.font')}</label>
-                        <select
-                            value={settings.fontFamily}
-                            onChange={(e) => updateSettings({ fontFamily: e.target.value as AppFont })}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-slate-200 outline-none focus:border-indigo-500"
-                        >
-                            <option value="system">{t('settings.font.system')}</option>
-                            <option value="serif">{t('settings.font.serif')}</option>
-                            <option value="mono">{t('settings.font.mono')}</option>
-                            <option value="handwriting">{t('settings.font.handwriting')}</option>
-                        </select>
                     </div>
                 </div>
 
