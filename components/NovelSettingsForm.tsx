@@ -4,6 +4,7 @@ import { NovelSettings, ReferenceNovel } from '../types';
 import { Button } from './Button';
 import { logger } from '../services/loggerService';
 import { apiService } from '../services/geminiService';
+import { authService } from '../services/authService';
 
 interface Props {
     settings: NovelSettings;
@@ -41,12 +42,20 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
     useEffect(() => {
         const loadConfig = async () => {
             try {
-                // 并行加载素材池、模型配置、用户状态
-                const [pool, modelConfig, userStatus] = await Promise.all([
+                // 并行加载素材池、模型配置
+                // 注意：getUserStatus 需要登录，若未登录则跳过，避免触发后端 401/500 日志
+                const promises: Promise<any>[] = [
                     apiService.fetchConfigPool(),
-                    apiService.getAiModels(),
-                    apiService.getUserStatus().catch(() => null)
-                ]);
+                    apiService.getAiModels()
+                ];
+
+                if (authService.isAuthenticated()) {
+                    promises.push(apiService.getUserStatus().catch(() => null));
+                } else {
+                    promises.push(Promise.resolve(null));
+                }
+
+                const [pool, modelConfig, userStatus] = await Promise.all(promises);
 
                 if (pool) setDataPool(pool);
                 

@@ -51,6 +51,11 @@ app.use('*', async (c, next) => {
 });
 
 app.onError((err, c) => {
+    // 专门处理 JWT 中间件抛出的未认证错误，返回 401 而不是 500
+    if (err.message.includes('no authorization included in request') || err.message.includes('Unauthorized')) {
+        return c.json({ error: 'Unauthorized' }, 401);
+    }
+
     // 生产安全：不向客户端泄露详细堆栈
     logger.error(`全局异常: ${err.message}`, { stack: err.stack });
     return c.json({ error: 'Internal Server Error', requestId: crypto.randomUUID() }, 500);
