@@ -118,7 +118,7 @@ export const ADMIN_HTML = `
                     <div class="w-64 bg-slate-800 border border-slate-700 rounded-xl flex flex-col overflow-hidden shrink-0 shadow-lg">
                         <div class="p-3 bg-slate-950 border-b border-slate-700 text-xs font-bold text-slate-400 uppercase">接口列表 (Endpoints)</div>
                         <div class="flex-1 overflow-y-auto p-2 space-y-1">
-                            <template x-for="api in apiRegistry" :key="api.url + api.method">
+                            <template x-for="(api, idx) in apiRegistry" :key="api.url + api.method + idx">
                                 <button 
                                     @click="selectApi(api)"
                                     class="w-full text-left px-3 py-2.5 rounded text-sm transition-colors flex flex-col gap-1 border border-transparent"
@@ -197,7 +197,7 @@ export const ADMIN_HTML = `
                     </button>
                 </div>
                 <div class="space-y-4">
-                    <template x-for="ann in announcements" :key="ann.id">
+                    <template x-for="(ann, idx) in announcements" :key="ann.id || idx">
                          <div class="bg-slate-800 border border-slate-700 rounded-lg p-4 relative group">
                             <div class="flex justify-between items-start mb-2">
                                 <h3 class="font-bold text-lg text-white" x-text="ann.title"></h3>
@@ -264,7 +264,7 @@ export const ADMIN_HTML = `
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-700">
-                            <template x-for="k in apiKeys" :key="k.id">
+                            <template x-for="(k, idx) in apiKeys" :key="k.id || idx">
                                 <tr class="hover:bg-slate-700/50 transition-colors">
                                     <td class="p-4 font-mono text-xs text-white" x-text="k.key"></td>
                                     <td class="p-4">
@@ -308,7 +308,7 @@ export const ADMIN_HTML = `
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-700">
-                            <template x-for="u in users" :key="u.id">
+                            <template x-for="(u, idx) in users" :key="u.id || idx">
                                 <tr class="hover:bg-slate-700/50 transition-colors">
                                     <td class="p-4 text-white font-medium" x-text="u.username"></td>
                                     <td class="p-4 font-mono text-yellow-500" x-text="u.tokens.toLocaleString()"></td>
@@ -388,7 +388,7 @@ export const ADMIN_HTML = `
             <!-- 日志 -->
             <div x-show="currentTab === 'logs'" class="h-full flex flex-col animate-fade-in">
                  <div class="bg-[#0d1117] rounded-xl p-4 font-mono text-xs flex-1 overflow-y-auto border border-slate-700 shadow-inner">
-                    <template x-for="l in filteredLogs" :key="l.id">
+                    <template x-for="(l, idx) in filteredLogs" :key="l.id || idx">
                         <div class="mb-2 border-b border-slate-800/50 pb-2 last:border-0 hover:bg-white/5 p-1 rounded transition-colors">
                             <div class="flex gap-2 mb-1">
                                 <span class="text-slate-500" x-text="formatTime(l.timestamp)"></span>
@@ -591,114 +591,117 @@ export const ADMIN_HTML = `
     // 扩展 AdminApp 逻辑以支持 API 实验室
     const originalAdminApp = adminApp;
     adminApp = function() {
-        const base = originalAdminApp(); // 获取原始对象
-        // 扩展数据和方法
-        return {
-            ...base,
-            apiRegistry: API_REGISTRY,
-            apiLab: {
-                currentApi: null,
-                targetUserId: '',
-                requestBody: '',
-                responseBody: '',
-                responseStatus: 0,
-                responseTime: 0,
-                responseSize: '0 B',
-                isLoading: false
-            },
-            
-            // 扩展 init
-            init() {
-                // 调用原始 init (如果需要绑定 this，请注意上下文，这里简化处理直接复制逻辑或手动调用)
-                const token = localStorage.getItem('skycraft_admin_token');
-                if (token) { 
-                    this.adminToken = token; 
-                    this.isAuthenticated = true; 
-                    this.fetchStats(); 
-                    this.fetchUsers(); // API Lab 需要用户列表
-                }
-            },
+        const app = originalAdminApp(); // 获取原始对象
+        
+        // 直接扩展对象属性，保留原对象的 getter/setter
+        app.apiRegistry = API_REGISTRY;
+        app.apiLab = {
+            currentApi: null,
+            targetUserId: '',
+            requestBody: '',
+            responseBody: '',
+            responseStatus: 0,
+            responseTime: 0,
+            responseSize: '0 B',
+            isLoading: false
+        };
 
-            selectApi(api) {
-                this.apiLab.currentApi = api;
-                this.apiLab.requestBody = JSON.stringify(api.body, null, 2);
-                this.apiLab.responseBody = '';
-                this.apiLab.responseStatus = 0;
-                this.apiLab.responseTime = 0;
-                this.apiLab.responseSize = '0 B';
-            },
+        // 扩展 init
+        const originalInit = app.init;
+        app.init = function() {
+             // 保持 this 上下文
+             if (originalInit) originalInit.call(this);
+             
+             const token = localStorage.getItem('skycraft_admin_token');
+             if (token) { 
+                 this.adminToken = token; 
+                 this.isAuthenticated = true; 
+                 this.fetchStats(); 
+                 this.fetchUsers(); // API Lab 需要用户列表
+             }
+        };
 
-            loadApiExample() {
-                if (this.apiLab.currentApi) {
-                    this.apiLab.requestBody = JSON.stringify(this.apiLab.currentApi.body, null, 2);
-                }
-            },
+        app.selectApi = function(api) {
+            this.apiLab.currentApi = api;
+            this.apiLab.requestBody = JSON.stringify(api.body, null, 2);
+            this.apiLab.responseBody = '';
+            this.apiLab.responseStatus = 0;
+            this.apiLab.responseTime = 0;
+            this.apiLab.responseSize = '0 B';
+        };
 
-            async testApi() {
-                if (!this.apiLab.targetUserId) return alert("请先选择一个模拟用户");
-                if (!this.apiLab.currentApi) return alert("请选择接口");
-
-                this.apiLab.isLoading = true;
-                this.apiLab.responseBody = '';
-                
-                try {
-                    // 1. 获取模拟 Token
-                    const tokenRes = await fetch('/admin/api/users/' + this.apiLab.targetUserId + '/impersonate', {
-                        method: 'POST',
-                        headers: { 'Authorization': 'Bearer ' + this.adminToken }
-                    });
-                    
-                    if (!tokenRes.ok) throw new Error("无法获取用户授权");
-                    const { token: userToken } = await tokenRes.json();
-
-                    // 2. 发起实际请求
-                    const startTime = performance.now();
-                    const options = {
-                        method: this.apiLab.currentApi.method,
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': 'Bearer ' + userToken
-                        }
-                    };
-                    
-                    if (this.apiLab.currentApi.method !== 'GET' && this.apiLab.currentApi.method !== 'HEAD') {
-                        options.body = this.apiLab.requestBody;
-                    }
-
-                    const res = await fetch(this.apiLab.currentApi.url, options);
-                    const endTime = performance.now();
-                    
-                    this.apiLab.responseStatus = res.status;
-                    this.apiLab.responseTime = Math.round(endTime - startTime);
-
-                    // 处理响应内容 (支持流式)
-                    const contentType = res.headers.get('content-type');
-                    let size = 0;
-
-                    if (contentType && contentType.includes('application/json')) {
-                        const json = await res.json();
-                        const jsonStr = JSON.stringify(json, null, 2);
-                        this.apiLab.responseBody = jsonStr;
-                        size = new Blob([jsonStr]).size;
-                    } else {
-                        // 假设是文本或流式文本，直接读取文本
-                        const text = await res.text();
-                        this.apiLab.responseBody = text;
-                        size = new Blob([text]).size;
-                    }
-
-                    // 计算大小
-                    this.apiLab.responseSize = size > 1024 ? (size/1024).toFixed(2) + ' KB' : size + ' B';
-
-                } catch (e) {
-                    this.apiLab.responseBody = 'Request Failed: ' + e.message;
-                    this.apiLab.responseStatus = 0;
-                } finally {
-                    this.apiLab.isLoading = false;
-                }
+        app.loadApiExample = function() {
+            if (this.apiLab.currentApi) {
+                this.apiLab.requestBody = JSON.stringify(this.apiLab.currentApi.body, null, 2);
             }
         };
-    }
+
+        app.testApi = async function() {
+            if (!this.apiLab.targetUserId) return alert("请先选择一个模拟用户");
+            if (!this.apiLab.currentApi) return alert("请选择接口");
+
+            this.apiLab.isLoading = true;
+            this.apiLab.responseBody = '';
+            
+            try {
+                // 1. 获取模拟 Token
+                const tokenRes = await fetch('/admin/api/users/' + this.apiLab.targetUserId + '/impersonate', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.adminToken }
+                });
+                
+                if (!tokenRes.ok) throw new Error("无法获取用户授权");
+                const { token: userToken } = await tokenRes.json();
+
+                // 2. 发起实际请求
+                const startTime = performance.now();
+                const options = {
+                    method: this.apiLab.currentApi.method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + userToken
+                    }
+                };
+                
+                if (this.apiLab.currentApi.method !== 'GET' && this.apiLab.currentApi.method !== 'HEAD') {
+                    options.body = this.apiLab.requestBody;
+                }
+
+                const res = await fetch(this.apiLab.currentApi.url, options);
+                const endTime = performance.now();
+                
+                this.apiLab.responseStatus = res.status;
+                this.apiLab.responseTime = Math.round(endTime - startTime);
+
+                // 处理响应内容 (支持流式)
+                const contentType = res.headers.get('content-type');
+                let size = 0;
+
+                if (contentType && contentType.includes('application/json')) {
+                    const json = await res.json();
+                    const jsonStr = JSON.stringify(json, null, 2);
+                    this.apiLab.responseBody = jsonStr;
+                    size = new Blob([jsonStr]).size;
+                } else {
+                    // 假设是文本或流式文本，直接读取文本
+                    const text = await res.text();
+                    this.apiLab.responseBody = text;
+                    size = new Blob([text]).size;
+                }
+
+                // 计算大小
+                this.apiLab.responseSize = size > 1024 ? (size/1024).toFixed(2) + ' KB' : size + ' B';
+
+            } catch (e) {
+                this.apiLab.responseBody = 'Request Failed: ' + e.message;
+                this.apiLab.responseStatus = 0;
+            } finally {
+                this.apiLab.isLoading = false;
+            }
+        };
+
+        return app;
+    };
     </script>
 </body>
 </html>`;

@@ -8,6 +8,7 @@ import { UserSettingsModal } from '../UserSettingsModal';
 import { PricingModal } from '../PricingModal';
 import { GuestbookModal } from '../GuestbookModal';
 import { AnnouncementModal } from '../AnnouncementModal';
+import { ApiLabModal } from '../ApiLabModal';
 import { useSettings } from '../../contexts/SettingsContext';
 import { apiService } from '../../services/geminiService';
 
@@ -51,8 +52,9 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     const [showPricing, setShowPricing] = useState(false);
     const [showGuestbook, setShowGuestbook] = useState(false);
     const [showAnnouncements, setShowAnnouncements] = useState(false);
+    const [showApiLab, setShowApiLab] = useState(false);
     const { t } = useSettings();
-    
+
     // 实时用户状态 (User 对象可能在 App 中更新不及时，这里单独维护展示用状态)
     const [userStats, setUserStats] = useState<{ tokens: number, isVip: boolean, vipExpiry: string | null } | null>(null);
 
@@ -91,7 +93,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                         <button onClick={onShowAuthModal} className="text-xs text-white bg-primary hover:bg-indigo-500 px-3 py-1 rounded">{t('sidebar.login')}</button>
                     )}
                 </div>
-                
+
                 {/* 会员/Token状态卡片 */}
                 {user && userStats && (
                     <div className="mt-3 bg-slate-900/50 rounded-lg p-3 border border-slate-700/50 flex flex-col gap-2 relative overflow-hidden group">
@@ -106,20 +108,20 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                                 {userStats.tokens.toLocaleString()} Tokens
                             </span>
                         </div>
-                        
+
                         {/* 进度条/装饰 */}
                         <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
                             <div className="bg-gradient-to-r from-indigo-500 to-pink-500 h-full w-[40%]"></div>
                         </div>
 
                         <div className="flex gap-2">
-                            <button 
+                            <button
                                 onClick={() => setShowPricing(true)}
                                 className="flex-1 text-[10px] bg-gradient-to-r from-yellow-600 to-orange-600 text-white py-1 rounded hover:brightness-110 transition-all font-bold shadow-sm"
                             >
                                 💎 充值
                             </button>
-                             <button 
+                            <button
                                 onClick={() => setShowGuestbook(true)}
                                 className="flex-1 text-[10px] bg-slate-700 text-slate-300 py-1 rounded hover:bg-slate-600 transition-all font-bold shadow-sm"
                             >
@@ -128,7 +130,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                         </div>
                     </div>
                 )}
-                
+
                 {!user && <p className="text-slate-500 text-xs mt-2">{t('app.slogan')}</p>}
             </div>
 
@@ -139,6 +141,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 
                 <button onClick={() => setShowPromptLib(true)} className="w-full bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white py-2 rounded-lg text-xs font-medium transition-all">
                     📚 {t('sidebar.prompts')}
+                </button>
+
+                <button onClick={() => setShowApiLab(true)} className="w-full bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white py-2 rounded-lg text-xs font-medium transition-all mt-2">
+                    🧪 API 实验室
                 </button>
 
                 <div className="flex space-x-2 bg-dark p-1 rounded-lg">
@@ -172,12 +178,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                                     <Button size="sm" onClick={onSaveArchive} isLoading={isSavingArchive} variant="secondary">{t('btn.save')}</Button>
                                 </div>
                             </div>
-                            <NovelSettingsForm 
-                                settings={settings} 
-                                onChange={setSettings} 
-                                onGenerateIdea={onGenerateIdea} 
-                                isGenerating={isGenerating} 
-                                loadedFromArchive={currentArchiveId ? currentArchiveTitle : undefined} 
+                            <NovelSettingsForm
+                                settings={settings}
+                                onChange={setSettings}
+                                onGenerateIdea={onGenerateIdea}
+                                isGenerating={isGenerating}
+                                loadedFromArchive={currentArchiveId ? currentArchiveTitle : undefined}
                             />
                         </div>
 
@@ -190,12 +196,13 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                     </>
                 )}
             </div>
-            
+
             {showPromptLib && <PromptLibraryModal onClose={() => setShowPromptLib(false)} />}
             {showSettings && <UserSettingsModal onClose={() => setShowSettings(false)} />}
             {showPricing && <PricingModal onClose={() => setShowPricing(false)} onSuccess={refreshUserStats} />}
             {showGuestbook && <GuestbookModal onClose={() => setShowGuestbook(false)} />}
             {showAnnouncements && <AnnouncementModal onClose={() => setShowAnnouncements(false)} />}
+            {showApiLab && <ApiLabModal onClose={() => setShowApiLab(false)} />}
         </div>
     );
 };

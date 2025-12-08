@@ -3,6 +3,21 @@
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
 
+## 版本 v3.3.0 (API Lab & Localization Optimization)
+
+### 功能变更
+- **Mind Map Editor Fixes**:
+    - 修复了思维导图“添加节点”点击无反应的问题。
+    - 增加了 `generateUUID` 兼容性处理，防止在非安全上下文下 `crypto.randomUUID` 报错导致程序崩溃。
+    - 增强了节点操作的日志输出，便于排查问题。
+- **API Laboratory**:
+    - 在侧边栏新增 **API 实验室** 入口。
+    - 集成 `ApiLabModal` 组件，提供可视化、交互式的 API 文档与调试界面。
+    - 涵盖了 Auth, User, Generate, Projects, Archives 等核心接口，支持一键发送测试请求并查看响应。
+- **Localization Refinement**:
+    - 优化了本地化策略，精简支持语言为：**简体中文**、**English (US)**、**日本語**。
+    - 移除了设置面板中的 **主题 (Theme)** 和 **字体 (Font)** 自定义选项，统一 UI 风格体验，降低维护复杂度。
+
 ## 版本 v3.2.1 (Admin Power-Up)
 
 ### 功能变更

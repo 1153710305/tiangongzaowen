@@ -149,7 +149,7 @@ export interface Archive {
 }
 
 // === 本地化设置 (New) ===
-export type AppLanguage = 'zh-CN' | 'en-US' | 'pt-BR' | 'es-MX' | 'vi-VN' | 'th-TH' | 'id-ID';
+export type AppLanguage = 'zh-CN' | 'en-US' | 'ja-JP';
 export type AppTheme = 'dark' | 'light' | 'midnight' | 'forest';
 export type AppFont = 'system' | 'serif' | 'mono' | 'handwriting';
 

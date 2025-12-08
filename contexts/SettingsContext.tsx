@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AppSettings, AppLanguage, AppTheme, AppFont } from '../types';
 
@@ -44,7 +43,7 @@ const TRANSLATIONS: Record<AppLanguage, Record<string, string>> = {
         'sidebar.login': 'Login / Register',
         'sidebar.announcements': 'Announcements',
         'sidebar.guestbook': 'Guestbook',
-        'sidebar.trash': 'Recycle Bin',
+        'sidebar.trash': 'Result Bin',
         'settings.modal.title': 'Localization & Preferences',
         'settings.lang': 'Language',
         'settings.theme': 'Theme',
@@ -60,145 +59,33 @@ const TRANSLATIONS: Record<AppLanguage, Record<string, string>> = {
         'btn.save': 'Save',
         'btn.close': 'Close'
     },
-    'pt-BR': {
+    'ja-JP': {
         'app.name': 'SkyCraft AI',
-        'app.slogan': 'Gerador de Romances Best-sellers',
-        'sidebar.projects': 'Meus Projetos',
-        'sidebar.prompts': 'Biblioteca de Prompts',
-        'sidebar.archives': 'Arquivos',
-        'sidebar.cards': 'Cartões de Ideias',
-        'sidebar.settings': 'Configurações',
-        'sidebar.logout': 'Sair',
-        'sidebar.login': 'Entrar / Registrar',
-        'sidebar.announcements': 'Anúncios',
-        'sidebar.guestbook': 'Livro de Visitas',
-        'sidebar.trash': 'Lixeira',
-        'settings.modal.title': 'Localização e Preferências',
-        'settings.lang': 'Idioma',
-        'settings.theme': 'Tema',
-        'settings.font': 'Fonte',
-        'settings.theme.dark': 'Escuro',
-        'settings.theme.light': 'Claro',
-        'settings.theme.midnight': 'Meia-noite',
-        'settings.theme.forest': 'Floresta',
-        'settings.font.system': 'Sistema',
-        'settings.font.serif': 'Serifa',
-        'settings.font.mono': 'Monoespaçada',
-        'settings.font.handwriting': 'Manuscrito',
-        'btn.save': 'Salvar',
-        'btn.close': 'Fechar'
-    },
-    'es-MX': {
-        'app.name': 'SkyCraft AI',
-        'app.slogan': 'Generador de Novelas Éxitos',
-        'sidebar.projects': 'Mis Proyectos',
-        'sidebar.prompts': 'Librería de Prompts',
-        'sidebar.archives': 'Archivos',
-        'sidebar.cards': 'Tarjetas de Ideas',
-        'sidebar.settings': 'Ajustes',
-        'sidebar.logout': 'Cerrar Sesión',
-        'sidebar.login': 'Iniciar / Registro',
-        'sidebar.announcements': 'Anuncios',
-        'sidebar.guestbook': 'Libro de Visitas',
-        'sidebar.trash': 'Papelera',
-        'settings.modal.title': 'Localización y Preferencias',
-        'settings.lang': 'Idioma',
-        'settings.theme': 'Tema',
-        'settings.font': 'Fuente',
-        'settings.theme.dark': 'Oscuro',
-        'settings.theme.light': 'Claro',
-        'settings.theme.midnight': 'Medianoche',
-        'settings.theme.forest': 'Bosque',
-        'settings.font.system': 'Sistema',
-        'settings.font.serif': 'Serifa',
-        'settings.font.mono': 'Monoespaciado',
-        'settings.font.handwriting': 'Manuscrito',
-        'btn.save': 'Guardar',
-        'btn.close': 'Cerrar'
-    },
-    'vi-VN': {
-        'app.name': 'SkyCraft AI',
-        'app.slogan': 'Trình tạo tiểu thuyết bán chạy nhất',
-        'sidebar.projects': 'Dự án của tôi',
-        'sidebar.prompts': 'Thư viện lời nhắc',
-        'sidebar.archives': 'Lưu trữ',
-        'sidebar.cards': 'Thẻ ý tưởng',
-        'sidebar.settings': 'Cài đặt',
-        'sidebar.logout': 'Đăng xuất',
-        'sidebar.login': 'Đăng nhập / Đăng ký',
-        'sidebar.announcements': 'Thông báo',
-        'sidebar.guestbook': 'Sổ lưu bút',
-        'sidebar.trash': 'Thùng rác',
-        'settings.modal.title': 'Ngôn ngữ & Tùy chọn',
-        'settings.lang': 'Ngôn ngữ',
-        'settings.theme': 'Giao diện',
-        'settings.theme.dark': 'Tối',
-        'settings.theme.light': 'Sáng',
-        'settings.theme.midnight': 'Nửa đêm',
-        'settings.theme.forest': 'Rừng',
-        'settings.font': 'Phông chữ',
-        'settings.font.system': 'Hệ thống',
-        'settings.font.serif': 'Có chân',
-        'settings.font.mono': 'Đơn không gian',
-        'settings.font.handwriting': 'Viết tay',
-        'btn.save': 'Lưu',
-        'btn.close': 'Đóng'
-    },
-    'th-TH': {
-        'app.name': 'SkyCraft AI',
-        'app.slogan': 'เครื่องมือสร้างนิยายยอดนิยม',
-        'sidebar.projects': 'โปรเจกต์ของฉัน',
-        'sidebar.prompts': 'คลังคำสั่ง',
-        'sidebar.archives': 'คลังข้อมูล',
-        'sidebar.cards': 'การ์ดไอเดีย',
-        'sidebar.settings': 'ตั้งค่า',
-        'sidebar.logout': 'ออกจากระบบ',
-        'sidebar.login': 'เข้าสู่ระบบ / ลงทะเบียน',
-        'sidebar.announcements': 'ประกาศ',
-        'sidebar.guestbook': 'สมุดเยี่ยม',
-        'sidebar.trash': 'ถังขยะ',
-        'settings.modal.title': 'การตั้งค่าและภาษา',
-        'settings.lang': 'ภาษา',
-        'settings.theme': 'ธีม',
-        'settings.theme.dark': 'มืด',
-        'settings.theme.light': 'สว่าง',
-        'settings.theme.midnight': 'เที่ยงคืน',
-        'settings.theme.forest': 'ป่า',
-        'settings.font': 'ฟอนต์',
-        'settings.font.system': 'ระบบ',
-        'settings.font.serif': 'แบบมีเชิง',
-        'settings.font.mono': 'โมโนสเปซ',
-        'settings.font.handwriting': 'ลายมือ',
-        'btn.save': 'บันทึก',
-        'btn.close': 'ปิด'
-    },
-    'id-ID': {
-        'app.name': 'SkyCraft AI',
-        'app.slogan': 'Generator Novel Terlaris',
-        'sidebar.projects': 'Proyek Saya',
-        'sidebar.prompts': 'Pustaka Prompt',
-        'sidebar.archives': 'Arsip',
-        'sidebar.cards': 'Kartu Ide',
-        'sidebar.settings': 'Pengaturan',
-        'sidebar.logout': 'Keluar',
-        'sidebar.login': 'Masuk / Daftar',
-        'sidebar.announcements': 'Pengumuman',
-        'sidebar.guestbook': 'Buku Tamu',
-        'sidebar.trash': 'Sampah',
-        'settings.modal.title': 'Lokalisasi & Preferensi',
-        'settings.lang': 'Bahasa',
-        'settings.theme': 'Tema',
-        'settings.theme.dark': 'Gelap',
-        'settings.theme.light': 'Terang',
-        'settings.theme.midnight': 'Tengah Malam',
-        'settings.theme.forest': 'Hutan',
-        'settings.font': 'Font',
-        'settings.font.system': 'Sistem',
-        'settings.font.serif': 'Serif',
-        'settings.font.mono': 'Monospace',
-        'settings.font.handwriting': 'Tulisan Tangan',
-        'btn.save': 'Simpan',
-        'btn.close': 'Tutup'
+        'app.slogan': 'ベストセラー小説ジェネレーター',
+        'sidebar.projects': 'マイプロジェクト',
+        'sidebar.prompts': 'プロンプトライブラリ',
+        'sidebar.archives': 'アーカイブ',
+        'sidebar.cards': 'アイデアカード',
+        'sidebar.settings': '設定',
+        'sidebar.logout': 'ログアウト',
+        'sidebar.login': 'ログイン / 登録',
+        'sidebar.announcements': 'お知らせ',
+        'sidebar.guestbook': 'ゲストブック',
+        'sidebar.trash': 'ゴミ箱',
+        'settings.modal.title': 'ローカリゼーションと設定',
+        'settings.lang': '言語 (Language)',
+        'settings.theme': 'テーマ (Theme)',
+        'settings.font': 'フォント (Font)',
+        'settings.theme.dark': 'ダーク',
+        'settings.theme.light': 'ライト',
+        'settings.theme.midnight': 'ミッドナイト',
+        'settings.theme.forest': 'フォレスト',
+        'settings.font.system': 'システム',
+        'settings.font.serif': 'セリフ (明朝)',
+        'settings.font.mono': '等幅',
+        'settings.font.handwriting': '手書き',
+        'btn.save': '保存',
+        'btn.close': '閉じる'
     }
 };
 
@@ -235,13 +122,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // 监听设置变化并应用副作用 (字体、主题)
     useEffect(() => {
         localStorage.setItem('skycraft_settings', JSON.stringify(settings));
-        
+
         // 1. 应用字体
         document.body.style.fontFamily = FONT_MAP[settings.fontFamily];
-        
+
         // 2. 应用主题
         const root = document.documentElement;
-        
+
         // 动态注入主题颜色变量
         // 注意：index.html 中的 tailwind 配置已经将 'dark' 和 'paper' 颜色映射为 var(--color-dark) 和 var(--color-paper)
         if (settings.theme === 'midnight') {
@@ -257,10 +144,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             root.style.setProperty('--color-dark', '#f8fafc'); // slate-50
             root.style.setProperty('--color-paper', '#ffffff'); // white
         } else {
-             // Default Dark
-             root.classList.add('dark');
-             root.style.setProperty('--color-dark', '#0f172a'); // slate-900
-             root.style.setProperty('--color-paper', '#1e293b'); // slate-800
+            // Default Dark
+            root.classList.add('dark');
+            root.style.setProperty('--color-dark', '#0f172a'); // slate-900
+            root.style.setProperty('--color-paper', '#1e293b'); // slate-800
         }
 
     }, [settings]);
