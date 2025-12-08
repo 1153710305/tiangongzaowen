@@ -8,7 +8,6 @@ import { UserSettingsModal } from '../UserSettingsModal';
 import { PricingModal } from '../PricingModal';
 import { GuestbookModal } from '../GuestbookModal';
 import { AnnouncementModal } from '../AnnouncementModal';
-import { ApiLabModal } from '../ApiLabModal';
 import { useSettings } from '../../contexts/SettingsContext';
 import { apiService } from '../../services/geminiService';
 
@@ -52,7 +51,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     const [showPricing, setShowPricing] = useState(false);
     const [showGuestbook, setShowGuestbook] = useState(false);
     const [showAnnouncements, setShowAnnouncements] = useState(false);
-    const [showApiLab, setShowApiLab] = useState(false);
     const { t } = useSettings();
 
     // 实时用户状态 (User 对象可能在 App 中更新不及时，这里单独维护展示用状态)
@@ -143,10 +141,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                     📚 {t('sidebar.prompts')}
                 </button>
 
-                <button onClick={() => setShowApiLab(true)} className="w-full bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white py-2 rounded-lg text-xs font-medium transition-all mt-2">
-                    🧪 API 实验室
-                </button>
-
                 <div className="flex space-x-2 bg-dark p-1 rounded-lg">
                     <button onClick={() => setShowCardHistory(false)} className={`flex-1 py-1.5 text-xs font-medium rounded transition-all ${!showCardHistory ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>{t('sidebar.archives')}</button>
                     <button onClick={() => setShowCardHistory(true)} className={`flex-1 py-1.5 text-xs font-medium rounded transition-all ${showCardHistory ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white'}`}>{t('sidebar.cards')} ({savedCardsCount})</button>
@@ -202,7 +196,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             {showPricing && <PricingModal onClose={() => setShowPricing(false)} onSuccess={refreshUserStats} />}
             {showGuestbook && <GuestbookModal onClose={() => setShowGuestbook(false)} />}
             {showAnnouncements && <AnnouncementModal onClose={() => setShowAnnouncements(false)} />}
-            {showApiLab && <ApiLabModal onClose={() => setShowApiLab(false)} />}
         </div>
     );
 };
