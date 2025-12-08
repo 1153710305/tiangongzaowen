@@ -1,10 +1,13 @@
 
 import { Hono } from 'hono';
 import { jwt, sign } from 'hono/jwt';
-import { logger } from './logger';
-import * as db from './db';
-import { ADMIN_HTML } from './admin_ui';
-import { JWT_SECRET, ADMIN_PASSWORD } from './config';
+import { logger } from './logger.ts';
+import * as db from './db.ts';
+import { ADMIN_HTML } from './admin_ui.ts';
+
+// 环境变量配置
+const JWT_SECRET = process.env.JWT_SECRET || 'skycraft_secret_key_change_me';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
 const adminRouter = new Hono();
 

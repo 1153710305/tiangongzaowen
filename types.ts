@@ -148,8 +148,8 @@ export interface Archive {
     updatedAt: string;
 }
 
-// === 本地化设置 (Updated) ===
-export type AppLanguage = 'zh-CN' | 'en-US' | 'ja-JP';
+// === 本地化设置 (New) ===
+export type AppLanguage = 'zh-CN' | 'en-US' | 'pt-BR' | 'es-MX' | 'vi-VN' | 'th-TH' | 'id-ID';
 export type AppTheme = 'dark' | 'light' | 'midnight' | 'forest';
 export type AppFont = 'system' | 'serif' | 'mono' | 'handwriting';
 

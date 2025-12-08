@@ -44,20 +44,6 @@ class ApiService {
     }
 
     /**
-     * 获取商品列表
-     */
-    public async getProducts(): Promise<any[]> {
-         try {
-             const res = await fetch(`${API_BASE_URL}/api/products`);
-             if (!res.ok) throw new Error("获取商品失败");
-             return await res.json();
-         } catch (e) {
-             console.error(e);
-             return [];
-         }
-    }
-
-    /**
      * 购买商品
      */
     public async buyProduct(productId: string): Promise<void> {
@@ -70,47 +56,6 @@ class ApiService {
         if (!res.ok) {
             const err = await res.json();
             throw new Error(err.error || "购买失败");
-        }
-    }
-
-    /**
-     * API 实验室测试 (New)
-     */
-    public async runLabTest(
-        model: string,
-        systemInstruction: string,
-        prompt: string,
-        temperature: number,
-        onChunk: (text: string) => void
-    ): Promise<void> {
-        const authHeaders = authService.getAuthHeader();
-        const res = await fetch(`${API_BASE_URL}/api/lab`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...authHeaders } as any,
-            body: JSON.stringify({ model, systemInstruction, prompt, temperature })
-        });
-
-        if (res.status === 401) throw new Error("Unauthorized");
-        if (res.status === 402) throw new Error("代币不足，请充值");
-        if (res.status === 403) throw new Error("该模型仅供会员使用");
-        if (!res.ok) throw new Error(`请求失败: ${res.statusText}`);
-
-        const reader = res.body?.getReader();
-        if (!reader) throw new Error("No response body");
-        
-        const decoder = new TextDecoder();
-        let done = false;
-
-        while (!done) {
-            const { value, done: doneReading } = await reader.read();
-            done = doneReading;
-            if (value) {
-                const chunkValue = decoder.decode(value, { stream: true });
-                if (chunkValue.startsWith('\n[Error:')) {
-                     throw new Error(chunkValue.replace('\n[Error: ', '').replace(']', ''));
-                }
-                onChunk(chunkValue);
-            }
         }
     }
 
