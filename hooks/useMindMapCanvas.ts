@@ -1,5 +1,5 @@
 
-import { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 
 export const useMindMapCanvas = () => {
     const [viewState, setViewState] = useState({ x: 0, y: 0, scale: 1 });
@@ -7,6 +7,7 @@ export const useMindMapCanvas = () => {
     const [startPan, setStartPan] = useState({ x: 0, y: 0 });
     const canvasRef = useRef<HTMLDivElement>(null);
 
+    // 修复: 引入 React 命名空间
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
         const target = e.target as HTMLElement;
         if (target.closest('.mindmap-node') || target.tagName === 'BUTTON' || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
