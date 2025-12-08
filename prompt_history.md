@@ -3,7 +3,13 @@
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
 
-## 版本 v3.2.1 (Admin Power-Up)
+## 版本 v3.2.1 (Admin Power-Up & Fixes)
+
+### 严重 Bug 修复
+- **Admin UI Recursion Crash**: 
+    - 现象：后台页面白屏，控制台报 `ReferenceError: isAuthenticated is not defined`。
+    - 原因：`adminApp = function() { ... const base = adminApp(); ... }` 导致无限递归栈溢出。
+    - 修复：引入 `const _baseAdminApp = adminApp;` 保存原始引用，切断递归链。
 
 ### 功能变更
 - **User Management**:

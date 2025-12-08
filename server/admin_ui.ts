@@ -72,15 +72,22 @@ export const ADMIN_HTML = `
     ${ADMIN_SCRIPT}
     
     // 扩展 API Lab 逻辑
-    const originalInit = adminApp().init;
+    // 关键修复：先将原始函数引用保存到 _baseAdminApp，防止下方重写时的递归调用
+    const _baseAdminApp = adminApp;
+    
     adminApp = function() {
-        const base = adminApp();
+        // 调用保存的原始函数，而不是调用新的 adminApp (避免无限递归)
+        const base = _baseAdminApp();
+        
         return {
             ...base,
             apiRegistry: API_REGISTRY,
             apiLab: { currentApi: null, targetUserId: '', requestUrl: '', requestBody: '', responseBody: '', responseStatus: 0, responseTime: 0, responseSize: '0 B', isLoading: false },
             
             init() {
+                // 调用原始的 init (如果存在)
+                if (base.init) base.init.call(this);
+                
                 const token = localStorage.getItem('skycraft_admin_token');
                 if (token) { this.adminToken = token; this.isAuthenticated = true; this.fetchStats(); this.fetchUsers(); }
             },

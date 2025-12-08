@@ -17,6 +17,7 @@
 4. [日志与监控 (Logging & Monitoring)](#-日志与监控-logging--monitoring)
 5. [前端部署手册 (Client)](#-前端部署手册-client)
 6. [使用说明书 (User Manual)](#-使用说明书-user-manual)
+7. [常见问题与排错 (Troubleshooting)](#-常见问题与排错-troubleshooting)
 
 ---
 
@@ -57,11 +58,29 @@
 
 ---
 
+## ❓ 常见问题与排错 (Troubleshooting)
+
+### Q1: 启动报错 `MODULE_NOT_FOUND: zod`
+*   **原因**: 依赖包未正确安装。
+*   **解决**: 在根目录执行 `npm install`。如果依然报错，请尝试删除 `node_modules` 和 `package-lock.json` 后重装。
+
+### Q2: 后台管理界面 (`/admin`) 白屏或黑屏
+*   **现象**: 打开 `/admin` 后页面全黑，控制台显示 `Uncaught ReferenceError: isAuthenticated is not defined`。
+*   **原因**: 这是由于 Javascript 函数重写导致的递归死循环 (Stack Overflow)，使得 Alpine.js 初始化失败。
+*   **解决**: 已在 v3.2.0+ 版本修复。核心修复逻辑是使用 `_baseAdminApp` 暂存原始函数引用。请确保 `server/admin_ui.ts` 代码已更新并重启服务。
+
+### Q3: 前端提示 "Failed to fetch"
+*   **原因**: 前端无法连接到后端 API。通常是因为 API 地址配置错误（如在 Cloud IDE 环境下使用了 `localhost`）。
+*   **解决**: 检查 `constants.ts` 中的 `API_BASE_URL`。如果是远程部署，确保前端构建时注入了正确的环境变量，或手动修改 `constants.ts` 兜底地址。
+
+---
+
 ## 📝 版本历史 (Changelog)
 
 **v3.2.0 (Community & Safety)**
 *   **Feature**: 项目回收站机制（软删除、30天自动清理、恢复功能）。
 *   **Feature**: 留言板与系统公告功能，增强作者与用户的互动。
+*   **Fix**: 修复 Admin UI 递归调用导致的白屏崩溃问题。
 
 **v3.1.0 (Membership Economy)**
 *   **Backend**: 实现 Token 扣费逻辑、VIP 权限校验拦截器、交易流水记录。
