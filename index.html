@@ -1,34 +1,26 @@
 
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>天工造文 - AI爆款小说生成器</title>
     <!-- 使用 Tailwind CDN 进行快速样式渲染 -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              primary: '#6366f1', // Indigo 500
-              secondary: '#ec4899', // Pink 500
-              dark: '#0f172a', // Slate 900
-              paper: '#1e293b', // Slate 800
-            }
-          }
-        }
-      }
-    </script>
     <style>
+        /* 定义全局 CSS 变量，用于动态主题切换 */
+        :root {
+            --color-dark: #0f172a;  /* slate-900 */
+            --color-paper: #1e293b; /* slate-800 */
+        }
+        
         /* 自定义滚动条，保持页面整洁 */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
         }
         ::-webkit-scrollbar-track {
-            background: #0f172a; 
+            background: var(--color-dark); 
         }
         ::-webkit-scrollbar-thumb {
             background: #334155; 
@@ -38,6 +30,28 @@
             background: #475569; 
         }
     </style>
+    <script>
+      tailwind.config = {
+        darkMode: 'class', // 启用 class 模式的暗黑支持
+        theme: {
+          extend: {
+            colors: {
+              primary: '#6366f1', // Indigo 500
+              secondary: '#ec4899', // Pink 500
+              // 使用 CSS 变量实现动态主题
+              dark: 'var(--color-dark)', 
+              paper: 'var(--color-paper)',
+            }
+          }
+        }
+      }
+    </script>
+    
+    <!-- 引入字体库：Noto Sans (多语言), Merriweather (衬线/阅读), JetBrains Mono (代码), Ma Shan Zheng (中文书法) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Ma+Shan+Zheng&family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Sans+Thai:wght@400;500;700&family=Noto+Sans:ital,wght@0,400;0,700;1,400&family=Roboto:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+
   <script type="importmap">
 {
   "imports": {
@@ -56,7 +70,9 @@
 }
 </script>
 </head>
-  <body class="bg-dark text-slate-200 antialiased overflow-hidden">
+  <!-- 移除 font-sans 以允许 SettingsContext 动态控制字体 -->
+  <!-- 添加 dark:text-slate-200 text-slate-900 以适配亮色模式 -->
+  <body class="bg-dark text-slate-900 dark:text-slate-200 antialiased overflow-hidden transition-colors duration-300">
     <div id="root" class="h-screen w-screen flex flex-col"></div>
     <!-- 添加 React 应用入口脚本，适配 Vite 本地开发环境 -->
     <script type="module" src="/index.tsx"></script>

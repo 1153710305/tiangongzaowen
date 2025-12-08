@@ -1,11 +1,11 @@
 
-# 天工造文 (SkyCraft Novel AI) - 企业级前后端分离版 (v2.9.5)
+# 天工造文 (SkyCraft Novel AI) - 企业级前后端分离版 (v2.9.8)
 
-> **架构理念**: 响应速度优先 (SQLite WAL + Hono + Streaming) | 稳定性优先 (Server Logger + Robust Error Handling) | 解耦优先 (Modular Router) | 资产化沉淀 (Structured Cards)
+> **架构理念**: 响应速度优先 (SQLite WAL + Hono + Streaming) | 稳定性优先 (Server Logger + Robust Error Handling) | 解耦优先 (Modular Router) | 资产化沉淀 (Structured Cards) | **全球化视野 (Localization)**
 
 本项目是一个专业的 AI 爆款网文生成系统，已从原型升级为可部署的前后端分离架构，并支持多用户登录、云端存档和全链路监控。
 
-**v2.9.5 更新：思维导图 AI 增强。新增大模型切换（Flash/Pro）及操作指引提示。**
+**v2.9.8 更新：强大的本地化支持。新增多语言界面、动态主题切换和字体配置。**
 
 ---
 
@@ -34,10 +34,11 @@
 *   **Prompt Engineering**: 针对思维导图扩展新增 `MIND_MAP_NODE` 模式，针对正文新增 `CHAPTER` 上下文注入模式。
 
 ### 2. 客户端 (Frontend) - 根目录
-*   **UI 框架**: React 18 + Tailwind CSS。
+*   **UI 框架**: React 18 + Tailwind CSS (支持动态 Theme Mode)。
 *   **Component**: 
     *   `MindMapEditor`: 可视化递归树状图编辑器。
     *   `ChapterEditor`: **NEW** 智能正文编辑器，支持 Shadow DOM 光标追踪。
+    *   `SettingsContext`: **NEW** 全局配置中心，管理语言、主题和字体。
 *   **AI Integration**: 支持流式 Markdown 解析，支持多资源上下文并发抓取。
 
 ---
@@ -78,7 +79,17 @@ CREATE TABLE IF NOT EXISTS chapters (
 
 ## 📖 使用说明书 (User Manual)
 
-### 1. IDE 创作模式 (Project IDE)
+### 1. 本地化与个性化 (Settings) - NEW
+点击侧边栏顶部的 ⚙️ 图标进入设置中心。
+*   **多语言支持**: 完整支持 **简体中文**、**英语(US)**、**葡萄牙语(巴西)**、**西班牙语(墨西哥)**、**越南语**、**泰语**、**印尼语**。界面文案会即时切换。
+*   **动态主题**: 
+    *   **暗夜 (Dark)**: 默认的深色模式，适合夜间创作。
+    *   **明亮 (Light)**: 清新的白底黑字风格。
+    *   **深蓝 (Midnight)**: 极客风格的深蓝色调。
+    *   **森系 (Forest)**: 护眼的墨绿色调。
+*   **字体配置**: 支持一键切换 **衬线体** (适合长文阅读)、**手写体** (增加创意感) 或 **等宽字体** (适合代码风格大纲)。
+
+### 2. IDE 创作模式 (Project IDE)
 1.  **新建/进入项目**：从脑洞卡片转化或直接创建项目。
 2.  **思维导图 (Mind Map)**：
     *   **布局切换**：支持逻辑结构图、组织结构图、时间轴视图。
@@ -96,6 +107,12 @@ CREATE TABLE IF NOT EXISTS chapters (
 ---
 
 ## 📝 版本历史 (Changelog)
+
+**v2.9.8 (Localization)**
+*   **Feature**: 新增全局设置上下文 (`SettingsContext`)。
+*   **Feature**: 支持 7 种语言切换 (CN, US, BR, MX, VN, TH, ID)。
+*   **Feature**: 支持 4 种主题配色和 4 种字体风格配置。
+*   **Infrastructure**: 引入 Google Fonts 多语言字体库。
 
 **v2.9.5 (Mind Map UI Polish)**
 *   **Feature**: 思维导图 AI 弹窗新增模型选择器 (Model Switcher)。

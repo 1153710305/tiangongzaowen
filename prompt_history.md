@@ -3,6 +3,16 @@
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
 
+## 版本 v2.9.8 (Localization)
+
+### 功能变更
+- **Global Settings Context**: 创建了 `SettingsContext.tsx`，通过 React Context API 管理全局的 `language`, `theme`, `fontFamily` 状态，并自动持久化到 `localStorage`。
+- **Translation System**: 实现了一个轻量级的 i18n 字典，包含中、英、葡、西、越、泰、印尼七种语言的 UI 文本映射。
+- **Theme Engine**:
+    - 扩展了 Tailwind 配置，支持通过 `data-theme` 属性或 body class 切换主题。
+    - 实现了 `theme-midnight` 和 `theme-forest` 的 CSS 变量动态注入，允许在不重载页面的情况下改变整个应用的色调。
+- **Typography**: 引入了 Google Fonts 的多语言字体包（包括 Noto Sans SC/TC/Thai, Ma Shan Zheng 等），并根据用户选择动态修改 `body.style.fontFamily`。
+
 ## 版本 v2.9.7 (Mind Map AI Config)
 
 ### 功能变更

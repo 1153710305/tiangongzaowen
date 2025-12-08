@@ -147,3 +147,15 @@ export interface Archive {
     createdAt: string;
     updatedAt: string;
 }
+
+// === 本地化设置 (New) ===
+export type AppLanguage = 'zh-CN' | 'en-US' | 'pt-BR' | 'es-MX' | 'vi-VN' | 'th-TH' | 'id-ID';
+export type AppTheme = 'dark' | 'light' | 'midnight' | 'forest';
+export type AppFont = 'system' | 'serif' | 'mono' | 'handwriting';
+
+export interface AppSettings {
+    language: AppLanguage;
+    theme: AppTheme;
+    fontFamily: AppFont;
+    fontSize: number; // 基础字号，默认16
+}
