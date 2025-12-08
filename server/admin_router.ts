@@ -58,6 +58,15 @@ protectedApi.put('/users/:id', async (c) => {
     return c.json({ success: true });
 });
 
+// Impersonate User (For API Lab)
+protectedApi.post('/users/:id/impersonate', async (c) => {
+    const user = db.getUserById(c.req.param('id'));
+    if (!user) return c.json({ error: 'User not found' }, 404);
+    // 生成该用户的临时 Token
+    const token = await sign({ id: user.id, username: user.username, role: 'user', exp: Math.floor(Date.now() / 1000) + 3600 }, JWT_SECRET);
+    return c.json({ token, username: user.username });
+});
+
 // Logs
 protectedApi.get('/logs', (c) => c.json(logger.getRecentLogs()));
 

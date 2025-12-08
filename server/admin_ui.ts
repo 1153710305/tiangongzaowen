@@ -37,11 +37,14 @@ export const ADMIN_HTML = `
         <div class="w-64 bg-slate-950 border-r border-slate-800 flex flex-col flex-shrink-0">
             <div class="p-6 border-b border-slate-800">
                 <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-pink-500">SkyCraft Admin</h1>
-                <p class="text-xs text-slate-500 mt-1">v3.2 Membership & Config</p>
+                <p class="text-xs text-slate-500 mt-1">v3.3 API Lab & Monitor</p>
             </div>
             <nav class="flex-1 p-4 space-y-2">
                 <button @click="switchTab('dashboard')" :class="{'bg-indigo-600/20 text-indigo-300': currentTab === 'dashboard'}" class="w-full text-left px-4 py-3 rounded-lg text-slate-400 hover:text-white transition-colors flex items-center gap-2">
                     <span>📊</span> 概览
+                </button>
+                <button @click="switchTab('apilab')" :class="{'bg-indigo-600/20 text-indigo-300': currentTab === 'apilab'}" class="w-full text-left px-4 py-3 rounded-lg text-slate-400 hover:text-white transition-colors flex items-center gap-2 font-bold border border-transparent" :class="currentTab === 'apilab' ? 'border-indigo-500/30' : ''">
+                    <span>🧪</span> API 实验室
                 </button>
                 <button @click="switchTab('announcements')" :class="{'bg-indigo-600/20 text-indigo-300': currentTab === 'announcements'}" class="w-full text-left px-4 py-3 rounded-lg text-slate-400 hover:text-white transition-colors flex items-center gap-2">
                     <span>📢</span> 公告管理
@@ -88,6 +91,99 @@ export const ADMIN_HTML = `
                      <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                         <div class="text-slate-400 text-sm font-medium mb-2">IDE 项目数</div>
                         <div class="text-3xl font-bold text-green-500" x-text="stats.totalProjects">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- API 实验室 -->
+            <div x-show="currentTab === 'apilab'" class="animate-fade-in h-full flex flex-col">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold text-white">🧪 API 实验室</h2>
+                        <p class="text-slate-400 text-sm mt-1">可视化调试与性能监控中心</p>
+                    </div>
+                    <div class="flex items-center gap-3 bg-slate-800 p-2 rounded-lg border border-slate-700">
+                        <span class="text-xs text-slate-500">模拟用户:</span>
+                        <select x-model="apiLab.targetUserId" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white outline-none w-48">
+                            <option value="">-- 请选择测试用户 --</option>
+                            <template x-for="u in users" :key="u.id">
+                                <option :value="u.id" x-text="u.username"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex-1 flex gap-6 overflow-hidden min-h-[600px]">
+                    <!-- 接口列表 -->
+                    <div class="w-64 bg-slate-800 border border-slate-700 rounded-xl flex flex-col overflow-hidden shrink-0 shadow-lg">
+                        <div class="p-3 bg-slate-950 border-b border-slate-700 text-xs font-bold text-slate-400 uppercase">接口列表 (Endpoints)</div>
+                        <div class="flex-1 overflow-y-auto p-2 space-y-1">
+                            <template x-for="api in apiRegistry" :key="api.url + api.method">
+                                <button 
+                                    @click="selectApi(api)"
+                                    class="w-full text-left px-3 py-2.5 rounded text-sm transition-colors flex flex-col gap-1 border border-transparent"
+                                    :class="apiLab.currentApi?.url === api.url && apiLab.currentApi?.method === api.method ? 'bg-indigo-900/50 border-indigo-500/50 shadow-inner' : 'hover:bg-slate-700/50 hover:border-slate-600'"
+                                >
+                                    <div class="flex items-center justify-between">
+                                        <span class="font-bold text-slate-200" x-text="api.name"></span>
+                                        <span class="text-[10px] px-1.5 rounded font-mono" 
+                                            :class="{
+                                                'bg-green-900 text-green-300': api.method === 'GET',
+                                                'bg-blue-900 text-blue-300': api.method === 'POST',
+                                                'bg-yellow-900 text-yellow-300': api.method === 'PUT',
+                                                'bg-red-900 text-red-300': api.method === 'DELETE'
+                                            }" x-text="api.method"></span>
+                                    </div>
+                                    <span class="text-[10px] text-slate-500 font-mono truncate" x-text="api.url"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- 调试面板 -->
+                    <div class="flex-1 flex flex-col gap-4 overflow-hidden">
+                        <!-- 请求区 -->
+                        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 shadow-lg flex flex-col h-1/2">
+                            <div class="flex justify-between items-center mb-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm font-bold text-white">Request Body</span>
+                                    <span class="text-xs text-slate-500">(JSON)</span>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button @click="loadApiExample" class="text-xs text-indigo-400 hover:text-white hover:underline">加载范例</button>
+                                    <button @click="testApi" :disabled="apiLab.isLoading || !apiLab.targetUserId" class="bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded text-xs font-bold shadow transition-transform active:scale-95 flex items-center gap-2">
+                                        <span x-show="apiLab.isLoading" class="animate-spin">⟳</span>
+                                        <span x-text="apiLab.isLoading ? '请求中...' : '发送请求 (Send)'"></span>
+                                    </button>
+                                </div>
+                            </div>
+                            <!-- 简易 JSON 编辑器 -->
+                            <textarea x-model="apiLab.requestBody" class="flex-1 bg-slate-950 border border-slate-600 rounded p-3 font-mono text-xs text-green-400 outline-none focus:border-indigo-500 resize-none" spellcheck="false" placeholder="Select an API to start..."></textarea>
+                        </div>
+
+                        <!-- 响应区 -->
+                        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 shadow-lg flex flex-col h-1/2 relative overflow-hidden">
+                            <div class="flex justify-between items-center mb-2 bg-slate-800 z-10">
+                                <span class="text-sm font-bold text-white">Response</span>
+                                <div class="flex gap-3 text-xs font-mono">
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-slate-500">Status:</span>
+                                        <span :class="apiLab.responseStatus >= 200 && apiLab.responseStatus < 300 ? 'text-green-400' : 'text-red-400'" x-text="apiLab.responseStatus || '-'"></span>
+                                    </div>
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-slate-500">Time:</span>
+                                        <span class="text-yellow-400" x-text="apiLab.responseTime ? apiLab.responseTime + 'ms' : '-'"></span>
+                                    </div>
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-slate-500">Size:</span>
+                                        <span class="text-blue-400" x-text="apiLab.responseSize || '-'"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex-1 bg-[#0d1117] border border-slate-600 rounded overflow-auto relative group">
+                                <pre class="p-3 font-mono text-xs text-slate-300 whitespace-pre-wrap break-all" x-text="apiLab.responseBody || '// Waiting for response...'"></pre>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -433,6 +529,176 @@ export const ADMIN_HTML = `
         </div>
     </div>
 
-    <script>${ADMIN_SCRIPT}</script>
+    <script>
+    // 定义 API 注册表 (静态定义，不与后端耦合)
+    const API_REGISTRY = [
+        {
+            name: "AI 生成 (Generate)",
+            url: "/api/generate",
+            method: "POST",
+            description: "核心内容生成接口，支持流式返回。",
+            body: {
+                "settings": {
+                    "genre": "玄幻",
+                    "trope": "系统",
+                    "protagonistType": "龙傲天",
+                    "goldenFinger": "加点",
+                    "pacing": "fast",
+                    "targetAudience": "male",
+                    "tone": "爽文"
+                },
+                "step": "idea",
+                "context": "",
+                "model": "gemini-2.5-flash"
+            }
+        },
+        {
+            name: "获取用户状态 (User Status)",
+            url: "/api/user/status",
+            method: "GET",
+            description: "获取当前登录用户的 Token 余额和 VIP 状态。",
+            body: {}
+        },
+        {
+            name: "从卡片创建项目 (Create Project)",
+            url: "/api/projects/from-card",
+            method: "POST",
+            description: "基于脑洞卡片初始化一个 IDE 项目。",
+            body: {
+                "cardId": "demo-card-id",
+                "title": "测试项目标题",
+                "description": "测试简介"
+            }
+        },
+        {
+            name: "提交留言 (Post Message)",
+            url: "/api/messages",
+            method: "POST",
+            description: "用户提交反馈留言。",
+            body: { "content": "后台接口测试留言" }
+        },
+        {
+            name: "获取所有项目 (Get Projects)",
+            url: "/api/projects",
+            method: "GET",
+            description: "列出用户的所有项目。",
+            body: {}
+        }
+    ];
+
+    ${ADMIN_SCRIPT}
+    
+    // 扩展 AdminApp 逻辑以支持 API 实验室
+    const originalInit = adminApp().init;
+    adminApp = function() {
+        const base = adminApp(); // 获取原始对象
+        // 扩展数据和方法
+        return {
+            ...base,
+            apiRegistry: API_REGISTRY,
+            apiLab: {
+                currentApi: null,
+                targetUserId: '',
+                requestBody: '',
+                responseBody: '',
+                responseStatus: 0,
+                responseTime: 0,
+                responseSize: '0 B',
+                isLoading: false
+            },
+            
+            // 扩展 init
+            init() {
+                // 调用原始 init (如果需要绑定 this，请注意上下文，这里简化处理直接复制逻辑或手动调用)
+                const token = localStorage.getItem('skycraft_admin_token');
+                if (token) { 
+                    this.adminToken = token; 
+                    this.isAuthenticated = true; 
+                    this.fetchStats(); 
+                    this.fetchUsers(); // API Lab 需要用户列表
+                }
+            },
+
+            selectApi(api) {
+                this.apiLab.currentApi = api;
+                this.apiLab.requestBody = JSON.stringify(api.body, null, 2);
+                this.apiLab.responseBody = '';
+                this.apiLab.responseStatus = 0;
+                this.apiLab.responseTime = 0;
+                this.apiLab.responseSize = '0 B';
+            },
+
+            loadApiExample() {
+                if (this.apiLab.currentApi) {
+                    this.apiLab.requestBody = JSON.stringify(this.apiLab.currentApi.body, null, 2);
+                }
+            },
+
+            async testApi() {
+                if (!this.apiLab.targetUserId) return alert("请先选择一个模拟用户");
+                if (!this.apiLab.currentApi) return alert("请选择接口");
+
+                this.apiLab.isLoading = true;
+                this.apiLab.responseBody = '';
+                
+                try {
+                    // 1. 获取模拟 Token
+                    const tokenRes = await fetch('/admin/api/users/' + this.apiLab.targetUserId + '/impersonate', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + this.adminToken }
+                    });
+                    
+                    if (!tokenRes.ok) throw new Error("无法获取用户授权");
+                    const { token: userToken } = await tokenRes.json();
+
+                    // 2. 发起实际请求
+                    const startTime = performance.now();
+                    const options = {
+                        method: this.apiLab.currentApi.method,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + userToken
+                        }
+                    };
+                    
+                    if (this.apiLab.currentApi.method !== 'GET' && this.apiLab.currentApi.method !== 'HEAD') {
+                        options.body = this.apiLab.requestBody;
+                    }
+
+                    const res = await fetch(this.apiLab.currentApi.url, options);
+                    const endTime = performance.now();
+                    
+                    this.apiLab.responseStatus = res.status;
+                    this.apiLab.responseTime = Math.round(endTime - startTime);
+
+                    // 处理响应内容 (支持流式)
+                    const contentType = res.headers.get('content-type');
+                    let size = 0;
+
+                    if (contentType && contentType.includes('application/json')) {
+                        const json = await res.json();
+                        const jsonStr = JSON.stringify(json, null, 2);
+                        this.apiLab.responseBody = jsonStr;
+                        size = new Blob([jsonStr]).size;
+                    } else {
+                        // 假设是文本或流式文本，直接读取文本
+                        const text = await res.text();
+                        this.apiLab.responseBody = text;
+                        size = new Blob([text]).size;
+                    }
+
+                    // 计算大小
+                    this.apiLab.responseSize = size > 1024 ? (size/1024).toFixed(2) + ' KB' : size + ' B';
+
+                } catch (e) {
+                    this.apiLab.responseBody = 'Request Failed: ' + e.message;
+                    this.apiLab.responseStatus = 0;
+                } finally {
+                    this.apiLab.isLoading = false;
+                }
+            }
+        };
+    }
+    </script>
 </body>
 </html>`;
