@@ -3,6 +3,22 @@
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
 
+## 版本 v3.1.0 (Membership & Economy)
+
+### 功能变更
+- **Token System**:
+    - 引入了 `tokens` 概念，对标 Model 消耗的 Token 数。
+    - 后端 `/api/generate` 在流式生成结束后，解析 Gemini 的 `usageMetadata`，精确扣除用户代币。
+    - 数据库新增 `user_transactions` 表，完整记录每一次生成消耗、充值入账流水。
+- **Membership (VIP)**:
+    - 用户表新增 `vip_expiry` 字段。
+    - 模型配置 (`ai_models` config) 新增 `isVip` 属性。
+    - 后端拦截逻辑：若请求的模型标记为 `isVip=true`，且用户非 VIP（或已过期），直接拒绝请求并返回 403。
+- **Economy UI**:
+    - 新增 `PricingModal` 组件，展示月卡、季卡、加油包等商品。
+    - 侧边栏实时展示用户 Token 余额和 VIP 身份徽章。
+    - 模型选择器自动识别 VIP 模型，为非会员用户提供弹窗提示。
+
 ## 版本 v3.0.0 (Key Pool & Stats)
 
 ### 功能变更

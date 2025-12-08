@@ -1,11 +1,13 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NovelSettingsForm } from '../NovelSettingsForm';
 import { Button } from '../Button';
-import { User, Archive, WorkflowStep, NovelSettings, ReferenceNovel, IdeaCard } from '../../types';
+import { User, Archive, WorkflowStep, NovelSettings, ReferenceNovel } from '../../types';
 import { PromptLibraryModal } from '../PromptLibraryModal';
 import { UserSettingsModal } from '../UserSettingsModal';
+import { PricingModal } from '../PricingModal';
 import { useSettings } from '../../contexts/SettingsContext';
+import { apiService } from '../../services/geminiService';
 
 interface AppSidebarProps {
     user: User | null;
@@ -44,7 +46,27 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 }) => {
     const [showPromptLib, setShowPromptLib] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
+    const [showPricing, setShowPricing] = useState(false);
     const { t } = useSettings();
+    
+    // 实时用户状态 (User 对象可能在 App 中更新不及时，这里单独维护展示用状态)
+    const [userStats, setUserStats] = useState<{ tokens: number, isVip: boolean, vipExpiry: string | null } | null>(null);
+
+    const refreshUserStats = async () => {
+        if (!user) return;
+        try {
+            const stats = await apiService.getUserStatus();
+            setUserStats({
+                tokens: stats.tokens,
+                isVip: stats.isVip,
+                vipExpiry: stats.vip_expiry
+            });
+        } catch (e) { console.error(e); }
+    };
+
+    useEffect(() => {
+        if (user) refreshUserStats();
+    }, [user, isGenerating]); // 生成结束后刷新余额
 
     return (
         <div className="w-96 flex-shrink-0 border-r border-slate-700 bg-paper flex flex-col h-full transition-colors duration-300">
@@ -62,7 +84,37 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                         <button onClick={onShowAuthModal} className="text-xs text-white bg-primary hover:bg-indigo-500 px-3 py-1 rounded">{t('sidebar.login')}</button>
                     )}
                 </div>
-                <p className="text-slate-500 text-xs">{t('app.slogan')} v2.9.8</p>
+                
+                {/* 会员/Token状态卡片 */}
+                {user && userStats && (
+                    <div className="mt-3 bg-slate-900/50 rounded-lg p-3 border border-slate-700/50 flex flex-col gap-2 relative overflow-hidden group">
+                        <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${userStats.isVip ? 'bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.8)]' : 'bg-slate-500'}`}></div>
+                                <span className={`text-xs font-bold ${userStats.isVip ? 'text-yellow-400' : 'text-slate-400'}`}>
+                                    {userStats.isVip ? '尊贵会员 VIP' : '普通用户'}
+                                </span>
+                            </div>
+                            <span className="text-[10px] text-slate-500 font-mono">
+                                {userStats.tokens.toLocaleString()} Tokens
+                            </span>
+                        </div>
+                        
+                        {/* 进度条/装饰 */}
+                        <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                            <div className="bg-gradient-to-r from-indigo-500 to-pink-500 h-full w-[40%]"></div>
+                        </div>
+
+                        <button 
+                            onClick={() => setShowPricing(true)}
+                            className="text-[10px] bg-gradient-to-r from-yellow-600 to-orange-600 text-white py-1 rounded hover:brightness-110 transition-all font-bold shadow-sm"
+                        >
+                            💎 充值 / 升级会员
+                        </button>
+                    </div>
+                )}
+                
+                {!user && <p className="text-slate-500 text-xs mt-2">{t('app.slogan')}</p>}
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
@@ -105,7 +157,14 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                                     <Button size="sm" onClick={onSaveArchive} isLoading={isSavingArchive} variant="secondary">{t('btn.save')}</Button>
                                 </div>
                             </div>
-                            <NovelSettingsForm settings={settings} onChange={setSettings} onGenerateIdea={onGenerateIdea} isGenerating={isGenerating} loadedFromArchive={currentArchiveId ? currentArchiveTitle : undefined} />
+                            <NovelSettingsForm 
+                                settings={settings} 
+                                onChange={setSettings} 
+                                onGenerateIdea={onGenerateIdea} 
+                                isGenerating={isGenerating} 
+                                loadedFromArchive={currentArchiveId ? currentArchiveTitle : undefined} 
+                                // 传递用户是否VIP，这里先简化，SettingsForm 内部会自己处理 availableModels 的展示
+                            />
                         </div>
 
                         <div className="space-y-3 pb-4">
@@ -120,6 +179,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             
             {showPromptLib && <PromptLibraryModal onClose={() => setShowPromptLib(false)} />}
             {showSettings && <UserSettingsModal onClose={() => setShowSettings(false)} />}
+            {showPricing && <PricingModal onClose={() => setShowPricing(false)} onSuccess={refreshUserStats} />}
         </div>
     );
 };

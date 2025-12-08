@@ -1,6 +1,6 @@
 
 import Database from 'better-sqlite3';
-import { User, Archive, DbIdeaCard, IdeaCardData, DbProject, DbChapter, DbMindMap, DbUserPrompt, PromptType, ApiKey, SystemModelConfig } from './types.ts';
+import { User, Archive, DbIdeaCard, IdeaCardData, DbProject, DbChapter, DbMindMap, DbUserPrompt, PromptType, ApiKey, SystemModelConfig, TransactionType, UserTransaction, ProductPlan, ProductType } from './types.ts';
 import fs from 'fs';
 import path from 'path';
 
@@ -16,12 +16,17 @@ db.pragma('foreign_keys = ON');
 // 初始化表结构
 export function initDB() {
     db.exec(`
+        -- 用户表升级：支持代币和会员
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
             username TEXT UNIQUE,
             password_hash TEXT,
+            tokens INTEGER DEFAULT 1000, -- 初始赠送1000代币
+            vip_expiry TEXT,             -- 会员过期时间
+            referral_code TEXT,          -- 邀请码
             created_at TEXT
         );
+
         CREATE TABLE IF NOT EXISTS archives (
             id TEXT PRIMARY KEY,
             user_id TEXT,
@@ -100,7 +105,7 @@ export function initDB() {
             updated_at TEXT
         );
 
-        -- === API Keys 表 (New) ===
+        -- === API Keys 表 ===
         CREATE TABLE IF NOT EXISTS api_keys (
             id TEXT PRIMARY KEY,
             key TEXT UNIQUE,
@@ -114,59 +119,169 @@ export function initDB() {
         );
         CREATE INDEX IF NOT EXISTS idx_api_keys_active ON api_keys(is_active);
         CREATE INDEX IF NOT EXISTS idx_api_keys_last_used ON api_keys(last_used_at);
-    `);
 
-    // 初始化默认模型配置 (包含 isActive 字段)
+        -- === 交易记录表 (New) ===
+        CREATE TABLE IF NOT EXISTS user_transactions (
+            id TEXT PRIMARY KEY,
+            user_id TEXT,
+            type TEXT, -- generate, recharge, etc.
+            amount INTEGER,
+            balance_after INTEGER,
+            description TEXT,
+            created_at TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_trans_user ON user_transactions(user_id);
+        CREATE INDEX IF NOT EXISTS idx_trans_created ON user_transactions(created_at);
+    `);
+    
+    // 数据库迁移：如果 users 表没有 tokens 字段，添加它
+    try {
+        db.prepare('SELECT tokens FROM users LIMIT 1').get();
+    } catch (e) {
+        console.log('[DB Migration] Adding tokens, vip_expiry, referral_code columns to users table...');
+        db.exec('ALTER TABLE users ADD COLUMN tokens INTEGER DEFAULT 1000');
+        db.exec('ALTER TABLE users ADD COLUMN vip_expiry TEXT');
+        db.exec('ALTER TABLE users ADD COLUMN referral_code TEXT');
+    }
+
+    // 初始化默认模型配置
     const checkConfig = db.prepare('SELECT key FROM system_configs WHERE key = ?').get('ai_models');
     if (!checkConfig) {
         const defaultModels: SystemModelConfig[] = [
-            { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (标准/快速)', isActive: true },
-            { id: 'gemini-2.5-flash-lite-preview-02-05', name: 'Gemini 2.5 Flash Lite (极速/省流)', isActive: true },
-            { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (强逻辑/深度)', isActive: true }
+            { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (标准/免费)', isActive: true, isVip: false },
+            { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (深度/VIP)', isActive: true, isVip: true }
         ];
         const now = new Date().toISOString();
         db.prepare('INSERT INTO system_configs (key, value, updated_at) VALUES (?, ?, ?)').run('ai_models', JSON.stringify(defaultModels), now);
         db.prepare('INSERT INTO system_configs (key, value, updated_at) VALUES (?, ?, ?)').run('default_model', 'gemini-2.5-flash', now);
-        console.log('[DB] Initialized default system configurations');
     }
 
-    // 自动导入环境变量中的 API KEY (如果是首次运行)
-    const envKey = process.env.API_KEY;
-    if (envKey) {
-        const existing = db.prepare('SELECT id FROM api_keys WHERE key = ?').get(envKey);
-        if (!existing) {
-            const id = crypto.randomUUID();
-            const now = new Date().toISOString();
-            // last_used_at 设置为较早时间，确保优先被选中
-            db.prepare(`
-                INSERT INTO api_keys (id, key, provider, is_active, last_used_at, created_at) 
-                VALUES (?, ?, 'google', 1, '1970-01-01T00:00:00.000Z', ?)
-            `).run(id, envKey, now);
-            console.log('[DB] Automatically imported API_KEY from environment variables.');
-        }
+    // 初始化默认商品配置
+    const checkProducts = db.prepare('SELECT key FROM system_configs WHERE key = ?').get('product_plans');
+    if (!checkProducts) {
+        const defaultPlans: ProductPlan[] = [
+            { id: 'plan_monthly', type: ProductType.SUBSCRIPTION, name: '月度会员', description: '30天会员 + 5万代币/天', price: 2900, tokens: 50000, days: 30, is_popular: true },
+            { id: 'plan_quarterly', type: ProductType.SUBSCRIPTION, name: '季度会员', description: '90天会员 + 8折优惠', price: 7900, tokens: 160000, days: 90 },
+            { id: 'pack_small', type: ProductType.TOKEN_PACK, name: '灵感加油包 (小)', description: '增加 10万代币', price: 990, tokens: 100000, days: 0 },
+            { id: 'pack_large', type: ProductType.TOKEN_PACK, name: '灵感加油包 (大)', description: '增加 50万代币', price: 3990, tokens: 500000, days: 0 }
+        ];
+        const now = new Date().toISOString();
+        db.prepare('INSERT INTO system_configs (key, value, updated_at) VALUES (?, ?, ?)').run('product_plans', JSON.stringify(defaultPlans), now);
     }
-
-    console.log(`[DB] Database initialized at ${DB_PATH} (WAL mode: ON)`);
 }
 
 // ... existing functions ...
 
-// === API Key Management (New) ===
+// === Users Updated ===
+export function createUser(id: string, username: string, passwordHash: string): User {
+    const stmt = db.prepare('INSERT INTO users (id, username, password_hash, tokens, referral_code, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+    const now = new Date().toISOString();
+    const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    stmt.run(id, username, passwordHash, 1000, referralCode, now); // 新用户默认 1000 Tokens
+    return { id, username, password_hash: passwordHash, tokens: 1000, vip_expiry: null, referral_code: referralCode, created_at: now };
+}
+
+export function getUserByUsername(username: string): User | undefined {
+    const stmt = db.prepare('SELECT * FROM users WHERE username = ?');
+    return stmt.get(username) as User | undefined;
+}
+
+export function getUserById(id: string): User | undefined {
+    const stmt = db.prepare('SELECT * FROM users WHERE id = ?');
+    return stmt.get(id) as User | undefined;
+}
+
+export function updateUserPassword(id: string, newPasswordHash: string): void {
+    const stmt = db.prepare('UPDATE users SET password_hash = ? WHERE id = ?');
+    stmt.run(newPasswordHash, id);
+}
+
+// === 会员与代币逻辑 ===
 
 /**
- * 获取下一个可用的 API Key
- * 策略：选择 active=1 且 last_used_at 最早的 Key (LRU - Least Recently Used)
- * 这实现了简单的轮询和负载均衡
+ * 扣除用户代币并记录交易
+ * @param amount 扣除数量（正数）
  */
+export function deductUserTokens(userId: string, amount: number, description: string): void {
+    const transaction = db.transaction(() => {
+        // 1. 获取当前余额
+        const user = db.prepare('SELECT tokens FROM users WHERE id = ?').get(userId) as { tokens: number };
+        if (!user) throw new Error("User not found");
+
+        const balanceAfter = user.tokens - amount;
+        
+        // 2. 更新用户表
+        db.prepare('UPDATE users SET tokens = ? WHERE id = ?').run(balanceAfter, userId);
+
+        // 3. 记录交易
+        const transId = crypto.randomUUID();
+        const now = new Date().toISOString();
+        db.prepare(`
+            INSERT INTO user_transactions (id, user_id, type, amount, balance_after, description, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(transId, userId, TransactionType.GENERATE, -amount, balanceAfter, description, now);
+    });
+    transaction();
+}
+
+/**
+ * 用户充值/增加代币/开通会员
+ */
+export function rechargeUser(userId: string, tokenAmount: number, vipDays: number, description: string): void {
+    const transaction = db.transaction(() => {
+        const user = db.prepare('SELECT tokens, vip_expiry FROM users WHERE id = ?').get(userId) as User;
+        if (!user) throw new Error("User not found");
+
+        // 计算代币
+        const balanceAfter = (user.tokens || 0) + tokenAmount;
+        
+        // 计算会员时间
+        let newVipExpiry = user.vip_expiry;
+        const now = new Date();
+        if (vipDays > 0) {
+            let currentExpiry = user.vip_expiry ? new Date(user.vip_expiry) : new Date();
+            if (currentExpiry < now) currentExpiry = now; // 如果已过期，从现在开始算
+            currentExpiry.setDate(currentExpiry.getDate() + vipDays);
+            newVipExpiry = currentExpiry.toISOString();
+        }
+
+        // 更新用户
+        db.prepare('UPDATE users SET tokens = ?, vip_expiry = ? WHERE id = ?').run(balanceAfter, newVipExpiry, userId);
+
+        // 记录交易
+        const transId = crypto.randomUUID();
+        db.prepare(`
+            INSERT INTO user_transactions (id, user_id, type, amount, balance_after, description, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(transId, userId, TransactionType.RECHARGE, tokenAmount, balanceAfter, description, now.toISOString());
+    });
+    transaction();
+}
+
+// === Config Getters ===
+export function getSystemConfig(key: string): string | null {
+    const row = db.prepare('SELECT value FROM system_configs WHERE key = ?').get(key) as { value: string } | undefined;
+    return row ? row.value : null;
+}
+
+export function setSystemConfig(key: string, value: string): void {
+    const now = new Date().toISOString();
+    db.prepare(`
+        INSERT INTO system_configs (key, value, updated_at) 
+        VALUES (?, ?, ?) 
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+    `).run(key, value, now);
+}
+
+// ... existing helpers for Key/Project/Archive ...
+
+// === API Key Management ===
 export function getNextAvailableApiKey(): ApiKey | undefined {
-    // 优先选择从未使用的 (last_used_at 最早)
     const stmt = db.prepare('SELECT * FROM api_keys WHERE is_active = 1 ORDER BY last_used_at ASC LIMIT 1');
     return stmt.get() as ApiKey | undefined;
 }
 
-/**
- * 更新 Key 的使用统计
- */
 export function updateApiKeyStats(id: string, latencyMs: number, tokenCount: number = 0): void {
     const now = new Date().toISOString();
     const stmt = db.prepare(`
@@ -204,45 +319,6 @@ export function toggleApiKeyStatus(id: string, isActive: boolean): void {
     const val = isActive ? 1 : 0;
     const stmt = db.prepare('UPDATE api_keys SET is_active = ? WHERE id = ?');
     stmt.run(val, id);
-}
-
-// === System Configs ===
-export function getSystemConfig(key: string): string | null {
-    const row = db.prepare('SELECT value FROM system_configs WHERE key = ?').get(key) as { value: string } | undefined;
-    return row ? row.value : null;
-}
-
-export function setSystemConfig(key: string, value: string): void {
-    const now = new Date().toISOString();
-    // UPSERT syntax for SQLite
-    db.prepare(`
-        INSERT INTO system_configs (key, value, updated_at) 
-        VALUES (?, ?, ?) 
-        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-    `).run(key, value, now);
-}
-
-// === Users ===
-export function createUser(id: string, username: string, passwordHash: string): User {
-    const stmt = db.prepare('INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)');
-    const now = new Date().toISOString();
-    stmt.run(id, username, passwordHash, now);
-    return { id, username, password_hash: passwordHash, created_at: now };
-}
-
-export function getUserByUsername(username: string): User | undefined {
-    const stmt = db.prepare('SELECT * FROM users WHERE username = ?');
-    return stmt.get(username) as User | undefined;
-}
-
-export function getUserById(id: string): User | undefined {
-    const stmt = db.prepare('SELECT * FROM users WHERE id = ?');
-    return stmt.get(id) as User | undefined;
-}
-
-export function updateUserPassword(id: string, newPasswordHash: string): void {
-    const stmt = db.prepare('UPDATE users SET password_hash = ? WHERE id = ?');
-    stmt.run(newPasswordHash, id);
 }
 
 // === Archives ===
@@ -418,7 +494,7 @@ export function getSystemStats() {
 }
 
 export function getAllUsers(): User[] {
-    return db.prepare('SELECT id, username, created_at FROM users ORDER BY created_at DESC').all() as User[];
+    return db.prepare('SELECT id, username, tokens, vip_expiry, created_at FROM users ORDER BY created_at DESC').all() as User[];
 }
 
 export function deleteUserFull(userId: string) {
@@ -426,6 +502,7 @@ export function deleteUserFull(userId: string) {
     const deleteCards = db.prepare('DELETE FROM idea_cards WHERE user_id = ?');
     const deleteProjects = db.prepare('DELETE FROM projects WHERE user_id = ?');
     const deletePrompts = db.prepare('DELETE FROM user_prompts WHERE user_id = ?');
+    const deleteTransactions = db.prepare('DELETE FROM user_transactions WHERE user_id = ?');
     const deleteUser = db.prepare('DELETE FROM users WHERE id = ?');
     
     const transaction = db.transaction(() => {
@@ -433,6 +510,7 @@ export function deleteUserFull(userId: string) {
         deleteCards.run(userId);
         deleteProjects.run(userId);
         deletePrompts.run(userId);
+        deleteTransactions.run(userId);
         deleteUser.run(userId);
     });
     

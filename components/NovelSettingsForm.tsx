@@ -8,10 +8,8 @@ import { apiService } from '../services/geminiService';
 interface Props {
     settings: NovelSettings;
     onChange: (settings: NovelSettings) => void;
-    // 修改：允许传递可选的自定义Context (idea模式) 或 Reference (analysis模式)
     onGenerateIdea: (customContext?: string, references?: ReferenceNovel[], model?: string) => void;
     isGenerating: boolean;
-    // 新增：存档加载提示
     loadedFromArchive?: string;
 }
 
@@ -25,7 +23,10 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
     
     // 模型选择状态
     const [aiModel, setAiModel] = useState('');
-    const [availableModels, setAvailableModels] = useState<{id: string, name: string}[]>([]);
+    const [availableModels, setAvailableModels] = useState<{id: string, name: string, isVip?: boolean}[]>([]);
+    
+    // 用户状态 (用于前端校验 VIP)
+    const [isVip, setIsVip] = useState(false);
 
     // 输入模式切换
     const [inputMode, setInputMode] = useState<InputMode>('config');
@@ -40,22 +41,22 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
     useEffect(() => {
         const loadConfig = async () => {
             try {
-                // 并行加载素材池和模型配置
-                const [pool, modelConfig] = await Promise.all([
+                // 并行加载素材池、模型配置、用户状态
+                const [pool, modelConfig, userStatus] = await Promise.all([
                     apiService.fetchConfigPool(),
-                    apiService.getAiModels()
+                    apiService.getAiModels(),
+                    apiService.getUserStatus().catch(() => null)
                 ]);
 
-                if (pool) {
-                    setDataPool(pool);
-                    logger.info("已加载后端爆款素材库");
-                } else {
-                    logger.warn("使用本地兜底素材库（无法连接后端）");
-                }
+                if (pool) setDataPool(pool);
                 
                 if (modelConfig) {
                     setAvailableModels(modelConfig.models);
                     setAiModel(modelConfig.defaultModel);
+                }
+                
+                if (userStatus) {
+                    setIsVip(userStatus.isVip);
                 }
             } catch (e) {
                 logger.error("加载配置失败", e);
@@ -65,6 +66,17 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
         };
         loadConfig();
     }, []);
+
+    // 处理模型选择
+    const handleModelChange = (modelId: string) => {
+        const target = availableModels.find(m => m.id === modelId);
+        if (target?.isVip && !isVip) {
+            // 这里仅仅是前端提示，实际拦截在后端
+            const proceed = confirm(`🚀 ${target.name} 是会员专属模型，拥有更强的推理和创作能力。\n\n选择它可能会导致请求失败（除非您已开通会员）。\n是否仍要选择？`);
+            if (!proceed) return;
+        }
+        setAiModel(modelId);
+    };
 
     // 处理单个字段变更
     const handleChange = (key: keyof NovelSettings, value: string) => {
@@ -108,7 +120,6 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
             }
             onGenerateIdea(oneLinerInput, undefined, aiModel);
         } else if (inputMode === 'analysis') {
-            // 校验参考小说
             const validRefs = references.filter(r => r.title.trim() && r.intro.trim());
             if (validRefs.length === 0) {
                 alert("请至少输入一个参考小说的标题和简介");
@@ -120,13 +131,8 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
         }
     };
 
-    // 参考小说管理
-    const addReference = () => {
-        setReferences([...references, { title: '', intro: '', url: '' }]);
-    };
-    const removeReference = (index: number) => {
-        setReferences(references.filter((_, i) => i !== index));
-    };
+    const addReference = () => setReferences([...references, { title: '', intro: '', url: '' }]);
+    const removeReference = (index: number) => setReferences(references.filter((_, i) => i !== index));
     const updateReference = (index: number, field: keyof ReferenceNovel, value: string) => {
         const newRefs = [...references];
         newRefs[index] = { ...newRefs[index], [field]: value };
@@ -146,38 +152,31 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
                     创作模式
                 </h2>
-                
-                {/* 仅在配置模式下显示随机按钮 */}
                 {inputMode === 'config' && (
                     <button 
                         onClick={handleRandomize}
                         disabled={isGenerating || isLoadingPool}
                         className="text-xs flex items-center bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white px-3 py-1.5 rounded-full transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={isLoadingPool ? "正在连接素材库..." : "点击从服务器获取随机爆款配置"}
                     >
-                        {isLoadingPool ? (
-                             <svg className="animate-spin h-4 w-4 mr-1 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                        ) : (
-                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
-                        )}
                         {isLoadingPool ? '加载中...' : '一键随机爆款'}
                     </button>
                 )}
             </div>
 
-            {/* 模型选择器 */}
+            {/* 模型选择器 (VIP 标识) */}
             <div className="mb-4 bg-slate-800/50 p-2 rounded-lg border border-slate-700/50 flex items-center gap-2">
                 <span className="text-xs text-slate-400 font-medium whitespace-nowrap">AI 模型:</span>
                 <select 
                     value={aiModel} 
-                    onChange={(e) => setAiModel(e.target.value)}
+                    onChange={(e) => handleModelChange(e.target.value)}
                     className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-slate-300 outline-none focus:border-indigo-500 cursor-pointer hover:bg-slate-800 transition-colors"
                 >
                     {availableModels.length > 0 ? (
-                        availableModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)
+                        availableModels.map(m => (
+                            <option key={m.id} value={m.id}>
+                                {m.isVip ? '👑 ' : ''}{m.name} {m.isVip ? '(VIP)' : ''}
+                            </option>
+                        ))
                     ) : (
                         <option value="gemini-2.5-flash">Gemini 2.5 Flash (默认)</option>
                     )}
@@ -186,30 +185,9 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
 
             {/* 模式切换 Tabs */}
             <div className="flex space-x-1 bg-dark p-1 rounded-lg mb-4">
-                <button 
-                    onClick={() => setInputMode('config')}
-                    className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
-                        inputMode === 'config' ? 'bg-primary text-white shadow' : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                >
-                    参数配置
-                </button>
-                <button 
-                    onClick={() => setInputMode('oneliner')}
-                    className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
-                        inputMode === 'oneliner' ? 'bg-primary text-white shadow' : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                >
-                    脑洞发散
-                </button>
-                <button 
-                    onClick={() => setInputMode('analysis')}
-                    className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
-                        inputMode === 'analysis' ? 'bg-primary text-white shadow' : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                >
-                    爆款仿写
-                </button>
+                <button onClick={() => setInputMode('config')} className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${inputMode === 'config' ? 'bg-primary text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>参数配置</button>
+                <button onClick={() => setInputMode('oneliner')} className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${inputMode === 'oneliner' ? 'bg-primary text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>脑洞发散</button>
+                <button onClick={() => setInputMode('analysis')} className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${inputMode === 'analysis' ? 'bg-primary text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>爆款仿写</button>
             </div>
             
             {/* 1. 参数配置模式 */}
@@ -217,76 +195,37 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
                     <div>
                         <label className="block text-sm font-medium text-slate-400 mb-1">流派 (Genre)</label>
-                        <input 
-                            type="text" 
-                            value={settings.genre} 
-                            onChange={(e) => handleChange('genre', e.target.value)}
-                            className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
-                            placeholder="例如：都市修仙"
-                        />
+                        <input type="text" value={settings.genre} onChange={(e) => handleChange('genre', e.target.value)} className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-400 mb-1">核心梗 (Trope)</label>
-                        <input 
-                            type="text" 
-                            value={settings.trope} 
-                            onChange={(e) => handleChange('trope', e.target.value)}
-                            className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
-                            placeholder="例如：重生+校花"
-                        />
+                        <input type="text" value={settings.trope} onChange={(e) => handleChange('trope', e.target.value)} className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
                     </div>
                     <div className="md:col-span-2">
                         <label className="block text-sm font-medium text-slate-400 mb-1">主角人设 (Protagonist)</label>
-                        <input 
-                            type="text" 
-                            value={settings.protagonistType} 
-                            onChange={(e) => handleChange('protagonistType', e.target.value)}
-                            className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
-                            placeholder="例如：腹黑、智商在线、杀伐果断"
-                        />
+                        <input type="text" value={settings.protagonistType} onChange={(e) => handleChange('protagonistType', e.target.value)} className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
                     </div>
                     <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-slate-400 mb-1">金手指 (Cheat/Golden Finger)</label>
-                        <textarea 
-                            value={settings.goldenFinger} 
-                            onChange={(e) => handleChange('goldenFinger', e.target.value)}
-                            className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none h-20 resize-none transition-colors"
-                            placeholder="主角的特殊能力，爽点的核心来源..."
-                        />
+                        <label className="block text-sm font-medium text-slate-400 mb-1">金手指 (Golden Finger)</label>
+                        <textarea value={settings.goldenFinger} onChange={(e) => handleChange('goldenFinger', e.target.value)} className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none h-20 resize-none transition-colors" />
                     </div>
-                    
                     <div className="md:col-span-2">
                          <label className="block text-sm font-medium text-slate-400 mb-1">整体基调 (Tone)</label>
-                         <input 
-                            type="text" 
-                            value={settings.tone} 
-                            onChange={(e) => handleChange('tone', e.target.value)}
-                            className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
-                            placeholder="例如：热血、搞笑、克苏鲁压抑风"
-                        />
+                         <input type="text" value={settings.tone} onChange={(e) => handleChange('tone', e.target.value)} className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
                     </div>
-
                     <div>
                         <label className="block text-sm font-medium text-slate-400 mb-1">节奏 (Pacing)</label>
-                        <select 
-                            value={settings.pacing} 
-                            onChange={(e) => handleChange('pacing', e.target.value as any)}
-                            className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
-                        >
-                            <option value="fast">快节奏 (极爽/无脑)</option>
-                            <option value="normal">常规节奏 (张弛有度)</option>
-                            <option value="slow">慢热 (铺垫流)</option>
+                        <select value={settings.pacing} onChange={(e) => handleChange('pacing', e.target.value as any)} className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors">
+                            <option value="fast">快节奏 (极爽)</option>
+                            <option value="normal">常规节奏</option>
+                            <option value="slow">慢热 (铺垫)</option>
                         </select>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-400 mb-1">受众 (Target)</label>
-                        <select 
-                            value={settings.targetAudience} 
-                            onChange={(e) => handleChange('targetAudience', e.target.value as any)}
-                            className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
-                        >
-                            <option value="male">男频 (热血/征服)</option>
-                            <option value="female">女频 (情感/复仇)</option>
+                        <select value={settings.targetAudience} onChange={(e) => handleChange('targetAudience', e.target.value as any)} className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors">
+                            <option value="male">男频</option>
+                            <option value="female">女频</option>
                         </select>
                     </div>
                 </div>
@@ -297,35 +236,19 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                 <div className="animate-fade-in space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-slate-400 mb-2">你的核心脑洞/灵感 (Idea)</label>
-                        <textarea 
-                            value={oneLinerInput}
-                            onChange={(e) => setOneLinerInput(e.target.value)}
-                            className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none h-48 resize-none transition-colors text-base"
-                            placeholder="例如：主角是个厨师，但是他做的菜都是用抓来的妖怪做的，吃了能涨修为..."
-                        />
-                        <p className="text-xs text-slate-500 mt-2">* AI 将基于此灵感，结合下方设定的基调进行发散。</p>
+                        <textarea value={oneLinerInput} onChange={(e) => setOneLinerInput(e.target.value)} className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none h-48 resize-none transition-colors text-base" />
                     </div>
                     <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-700/50">
                          <div>
                             <label className="block text-xs font-medium text-slate-500 mb-1">受众 (Target)</label>
-                            <select 
-                                value={settings.targetAudience} 
-                                onChange={(e) => handleChange('targetAudience', e.target.value as any)}
-                                className="w-full bg-dark border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-300 outline-none focus:border-primary"
-                            >
+                            <select value={settings.targetAudience} onChange={(e) => handleChange('targetAudience', e.target.value as any)} className="w-full bg-dark border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-300 outline-none focus:border-primary">
                                 <option value="male">男频</option>
                                 <option value="female">女频</option>
                             </select>
                         </div>
                         <div>
                              <label className="block text-xs font-medium text-slate-500 mb-1">基调 (Tone)</label>
-                             <input 
-                                type="text" 
-                                value={settings.tone} 
-                                onChange={(e) => handleChange('tone', e.target.value)}
-                                className="w-full bg-dark border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-300 outline-none focus:border-primary"
-                                placeholder="例如：搞笑、热血"
-                            />
+                             <input type="text" value={settings.tone} onChange={(e) => handleChange('tone', e.target.value)} className="w-full bg-dark border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-300 outline-none focus:border-primary" />
                         </div>
                     </div>
                 </div>
@@ -335,9 +258,8 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
             {inputMode === 'analysis' && (
                 <div className="animate-fade-in space-y-4">
                     <div className="bg-blue-900/20 p-3 rounded text-xs text-blue-200 mb-4 border border-blue-800">
-                        在此模式下，您可以输入 1-3 本您认为“爆火”的同类小说信息。AI 将深度拆解它们的成功基因（如爽点节奏、人设反差），并结合您的受众偏好生成全新的创意。
+                        在此模式下，您可以输入 1-3 本您认为“爆火”的同类小说信息。AI 将深度拆解它们的成功基因。
                     </div>
-                    
                     <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
                         {references.map((ref, index) => (
                             <div key={index} className="bg-black/20 p-3 rounded border border-slate-700 relative group">
@@ -347,79 +269,36 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                                     </button>
                                 </div>
                                 <div className="space-y-2">
-                                    <input 
-                                        type="text" 
-                                        value={ref.title}
-                                        onChange={(e) => updateReference(index, 'title', e.target.value)}
-                                        placeholder={`参考小说 ${index + 1} 书名`}
-                                        className="w-full bg-transparent border-b border-slate-600 text-sm py-1 focus:border-primary outline-none"
-                                    />
-                                    <input 
-                                        type="text" 
-                                        value={ref.url}
-                                        onChange={(e) => updateReference(index, 'url', e.target.value)}
-                                        placeholder="小说地址 URL (可选)"
-                                        className="w-full bg-transparent border-b border-slate-600 text-xs py-1 text-slate-400 focus:border-primary outline-none"
-                                    />
-                                    <textarea 
-                                        value={ref.intro}
-                                        onChange={(e) => updateReference(index, 'intro', e.target.value)}
-                                        placeholder="请粘贴小说的简介文案或第一章核心情节 (AI将基于此内容进行拆解)"
-                                        className="w-full bg-dark/50 rounded p-2 text-xs text-slate-300 outline-none h-16 resize-none focus:ring-1 focus:ring-primary"
-                                    />
+                                    <input type="text" value={ref.title} onChange={(e) => updateReference(index, 'title', e.target.value)} placeholder={`参考小说 ${index + 1} 书名`} className="w-full bg-transparent border-b border-slate-600 text-sm py-1 focus:border-primary outline-none" />
+                                    <input type="text" value={ref.url} onChange={(e) => updateReference(index, 'url', e.target.value)} placeholder="小说地址 URL (可选)" className="w-full bg-transparent border-b border-slate-600 text-xs py-1 text-slate-400 focus:border-primary outline-none" />
+                                    <textarea value={ref.intro} onChange={(e) => updateReference(index, 'intro', e.target.value)} placeholder="简介文案..." className="w-full bg-dark/50 rounded p-2 text-xs text-slate-300 outline-none h-16 resize-none focus:ring-1 focus:ring-primary" />
                                 </div>
                             </div>
                         ))}
                     </div>
-
-                    {references.length < 3 && (
-                        <button onClick={addReference} className="w-full py-2 border border-dashed border-slate-600 rounded text-slate-400 hover:text-white hover:border-slate-400 text-sm transition-colors">
-                            + 添加参考案例
-                        </button>
-                    )}
-
+                    {references.length < 3 && <button onClick={addReference} className="w-full py-2 border border-dashed border-slate-600 rounded text-slate-400 hover:text-white text-sm">+ 添加参考案例</button>}
                     <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-700/50">
                          <div>
                             <label className="block text-xs font-medium text-slate-500 mb-1">您的目标受众</label>
-                            <select 
-                                value={settings.targetAudience} 
-                                onChange={(e) => handleChange('targetAudience', e.target.value as any)}
-                                className="w-full bg-dark border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-300 outline-none focus:border-primary"
-                            >
+                            <select value={settings.targetAudience} onChange={(e) => handleChange('targetAudience', e.target.value as any)} className="w-full bg-dark border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-300 outline-none focus:border-primary">
                                 <option value="male">男频</option>
                                 <option value="female">女频</option>
                             </select>
                         </div>
                         <div>
                              <label className="block text-xs font-medium text-slate-500 mb-1">您的期望基调</label>
-                             <input 
-                                type="text" 
-                                value={settings.tone} 
-                                onChange={(e) => handleChange('tone', e.target.value)}
-                                className="w-full bg-dark border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-300 outline-none focus:border-primary"
-                                placeholder="例如：更热血一点"
-                            />
+                             <input type="text" value={settings.tone} onChange={(e) => handleChange('tone', e.target.value)} className="w-full bg-dark border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-300 outline-none focus:border-primary" />
                         </div>
                     </div>
                 </div>
             )}
 
             <div className="pt-4 border-t border-slate-700">
-                <Button 
-                    onClick={handleGenerateClick} 
-                    isLoading={isGenerating}
-                    className="w-full"
-                    variant="secondary"
-                >
+                <Button onClick={handleGenerateClick} isLoading={isGenerating} className="w-full" variant="secondary">
                     {inputMode === 'config' && '✨ 基于参数生成创意脑洞'}
                     {inputMode === 'oneliner' && '🚀 基于灵感发散生成脑洞'}
                     {inputMode === 'analysis' && '🔬 分析爆款基因并生成新创意'}
                 </Button>
-                {inputMode === 'config' && (
-                    <p className="text-xs text-center text-slate-500 mt-2">
-                        觉得配置不满意？点击右上角"随机"按钮重试，数据由云端实时更新。
-                    </p>
-                )}
             </div>
         </div>
     );

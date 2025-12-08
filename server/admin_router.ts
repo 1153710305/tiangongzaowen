@@ -61,12 +61,18 @@ protectedApi.get('/stats', (c) => {
     }
 });
 
-// 获取用户列表
+// 获取用户列表 (增加了 Token 和 VIP 字段)
 protectedApi.get('/users', (c) => {
     try {
         const users = db.getAllUsers();
         // 隐藏密码hash，保护隐私
-        const safeUsers = users.map(u => ({ id: u.id, username: u.username, created_at: u.created_at }));
+        const safeUsers = users.map(u => ({ 
+            id: u.id, 
+            username: u.username, 
+            tokens: u.tokens,
+            vip_expiry: u.vip_expiry,
+            created_at: u.created_at 
+        }));
         return c.json(safeUsers);
     } catch (e: any) {
         logger.error("获取用户列表失败", { error: e.message });
@@ -201,9 +207,11 @@ protectedApi.get('/logs', (c) => {
 protectedApi.get('/configs', (c) => {
     const aiModels = db.getSystemConfig('ai_models');
     const defaultModel = db.getSystemConfig('default_model');
+    const productPlans = db.getSystemConfig('product_plans');
     return c.json({ 
         ai_models: aiModels ? JSON.parse(aiModels) : [],
-        default_model: defaultModel
+        default_model: defaultModel,
+        product_plans: productPlans ? JSON.parse(productPlans) : []
     });
 });
 
@@ -211,14 +219,14 @@ protectedApi.put('/configs', async (c) => {
     const { key, value } = await c.req.json();
     if (!key || value === undefined) return c.json({ error: "Invalid params" }, 400);
     
-    if (key === 'ai_models') {
-        // 校验 JSON 格式
+    // 简单校验 JSON
+    if (key === 'ai_models' || key === 'product_plans') {
         try {
             const parsed = JSON.parse(value);
             if (!Array.isArray(parsed)) throw new Error("Must be array");
             db.setSystemConfig(key, value);
         } catch(e) {
-            return c.json({ error: "Invalid JSON for ai_models" }, 400);
+            return c.json({ error: `Invalid JSON for ${key}` }, 400);
         }
     } else {
         db.setSystemConfig(key, value);
@@ -227,7 +235,7 @@ protectedApi.put('/configs', async (c) => {
     return c.json({ success: true });
 });
 
-// === API Key 管理接口 (New) ===
+// === API Key 管理接口 ===
 protectedApi.get('/keys', (c) => {
     try {
         const keys = db.getAllApiKeys();

@@ -20,9 +20,9 @@ class ApiService {
     }
 
     /**
-     * 获取后端配置的AI模型列表 (New)
+     * 获取后端配置的AI模型列表
      */
-    public async getAiModels(): Promise<{ models: {id: string, name: string}[], defaultModel: string }> {
+    public async getAiModels(): Promise<{ models: {id: string, name: string, isVip?: boolean}[], defaultModel: string }> {
         try {
             const res = await fetch(`${API_ENDPOINTS.CONFIG.replace('/pool', '/models')}`);
             if (!res.ok) throw new Error("获取模型配置失败");
@@ -34,14 +34,33 @@ class ApiService {
     }
 
     /**
+     * 获取用户实时状态 (Token, VIP)
+     */
+    public async getUserStatus(): Promise<{ id: string, username: string, tokens: number, isVip: boolean, vip_expiry: string | null }> {
+        const authHeaders = authService.getAuthHeader();
+        const res = await fetch(`${API_BASE_URL}/api/user/status`, { headers: { ...authHeaders } as any });
+        if (!res.ok) throw new Error("获取状态失败");
+        return await res.json();
+    }
+
+    /**
+     * 购买商品
+     */
+    public async buyProduct(productId: string): Promise<void> {
+        const authHeaders = authService.getAuthHeader();
+        const res = await fetch(`${API_BASE_URL}/api/user/buy`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders } as any,
+            body: JSON.stringify({ productId })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || "购买失败");
+        }
+    }
+
+    /**
      * 请求生成内容（流式）
-     * @param settings 小说设定
-     * @param step 工作流步骤
-     * @param context 上下文内容
-     * @param references 参考资料
-     * @param onChunk 流式回调
-     * @param extraPrompt 额外指令
-     * @param model 指定使用的模型 (可选)
      */
     public async generateStream(
         settings: NovelSettings, 
@@ -64,7 +83,9 @@ class ApiService {
             });
 
             if (response.status === 401) throw new Error("Unauthorized");
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            if (response.status === 402) throw new Error("代币不足，请充值");
+            if (response.status === 403) throw new Error("该模型仅供会员使用");
+            if (!response.ok) throw new Error(`请求失败: ${response.statusText}`);
 
             const reader = response.body?.getReader();
             if (!reader) throw new Error("No response body");
@@ -78,6 +99,10 @@ class ApiService {
                 done = doneReading;
                 if (value) {
                     const chunkValue = decoder.decode(value, { stream: true });
+                    // 如果后端返回的是错误JSON (流式中间报错)
+                    if (chunkValue.startsWith('\n[Error:')) {
+                         throw new Error(chunkValue.replace('\n[Error: ', '').replace(']', ''));
+                    }
                     fullText += chunkValue;
                     onChunk(chunkValue);
                 }
@@ -265,7 +290,7 @@ class ApiService {
     // === 提示词库 CRUD (New) ===
     public async getUserPrompts(): Promise<UserPrompt[]> {
         const authHeaders = authService.getAuthHeader();
-        const res = await fetch(`${API_ENDPOINTS.PROJECTS.replace('/api/projects', '')}/api/prompts`, { 
+        const res = await fetch(`${API_BASE_URL}/api/prompts`, { 
             headers: { ...authHeaders } as any 
         });
         if (!res.ok) return [];
@@ -274,7 +299,7 @@ class ApiService {
 
     public async createUserPrompt(type: PromptType, title: string, content: string): Promise<UserPrompt> {
         const authHeaders = authService.getAuthHeader();
-        const res = await fetch(`${API_ENDPOINTS.PROJECTS.replace('/api/projects', '')}/api/prompts`, {
+        const res = await fetch(`${API_BASE_URL}/api/prompts`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...authHeaders } as any,
             body: JSON.stringify({ type, title, content })
@@ -285,7 +310,7 @@ class ApiService {
 
     public async updateUserPrompt(id: string, title: string, content: string): Promise<void> {
         const authHeaders = authService.getAuthHeader();
-        const res = await fetch(`${API_ENDPOINTS.PROJECTS.replace('/api/projects', '')}/api/prompts/${id}`, {
+        const res = await fetch(`${API_BASE_URL}/api/prompts/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', ...authHeaders } as any,
             body: JSON.stringify({ title, content })
@@ -295,13 +320,16 @@ class ApiService {
 
     public async deleteUserPrompt(id: string): Promise<void> {
         const authHeaders = authService.getAuthHeader();
-        const res = await fetch(`${API_ENDPOINTS.PROJECTS.replace('/api/projects', '')}/api/prompts/${id}`, {
+        const res = await fetch(`${API_BASE_URL}/api/prompts/${id}`, {
             method: 'DELETE',
             headers: { ...authHeaders } as any
         });
         if (!res.ok) throw new Error("删除失败");
     }
 }
+
+// 重新导出常量，因为方法中用到了
+import { API_BASE_URL } from "../constants";
 
 export const apiService = new ApiService();
 export const geminiService = apiService;

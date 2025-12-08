@@ -159,3 +159,20 @@ export interface AppSettings {
     fontFamily: AppFont;
     fontSize: number; // 基础字号，默认16
 }
+
+// === 商品与交易相关 (New) ===
+export enum ProductType {
+    SUBSCRIPTION = 'subscription', // 订阅 (月卡/季卡)
+    TOKEN_PACK = 'token_pack'      // 加油包
+}
+
+export interface ProductPlan {
+    id: string;
+    type: ProductType;
+    name: string;
+    description: string;
+    price: number;       // 价格 (分/CNY)
+    tokens: number;      // 赠送代币
+    days: number;        // 会员天数 (0表示不送会员)
+    is_popular?: boolean;// 是否推荐
+}

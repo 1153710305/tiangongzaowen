@@ -6,7 +6,7 @@ import { sign } from 'hono/jwt';
 import { GoogleGenAI } from '@google/genai';
 import { SYSTEM_INSTRUCTION, PROMPT_BUILDERS } from './prompts.ts';
 import { RANDOM_DATA_POOL } from './data.ts';
-import { NovelSettings, WorkflowStep, ReferenceNovel, SystemModelConfig } from './types.ts';
+import { NovelSettings, WorkflowStep, ReferenceNovel, SystemModelConfig, User } from './types.ts';
 import { logger } from './logger.ts';
 import { adminRouter } from './admin_router.ts';
 import * as db from './db.ts';
@@ -17,7 +17,7 @@ try {
     if (typeof db.createProject !== 'function') {
         logger.error("❌ CRITICAL: db.createProject function is missing from exports!");
     } else {
-        logger.info("✅ Database module loaded successfully (Project API enabled)");
+        logger.info("✅ Database module loaded successfully (VIP & Token System enabled)");
     }
 } catch (e: any) {
     logger.error("数据库初始化失败", { error: e.message });
@@ -66,17 +66,15 @@ const JWT_SECRET = process.env.JWT_SECRET || 'skycraft_secret_key_change_me';
 app.route('/admin', adminRouter);
 
 // === 公开路由 ===
-app.get('/', (c) => c.text('SkyCraft AI Backend (Auth Enabled) is Running! 🚀'));
+app.get('/', (c) => c.text('SkyCraft AI Backend (Auth + Token System) is Running! 🚀'));
 app.get('/api/config/pool', (c) => c.json(RANDOM_DATA_POOL));
 
-// 获取可用模型列表
+// 获取可用模型列表 (包含VIP信息)
 app.get('/api/config/models', (c) => {
     try {
         const modelsStr = db.getSystemConfig('ai_models');
         const defaultModel = db.getSystemConfig('default_model');
         const allModels: SystemModelConfig[] = modelsStr ? JSON.parse(modelsStr) : [];
-        
-        // 过滤掉未激活的模型
         const activeModels = allModels.filter(m => m.isActive !== false);
 
         return c.json({ 
@@ -84,12 +82,17 @@ app.get('/api/config/models', (c) => {
             defaultModel: defaultModel || 'gemini-2.5-flash' 
         });
     } catch (e: any) {
-        logger.error("获取模型配置失败", { error: e.message });
-        // 兜底默认值
-        return c.json({ 
-            models: [{ id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' }], 
-            defaultModel: 'gemini-2.5-flash' 
-        });
+        return c.json({ models: [], defaultModel: 'gemini-2.5-flash' });
+    }
+});
+
+// 获取商品列表
+app.get('/api/products', (c) => {
+    try {
+        const plansStr = db.getSystemConfig('product_plans');
+        return c.json(plansStr ? JSON.parse(plansStr) : []);
+    } catch (e) {
+        return c.json([]);
     }
 });
 
@@ -107,7 +110,7 @@ app.post('/api/auth/register', async (c) => {
         const user = db.createUser(userId, username, password);
         logger.info(`新用户注册: ${username} (${userId})`);
         const token = await sign({ id: user.id, username: user.username, role: 'user', exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 }, JWT_SECRET);
-        return c.json({ token, user: { id: user.id, username: user.username } });
+        return c.json({ token, user: { id: user.id, username: user.username, tokens: user.tokens, vip_expiry: user.vip_expiry } });
     } catch (e: any) {
         return c.json({ error: e.message }, 500);
     }
@@ -123,7 +126,7 @@ app.post('/api/auth/login', async (c) => {
         }
         logger.info(`用户登录: ${username}`);
         const token = await sign({ id: user.id, username: user.username, role: 'user', exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 }, JWT_SECRET);
-        return c.json({ token, user: { id: user.id, username: user.username } });
+        return c.json({ token, user: { id: user.id, username: user.username, tokens: user.tokens, vip_expiry: user.vip_expiry } });
     } catch (e: any) {
         return c.json({ error: e.message }, 500);
     }
@@ -135,57 +138,101 @@ app.use('/api/archives/*', jwt({ secret: JWT_SECRET }));
 app.use('/api/cards/*', jwt({ secret: JWT_SECRET }));
 app.use('/api/projects/*', jwt({ secret: JWT_SECRET }));
 app.use('/api/prompts/*', jwt({ secret: JWT_SECRET })); 
+app.use('/api/user/*', jwt({ secret: JWT_SECRET }));
+
+// 获取当前用户状态（余额、会员）
+app.get('/api/user/status', async (c) => {
+    const payload = c.get('jwtPayload');
+    const user = db.getUserById(payload.id);
+    if (!user) return c.json({ error: 'User not found' }, 404);
+    
+    // 判断是否 VIP (简单过期时间判断)
+    const isVip = user.vip_expiry ? new Date(user.vip_expiry) > new Date() : false;
+    
+    return c.json({
+        id: user.id,
+        username: user.username,
+        tokens: user.tokens,
+        vip_expiry: user.vip_expiry,
+        isVip,
+        referral_code: user.referral_code
+    });
+});
+
+// 模拟充值接口 (为了演示功能，实际应对接支付回调)
+app.post('/api/user/buy', async (c) => {
+    const payload = c.get('jwtPayload');
+    const { productId } = await c.req.json();
+    
+    const plansStr = db.getSystemConfig('product_plans');
+    const plans = plansStr ? JSON.parse(plansStr) : [];
+    const product = plans.find((p: any) => p.id === productId);
+    
+    if (!product) return c.json({ error: '商品不存在' }, 404);
+    
+    try {
+        db.rechargeUser(payload.id, product.tokens, product.days, `购买:${product.name}`);
+        logger.info(`用户 ${payload.username} 购买了 ${product.name}`);
+        return c.json({ success: true, message: '购买成功' });
+    } catch(e: any) {
+        return c.json({ error: e.message }, 500);
+    }
+});
 
 // AI 生成
 app.post('/api/generate', async (c) => {
     const startTime = Date.now();
+    const payload = c.get('jwtPayload');
+    const userId = payload.id;
     
-    // 轮询获取数据库中的 API Key
+    // 1. 获取用户信息，校验余额
+    const user = db.getUserById(userId);
+    if (!user) return c.json({ error: "用户不存在" }, 401);
+    if (user.tokens <= 0) {
+        return c.json({ error: "代币不足，请充值后使用" }, 402); // 402 Payment Required
+    }
+
+    // 2. 获取模型配置，校验 VIP 权限
+    const body = await c.req.json();
+    const { settings, step, context, references, extraPrompt, model } = body as any;
+
+    let modelName = model;
+    if (!modelName) {
+        modelName = db.getSystemConfig('default_model') || 'gemini-2.5-flash';
+    }
+
+    const modelsStr = db.getSystemConfig('ai_models');
+    const allModels: SystemModelConfig[] = modelsStr ? JSON.parse(modelsStr) : [];
+    const targetModelConfig = allModels.find(m => m.id === modelName);
+
+    if (targetModelConfig?.isVip) {
+        const isVip = user.vip_expiry ? new Date(user.vip_expiry) > new Date() : false;
+        if (!isVip) {
+            logger.warn(`非会员用户 ${user.username} 尝试调用 VIP 模型 ${modelName}`);
+            return c.json({ error: "该模型仅供会员使用，请开通会员" }, 403);
+        }
+    }
+
+    // 3. 获取 API Key
     const apiKeyData = db.getNextAvailableApiKey();
     if (!apiKeyData) {
-        logger.error("无可用 API Key");
-        return c.json({ error: "系统繁忙：暂无可用 AI 资源，请联系管理员" }, 503);
+        return c.json({ error: "系统繁忙：暂无可用 AI 资源" }, 503);
     }
 
     const API_KEY = apiKeyData.key;
-    const apiKeyMasked = `...${API_KEY.slice(-4)}`;
     const apiKeyId = apiKeyData.id;
-    
-    const body = await c.req.json();
-    const { settings, step, context, references, extraPrompt, model } = body as { 
-        settings: NovelSettings, 
-        step: WorkflowStep,
-        context?: string,
-        references?: ReferenceNovel[] | string,
-        extraPrompt?: string,
-        model?: string
-    };
 
-    const payload = c.get('jwtPayload'); 
-    
-    // 确定使用的模型
-    let modelName = model;
-    if (!modelName) {
-        const dbDefault = db.getSystemConfig('default_model');
-        modelName = dbDefault || 'gemini-2.5-flash';
-    }
-
-    // 准备审计日志对象
+    // 准备审计日志
     let auditLog: any = {
         user: payload.username,
         model: modelName,
-        apiKey: apiKeyMasked,
-        keyId: apiKeyId,
-        systemInstruction: SYSTEM_INSTRUCTION,
-        request: {},
-        response: {},
+        step,
+        keyId: apiKeyId
     };
 
     try {
         const ai = new GoogleGenAI({ apiKey: API_KEY });
         
-        if (!step) return c.json({ error: "Missing step parameter" }, 400);
-
         let prompt = '';
         try {
             switch (step) {
@@ -211,14 +258,8 @@ app.post('/api/generate', async (c) => {
         if (extraPrompt && step !== WorkflowStep.MIND_MAP_NODE) {
             prompt += `\n\n【用户额外指令/约束】:\n${extraPrompt}`;
         }
-
-        auditLog.request = {
-            step,
-            fullPrompt: prompt,
-            settings
-        };
         
-        logger.info(`[AI Start] ${step} by ${payload.username} using ${modelName} (KeyID: ${apiKeyId})`);
+        logger.info(`[AI Start] ${step} by ${user.username} (Tokens: ${user.tokens})`);
 
         const responseStream = await ai.models.generateContentStream({
             model: modelName!, 
@@ -233,10 +274,10 @@ app.post('/api/generate', async (c) => {
         const writer = writable.getWriter();
         const encoder = new TextEncoder();
 
-        // 异步处理流和日志
+        // 异步处理流、日志和扣费
         (async () => {
             let fullResponseText = '';
-            let tokenUsage: any = null;
+            let usageMetadata: any = null;
             let totalTokens = 0;
             
             try {
@@ -247,36 +288,35 @@ app.post('/api/generate', async (c) => {
                         await writer.write(encoder.encode(text));
                     }
                     if (chunk.usageMetadata) {
-                        tokenUsage = chunk.usageMetadata;
-                        totalTokens = (tokenUsage.promptTokenCount || 0) + (tokenUsage.candidatesTokenCount || 0);
+                        usageMetadata = chunk.usageMetadata;
+                        // Gemini API 返回的是累计还是单次？通常最后一次包含总数。我们取最后一次非空的。
                     }
                 }
                 
+                // 计算 Token 消耗 (如果有元数据则使用，否则估算: 1中文字符=2tokens)
+                if (usageMetadata) {
+                    totalTokens = (usageMetadata.promptTokenCount || 0) + (usageMetadata.candidatesTokenCount || 0);
+                } else {
+                    totalTokens = prompt.length + fullResponseText.length; // Fallback
+                }
+
+                // === 核心扣费逻辑 ===
+                if (totalTokens > 0) {
+                    db.deductUserTokens(userId, totalTokens, `AI生成:${step}`);
+                    logger.info(`[Token Deduct] User: ${user.username}, Cost: ${totalTokens}`);
+                }
+
                 // 记录成功日志
                 const duration = Date.now() - startTime;
-                auditLog.response = {
-                    timeCost: `${duration}ms`,
-                    tokenUsage: tokenUsage, 
-                    fullText: fullResponseText
-                };
+                logger.info(`[AI Success] ${step} Completed (${duration}ms)`, { ...auditLog, tokens: totalTokens });
                 
-                logger.info(`[AI Success] ${step} Completed (${duration}ms)`, auditLog);
-                
-                // === 异步更新 Key 的统计数据 ===
+                // 更新 Key 统计
                 db.updateApiKeyStats(apiKeyId, duration, totalTokens);
 
             } catch (err: any) {
                 const duration = Date.now() - startTime;
-                auditLog.response = {
-                    timeCost: `${duration}ms`,
-                    error: err.message,
-                    partialText: fullResponseText
-                };
-                logger.error(`[AI Error] ${step} Failed`, auditLog);
-                
-                // 失败也要更新 Key 状态 (至少记录时间，避免死锁在坏 Key 上)
+                logger.error(`[AI Error] ${step} Failed`, { ...auditLog, error: err.message });
                 db.updateApiKeyStats(apiKeyId, duration, 0);
-
                 await writer.write(encoder.encode(`\n[Error: ${err.message}]`));
             } finally {
                 await writer.close();
@@ -288,14 +328,12 @@ app.post('/api/generate', async (c) => {
         });
 
     } catch (error: any) {
-        if (error.message && error.message.includes('fetch failed')) {
-            logger.error("AI 服务连接失败", { error: error.message, apiKeyMasked });
-            return c.json({ error: "AI 服务连接超时" }, 503);
-        }
-        logger.error("AI 请求初始化失败", { error: error.message, auditLog });
+        logger.error("AI 请求初始化失败", { error: error.message });
         return c.json({ error: error.message }, 500);
     }
 });
+
+// ... existing endpoints for archives, cards, projects, prompts ...
 
 // 存档接口
 app.get('/api/archives', (c) => {
@@ -422,7 +460,7 @@ app.delete('/api/projects/:pid/maps/:mid', (c) => {
     return c.json({ success: true });
 });
 
-// === Chapter CRUD (New) ===
+// === Chapter CRUD ===
 
 app.post('/api/projects/:pid/chapters', async (c) => {
     const projectId = c.req.param('pid');

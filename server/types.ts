@@ -49,6 +49,9 @@ export interface User {
     id: string;
     username: string;
     password_hash: string;
+    tokens: number;           // 剩余代币
+    vip_expiry: string | null; // 会员过期时间 ISO String
+    referral_code: string;    // 自己的邀请码
     created_at: string;
 }
 
@@ -109,7 +112,7 @@ export interface DbUserPrompt {
     updated_at: string;
 }
 
-// === API Key 管理 (New) ===
+// === API Key 管理 ===
 export interface ApiKey {
     id: string;
     key: string;            // 实际 Key
@@ -126,5 +129,42 @@ export interface ApiKey {
 export interface SystemModelConfig {
     id: string;
     name: string;
-    isActive?: boolean; // 新增：是否启用
+    isActive?: boolean;
+    isVip?: boolean; // 新增：是否为会员专属模型
+}
+
+// === 会员与经济系统 (New) ===
+
+export enum TransactionType {
+    GENERATE = 'generate',   // 生成消耗
+    RECHARGE = 'recharge',   // 充值
+    REFUND = 'refund',       // 退款/补偿
+    REFERRAL = 'referral',   // 邀请奖励
+    SYSTEM = 'system'        // 系统赠送
+}
+
+export interface UserTransaction {
+    id: string;
+    user_id: string;
+    type: TransactionType;
+    amount: number; // 正数为增加，负数为消耗
+    balance_after: number;
+    description: string;
+    created_at: string;
+}
+
+export enum ProductType {
+    SUBSCRIPTION = 'subscription', // 订阅 (月卡/季卡)
+    TOKEN_PACK = 'token_pack'      // 加油包
+}
+
+export interface ProductPlan {
+    id: string;
+    type: ProductType;
+    name: string;
+    description: string;
+    price: number;       // 价格 (分/CNY)
+    tokens: number;      // 赠送代币
+    days: number;        // 会员天数 (0表示不送会员)
+    is_popular?: boolean;// 是否推荐
 }
