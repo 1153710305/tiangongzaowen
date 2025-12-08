@@ -45,7 +45,8 @@ export const validateJson = <T>(schema: z.ZodSchema<T>) => async (c: Context, ne
         const result = schema.safeParse(body);
         
         if (!result.success) {
-            const errorMsg = result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+            // Fix: Use 'issues' instead of 'errors' as 'errors' property might not exist on ZodError type
+            const errorMsg = result.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
             logger.warn(`[Security] Invalid input: ${errorMsg}`);
             return c.json({ error: "Invalid input parameters", details: errorMsg }, 400);
         }
