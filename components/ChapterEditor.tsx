@@ -27,8 +27,7 @@ export const ChapterEditor: React.FC<Props> = ({ projectId, chapter, availableRe
     const [wordCount, setWordCount] = useState(0);
     
     // Auto Save Timer
-    // 修复: 使用 any 替代 NodeJS.Timeout，避免缺少 Node 类型定义时的报错
-    const autoSaveTimerRef = useRef<any>(null);
+    const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     // AI State
     const [isGenerating, setIsGenerating] = useState(false);
