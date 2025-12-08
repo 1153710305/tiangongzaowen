@@ -43,6 +43,7 @@ export const ADMIN_HTML = `
                 <button @click="switchTab('dashboard')" :class="{'bg-indigo-600/20 text-indigo-300': currentTab === 'dashboard'}" class="w-full text-left px-4 py-3 rounded-lg text-slate-400 hover:text-white transition-colors flex items-center gap-2">
                     <span>📊</span> 概览
                 </button>
+                <!-- API Lab 入口 -->
                 <button @click="switchTab('apilab')" :class="{'bg-indigo-600/20 text-indigo-300': currentTab === 'apilab'}" class="w-full text-left px-4 py-3 rounded-lg text-slate-400 hover:text-white transition-colors flex items-center gap-2 font-bold border border-transparent" :class="currentTab === 'apilab' ? 'border-indigo-500/30' : ''">
                     <span>🧪</span> API 实验室
                 </button>
@@ -95,93 +96,140 @@ export const ADMIN_HTML = `
                 </div>
             </div>
 
-            <!-- API 实验室 -->
+            <!-- === API 实验室 (API Lab) === -->
             <div x-show="currentTab === 'apilab'" class="animate-fade-in h-full flex flex-col">
                 <div class="flex justify-between items-center mb-6">
                     <div>
                         <h2 class="text-2xl font-bold text-white">🧪 API 实验室</h2>
-                        <p class="text-slate-400 text-sm mt-1">可视化调试与性能监控中心</p>
+                        <p class="text-slate-400 text-sm mt-1">可视化调试与性能监控中心 (Debug & Performance Monitor)</p>
                     </div>
-                    <div class="flex items-center gap-3 bg-slate-800 p-2 rounded-lg border border-slate-700">
-                        <span class="text-xs text-slate-500">模拟用户:</span>
-                        <select x-model="apiLab.targetUserId" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white outline-none w-48">
-                            <option value="">-- 请选择测试用户 --</option>
+                    <!-- 用户模拟器 -->
+                    <div class="flex items-center gap-3 bg-slate-800 p-2 rounded-lg border border-slate-700 shadow-sm">
+                        <div class="flex flex-col items-end">
+                            <span class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Impersonate As</span>
+                            <span class="text-xs text-indigo-400" x-text="apiLab.targetUserId ? '模拟用户生效' : '未选择 (Public Mode)'"></span>
+                        </div>
+                        <select x-model="apiLab.targetUserId" class="bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-xs text-white outline-none w-48 focus:border-indigo-500 transition-colors">
+                            <option value="">-- 公开接口 (No Auth) --</option>
                             <template x-for="u in users" :key="u.id">
-                                <option :value="u.id" x-text="u.username"></option>
+                                <option :value="u.id" x-text="u.username + (u.isVip ? ' [VIP]' : '')"></option>
                             </template>
                         </select>
                     </div>
                 </div>
 
                 <div class="flex-1 flex gap-6 overflow-hidden min-h-[600px]">
-                    <!-- 接口列表 -->
-                    <div class="w-64 bg-slate-800 border border-slate-700 rounded-xl flex flex-col overflow-hidden shrink-0 shadow-lg">
-                        <div class="p-3 bg-slate-950 border-b border-slate-700 text-xs font-bold text-slate-400 uppercase">接口列表 (Endpoints)</div>
+                    <!-- 1. 接口列表 (Registry) -->
+                    <div class="w-72 bg-slate-800 border border-slate-700 rounded-xl flex flex-col overflow-hidden shrink-0 shadow-lg">
+                        <div class="p-3 bg-slate-950 border-b border-slate-700 text-xs font-bold text-slate-400 uppercase flex justify-between">
+                            <span>Available Endpoints</span>
+                            <span class="text-indigo-500" x-text="apiRegistry.length"></span>
+                        </div>
                         <div class="flex-1 overflow-y-auto p-2 space-y-1">
                             <template x-for="api in apiRegistry" :key="api.url + api.method">
                                 <button 
                                     @click="selectApi(api)"
-                                    class="w-full text-left px-3 py-2.5 rounded text-sm transition-colors flex flex-col gap-1 border border-transparent"
-                                    :class="apiLab.currentApi?.url === api.url && apiLab.currentApi?.method === api.method ? 'bg-indigo-900/50 border-indigo-500/50 shadow-inner' : 'hover:bg-slate-700/50 hover:border-slate-600'"
+                                    class="w-full text-left px-3 py-3 rounded-lg text-sm transition-all flex flex-col gap-1 border border-transparent group"
+                                    :class="apiLab.currentApi?.name === api.name ? 'bg-indigo-900/40 border-indigo-500/50 shadow-md' : 'hover:bg-slate-700/50 hover:border-slate-600'"
                                 >
-                                    <div class="flex items-center justify-between">
-                                        <span class="font-bold text-slate-200" x-text="api.name"></span>
-                                        <span class="text-[10px] px-1.5 rounded font-mono" 
+                                    <div class="flex items-center justify-between w-full">
+                                        <span class="font-bold text-slate-200 group-hover:text-white transition-colors truncate" x-text="api.name"></span>
+                                        <span class="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold shadow-sm" 
                                             :class="{
-                                                'bg-green-900 text-green-300': api.method === 'GET',
-                                                'bg-blue-900 text-blue-300': api.method === 'POST',
-                                                'bg-yellow-900 text-yellow-300': api.method === 'PUT',
-                                                'bg-red-900 text-red-300': api.method === 'DELETE'
+                                                'bg-green-500/20 text-green-400 border border-green-500/30': api.method === 'GET',
+                                                'bg-blue-500/20 text-blue-400 border border-blue-500/30': api.method === 'POST',
+                                                'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30': api.method === 'PUT',
+                                                'bg-red-500/20 text-red-400 border border-red-500/30': api.method === 'DELETE'
                                             }" x-text="api.method"></span>
                                     </div>
-                                    <span class="text-[10px] text-slate-500 font-mono truncate" x-text="api.url"></span>
+                                    <div class="flex items-center gap-2 w-full">
+                                        <span class="text-[10px] text-slate-500 font-mono truncate flex-1 opacity-70" x-text="api.url"></span>
+                                        <span x-show="api.auth" class="text-[10px] text-yellow-500" title="需要认证">🔒</span>
+                                    </div>
                                 </button>
                             </template>
                         </div>
                     </div>
 
-                    <!-- 调试面板 -->
+                    <!-- 2. 调试面板 (Workspace) -->
                     <div class="flex-1 flex flex-col gap-4 overflow-hidden">
-                        <!-- 请求区 -->
-                        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 shadow-lg flex flex-col h-1/2">
-                            <div class="flex justify-between items-center mb-2">
-                                <div class="flex items-center gap-2">
-                                    <span class="text-sm font-bold text-white">Request Body</span>
-                                    <span class="text-xs text-slate-500">(JSON)</span>
+                        
+                        <!-- 请求区 (Request) -->
+                        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 shadow-lg flex flex-col h-1/2 relative group">
+                            <div class="flex justify-between items-center mb-3">
+                                <div class="flex items-center gap-2 flex-1 mr-4">
+                                    <span class="text-sm font-bold text-white bg-slate-700 px-2 py-0.5 rounded shrink-0">URL</span>
+                                    <input 
+                                        type="text" 
+                                        x-model="apiLab.requestUrl" 
+                                        class="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-yellow-400 font-mono outline-none focus:border-indigo-500 transition-colors"
+                                        placeholder="/api/..."
+                                    >
                                 </div>
                                 <div class="flex gap-2">
-                                    <button @click="loadApiExample" class="text-xs text-indigo-400 hover:text-white hover:underline">加载范例</button>
-                                    <button @click="testApi" :disabled="apiLab.isLoading || !apiLab.targetUserId" class="bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded text-xs font-bold shadow transition-transform active:scale-95 flex items-center gap-2">
+                                    <button @click="loadApiExample" title="重置为默认范例" class="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition-colors px-2 py-1 rounded hover:bg-slate-700">
+                                        <span>↺</span> 重置
+                                    </button>
+                                    <button @click="testApi" :disabled="apiLab.isLoading || (apiLab.currentApi?.auth && !apiLab.targetUserId)" class="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-1.5 rounded-lg text-xs font-bold shadow-lg shadow-green-900/20 transition-all active:scale-95 flex items-center gap-2">
                                         <span x-show="apiLab.isLoading" class="animate-spin">⟳</span>
-                                        <span x-text="apiLab.isLoading ? '请求中...' : '发送请求 (Send)'"></span>
+                                        <span x-text="apiLab.isLoading ? 'Processing...' : 'Send Request 🚀'"></span>
                                     </button>
                                 </div>
                             </div>
-                            <!-- 简易 JSON 编辑器 -->
-                            <textarea x-model="apiLab.requestBody" class="flex-1 bg-slate-950 border border-slate-600 rounded p-3 font-mono text-xs text-green-400 outline-none focus:border-indigo-500 resize-none" spellcheck="false" placeholder="Select an API to start..."></textarea>
+                            
+                            <div class="text-xs text-slate-500 mb-1 px-1">Request Body (JSON):</div>
+                            
+                            <!-- JSON 编辑器 -->
+                            <textarea 
+                                x-model="apiLab.requestBody" 
+                                class="flex-1 bg-[#0f172a] border border-slate-600 rounded-lg p-4 font-mono text-xs text-emerald-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 resize-none transition-all placeholder-slate-700 custom-scrollbar" 
+                                spellcheck="false" 
+                                placeholder="Select an API from the left list to load example payload..."
+                            ></textarea>
+                            <!-- 提示遮罩 -->
+                            <div x-show="!apiLab.currentApi" class="absolute inset-0 top-14 bg-slate-800/80 backdrop-blur-[1px] flex flex-col items-center justify-center text-slate-500 z-10 rounded-b-xl">
+                                <svg class="w-12 h-12 mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path></svg>
+                                <p>请先在左侧选择一个接口进行调试</p>
+                            </div>
                         </div>
 
-                        <!-- 响应区 -->
+                        <!-- 响应区 (Response) -->
                         <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 shadow-lg flex flex-col h-1/2 relative overflow-hidden">
-                            <div class="flex justify-between items-center mb-2 bg-slate-800 z-10">
-                                <span class="text-sm font-bold text-white">Response</span>
-                                <div class="flex gap-3 text-xs font-mono">
-                                    <div class="flex items-center gap-1">
+                            <div class="flex justify-between items-center mb-2 z-10">
+                                <span class="text-sm font-bold text-white bg-slate-700 px-2 py-0.5 rounded">Response</span>
+                                
+                                <!-- 状态指示器 -->
+                                <div class="flex gap-4 text-xs font-mono bg-black/20 px-3 py-1 rounded-lg border border-slate-700/50">
+                                    <div class="flex items-center gap-1.5">
                                         <span class="text-slate-500">Status:</span>
-                                        <span :class="apiLab.responseStatus >= 200 && apiLab.responseStatus < 300 ? 'text-green-400' : 'text-red-400'" x-text="apiLab.responseStatus || '-'"></span>
+                                        <span class="font-bold" :class="apiLab.responseStatus >= 200 && apiLab.responseStatus < 300 ? 'text-green-400' : (apiLab.responseStatus === 0 ? 'text-slate-600' : 'text-red-400')" x-text="apiLab.responseStatus || '---'"></span>
                                     </div>
-                                    <div class="flex items-center gap-1">
+                                    <div class="w-px bg-slate-700 h-3 self-center"></div>
+                                    <div class="flex items-center gap-1.5">
                                         <span class="text-slate-500">Time:</span>
-                                        <span class="text-yellow-400" x-text="apiLab.responseTime ? apiLab.responseTime + 'ms' : '-'"></span>
+                                        <span class="text-yellow-400" x-text="apiLab.responseTime ? apiLab.responseTime + 'ms' : '---'"></span>
                                     </div>
-                                    <div class="flex items-center gap-1">
+                                    <div class="w-px bg-slate-700 h-3 self-center"></div>
+                                    <div class="flex items-center gap-1.5">
                                         <span class="text-slate-500">Size:</span>
-                                        <span class="text-blue-400" x-text="apiLab.responseSize || '-'"></span>
+                                        <span class="text-blue-400" x-text="apiLab.responseSize || '---'"></span>
                                     </div>
                                 </div>
                             </div>
-                            <div class="flex-1 bg-[#0d1117] border border-slate-600 rounded overflow-auto relative group">
-                                <pre class="p-3 font-mono text-xs text-slate-300 whitespace-pre-wrap break-all" x-text="apiLab.responseBody || '// Waiting for response...'"></pre>
+                            
+                            <div class="flex-1 bg-[#0d1117] border border-slate-600 rounded-lg overflow-hidden relative group">
+                                <pre class="absolute inset-0 p-4 font-mono text-xs text-blue-300 whitespace-pre-wrap break-all overflow-auto custom-scrollbar" x-text="apiLab.responseBody || '// Waiting for response...'"></pre>
+                                
+                                <!-- Loading Overlay -->
+                                <div x-show="apiLab.isLoading" class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-20">
+                                    <div class="flex flex-col items-center text-indigo-400">
+                                        <svg class="animate-spin h-8 w-8 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        <span class="text-xs font-mono animate-pulse">Waiting for Server...</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -531,15 +579,18 @@ export const ADMIN_HTML = `
 
     <script>
     // 定义 API 注册表 (静态定义，不与后端耦合)
+    // 实验室接口列表定义
     const API_REGISTRY = [
+        // --- 1. 核心业务 ---
         {
-            name: "AI 生成 (Generate)",
+            name: "AI 内容生成 (Generate)",
             url: "/api/generate",
             method: "POST",
-            description: "核心内容生成接口，支持流式返回。",
+            auth: true,
+            description: "核心生成接口。支持流式返回，需消耗用户 Token。",
             body: {
                 "settings": {
-                    "genre": "玄幻",
+                    "genre": "都市异能",
                     "trope": "系统",
                     "protagonistType": "龙傲天",
                     "goldenFinger": "加点",
@@ -556,32 +607,81 @@ export const ADMIN_HTML = `
             name: "获取用户状态 (User Status)",
             url: "/api/user/status",
             method: "GET",
+            auth: true,
             description: "获取当前登录用户的 Token 余额和 VIP 状态。",
+            body: {}
+        },
+        // --- 2. 认证 (Public) ---
+        {
+            name: "用户登录 (Login)",
+            url: "/api/auth/login",
+            method: "POST",
+            auth: false,
+            description: "公开接口，测试用户登录逻辑。",
+            body: { "username": "test_user", "password": "password123" }
+        },
+        // --- 3. 项目与 IDE ---
+        {
+            name: "获取项目列表 (Get Projects)",
+            url: "/api/projects",
+            method: "GET",
+            auth: true,
+            description: "列出当前用户的所有项目。",
             body: {}
         },
         {
             name: "从卡片创建项目 (Create Project)",
             url: "/api/projects/from-card",
             method: "POST",
-            description: "基于脑洞卡片初始化一个 IDE 项目。",
+            auth: true,
+            description: "基于脑洞卡片初始化一个 IDE 项目结构。",
             body: {
                 "cardId": "demo-card-id",
-                "title": "测试项目标题",
-                "description": "测试简介"
+                "title": "测试项目 (Lab Created)",
+                "description": "API 实验室自动创建"
             }
         },
+        {
+            name: "获取项目结构 (Project Structure)",
+            url: "/api/projects/:pid/structure",
+            method: "GET",
+            auth: true,
+            description: "获取项目的文件树（章节和导图列表）。请替换 :pid 为真实项目 ID。",
+            body: {}
+        },
+        // --- 4. 章节管理 ---
+        {
+            name: "创建章节 (Create Chapter)",
+            url: "/api/projects/:pid/chapters",
+            method: "POST",
+            auth: true,
+            description: "在项目中创建新章节。请替换 :pid。",
+            body: { "title": "新章节", "order": 1 }
+        },
+        // --- 5. 思维导图 ---
+        {
+            name: "创建思维导图 (Create MindMap)",
+            url: "/api/projects/:pid/maps",
+            method: "POST",
+            auth: true,
+            description: "创建新的思维导图文件。请替换 :pid。",
+            body: {}
+        },
+        // --- 6. 社区功能 ---
         {
             name: "提交留言 (Post Message)",
             url: "/api/messages",
             method: "POST",
+            auth: true,
             description: "用户提交反馈留言。",
-            body: { "content": "后台接口测试留言" }
+            body: { "content": "这条留言来自后台 API 实验室测试" }
         },
         {
-            name: "获取所有项目 (Get Projects)",
-            url: "/api/projects",
+            name: "获取系统公告 (Get Announcements)",
+            url: "/api/announcements",
             method: "GET",
-            description: "列出用户的所有项目。",
+            auth: false,
+            description: "公开接口，获取已发布的系统公告。",
             body: {}
         }
     ];
@@ -599,6 +699,7 @@ export const ADMIN_HTML = `
             apiLab: {
                 currentApi: null,
                 targetUserId: '',
+                requestUrl: '',
                 requestBody: '',
                 responseBody: '',
                 responseStatus: 0,
@@ -609,7 +710,7 @@ export const ADMIN_HTML = `
             
             // 扩展 init
             init() {
-                // 调用原始 init (如果需要绑定 this，请注意上下文，这里简化处理直接复制逻辑或手动调用)
+                // 手动初始化认证状态
                 const token = localStorage.getItem('skycraft_admin_token');
                 if (token) { 
                     this.adminToken = token; 
@@ -621,6 +722,7 @@ export const ADMIN_HTML = `
 
             selectApi(api) {
                 this.apiLab.currentApi = api;
+                this.apiLab.requestUrl = api.url; // 允许用户编辑 URL
                 this.apiLab.requestBody = JSON.stringify(api.body, null, 2);
                 this.apiLab.responseBody = '';
                 this.apiLab.responseStatus = 0;
@@ -631,63 +733,79 @@ export const ADMIN_HTML = `
             loadApiExample() {
                 if (this.apiLab.currentApi) {
                     this.apiLab.requestBody = JSON.stringify(this.apiLab.currentApi.body, null, 2);
+                    this.apiLab.requestUrl = this.apiLab.currentApi.url;
                 }
             },
 
             async testApi() {
-                if (!this.apiLab.targetUserId) return alert("请先选择一个模拟用户");
-                if (!this.apiLab.currentApi) return alert("请选择接口");
-
+                const isAuthRequired = this.apiLab.currentApi?.auth;
+                
+                if (isAuthRequired && !this.apiLab.targetUserId) {
+                    return alert("此接口需要认证。请先在右上角选择一个模拟用户 (Impersonate)。");
+                }
+                
                 this.apiLab.isLoading = true;
                 this.apiLab.responseBody = '';
+                this.apiLab.responseStatus = 0;
                 
                 try {
-                    // 1. 获取模拟 Token
-                    const tokenRes = await fetch('/admin/api/users/' + this.apiLab.targetUserId + '/impersonate', {
-                        method: 'POST',
-                        headers: { 'Authorization': 'Bearer ' + this.adminToken }
-                    });
-                    
-                    if (!tokenRes.ok) throw new Error("无法获取用户授权");
-                    const { token: userToken } = await tokenRes.json();
+                    let userToken = '';
+
+                    // 1. 如果需要认证，先获取模拟 Token
+                    if (isAuthRequired) {
+                         const tokenRes = await fetch('/admin/api/users/' + this.apiLab.targetUserId + '/impersonate', {
+                            method: 'POST',
+                            headers: { 'Authorization': 'Bearer ' + this.adminToken }
+                        });
+                        
+                        if (!tokenRes.ok) throw new Error("无法获取用户授权 (Impersonation Failed)");
+                        const data = await tokenRes.json();
+                        userToken = data.token;
+                    }
 
                     // 2. 发起实际请求
                     const startTime = performance.now();
                     const options = {
-                        method: this.apiLab.currentApi.method,
+                        method: this.apiLab.currentApi?.method || 'GET',
                         headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': 'Bearer ' + userToken
+                            'Content-Type': 'application/json'
                         }
                     };
+
+                    // 注入 Token
+                    if (userToken) {
+                        options.headers['Authorization'] = 'Bearer ' + userToken;
+                    }
                     
-                    if (this.apiLab.currentApi.method !== 'GET' && this.apiLab.currentApi.method !== 'HEAD') {
+                    // 注入 Body (非 GET/HEAD)
+                    if (options.method !== 'GET' && options.method !== 'HEAD') {
                         options.body = this.apiLab.requestBody;
                     }
 
-                    const res = await fetch(this.apiLab.currentApi.url, options);
+                    // 使用编辑后的 URL
+                    const targetUrl = this.apiLab.requestUrl;
+                    const res = await fetch(targetUrl, options);
                     const endTime = performance.now();
                     
                     this.apiLab.responseStatus = res.status;
                     this.apiLab.responseTime = Math.round(endTime - startTime);
 
-                    // 处理响应内容 (支持流式)
+                    // 处理响应内容 (支持流式文本或 JSON)
                     const contentType = res.headers.get('content-type');
                     let size = 0;
+                    let bodyText = '';
 
-                    if (contentType && contentType.includes('application/json')) {
-                        const json = await res.json();
-                        const jsonStr = JSON.stringify(json, null, 2);
-                        this.apiLab.responseBody = jsonStr;
-                        size = new Blob([jsonStr]).size;
-                    } else {
-                        // 假设是文本或流式文本，直接读取文本
-                        const text = await res.text();
-                        this.apiLab.responseBody = text;
-                        size = new Blob([text]).size;
+                    const rawText = await res.text();
+                    size = new Blob([rawText]).size;
+                    
+                    try {
+                        const json = JSON.parse(rawText);
+                        bodyText = JSON.stringify(json, null, 2);
+                    } catch (e) {
+                        bodyText = rawText;
                     }
 
-                    // 计算大小
+                    this.apiLab.responseBody = bodyText;
                     this.apiLab.responseSize = size > 1024 ? (size/1024).toFixed(2) + ' KB' : size + ' B';
 
                 } catch (e) {

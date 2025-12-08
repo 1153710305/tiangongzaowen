@@ -38,13 +38,41 @@ export default function App() {
 
     // 初始化加载
     useEffect(() => {
-        const currentUser = authService.getCurrentUser();
-        if (currentUser) { setUser(currentUser); loadUserData(); }
-        setIsCheckingAuth(false);
+        const initSession = async () => {
+            const currentUser = authService.getCurrentUser();
+            if (currentUser) {
+                // 1. 乐观更新：先显示用户，提升体验
+                setUser(currentUser); 
+                
+                try {
+                    // 2. 后端校验：验证 Token 是否真的有效 (服务器可能重启过)
+                    await apiService.getUserStatus();
+                    // 3. 校验通过，加载数据
+                    await loadUserData(); 
+                } catch (e) {
+                    // 4. 校验失败 (401/403)，强制登出
+                    console.warn("Session invalid, logging out...", e);
+                    handleLogout();
+                }
+            }
+            setIsCheckingAuth(false);
+        };
+        initSession();
     }, []);
 
     const loadUserData = async () => {
-        await Promise.all([apiService.getArchives().then(setArchives), apiService.getIdeaCards().then(setSavedCards), apiService.getProjects().then(setProjectList)]);
+        try {
+            await Promise.all([
+                apiService.getArchives().then(setArchives), 
+                apiService.getIdeaCards().then(setSavedCards), 
+                apiService.getProjects().then(setProjectList)
+            ]);
+        } catch (e: any) {
+            console.error("Failed to load user data", e);
+            if (e.message && e.message.includes("Unauthorized")) {
+                handleLogout();
+            }
+        }
     };
 
     // 核心业务逻辑

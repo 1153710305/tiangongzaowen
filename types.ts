@@ -148,16 +148,13 @@ export interface Archive {
     updatedAt: string;
 }
 
-// === 本地化设置 (New) ===
-export type AppLanguage = 'zh-CN' | 'en-US' | 'pt-BR' | 'es-MX' | 'vi-VN' | 'th-TH' | 'id-ID';
-export type AppTheme = 'dark' | 'light' | 'midnight' | 'forest';
-export type AppFont = 'system' | 'serif' | 'mono' | 'handwriting';
+// === 本地化设置 (Updated) ===
+// 仅保留中文、英文、日文
+export type AppLanguage = 'zh-CN' | 'en-US' | 'ja-JP';
 
 export interface AppSettings {
     language: AppLanguage;
-    theme: AppTheme;
-    fontFamily: AppFont;
-    fontSize: number; // 基础字号，默认16
+    // 主题和字体已移除，使用系统默认样式
 }
 
 // === 商品与交易相关 (New) ===

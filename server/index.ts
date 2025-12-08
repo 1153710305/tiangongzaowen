@@ -107,6 +107,24 @@ app.get('/api/user/status', (c) => {
     return c.json({ id: user.id, username: user.username, tokens: user.tokens, vip_expiry: user.vip_expiry, isVip, referral_code: user.referral_code });
 });
 
+app.post('/api/user/change-password', async (c) => {
+    const payload = c.get('jwtPayload');
+    const { oldPassword, newPassword } = await c.req.json();
+    const user = db.getUserById(payload.id);
+    if (!user) return c.json({ error: 'User not found' }, 404);
+    
+    // 简单校验旧密码 (明文比对，生产环境应用 Hash)
+    if (user.password_hash !== oldPassword) {
+        return c.json({ error: '旧密码错误' }, 400);
+    }
+    if (!newPassword || newPassword.length < 6) {
+        return c.json({ error: '新密码长度至少6位' }, 400);
+    }
+    
+    db.updateUserPassword(user.id, newPassword);
+    return c.json({ success: true });
+});
+
 app.post('/api/user/buy', async (c) => {
     const payload = c.get('jwtPayload');
     const { productId } = await c.req.json();

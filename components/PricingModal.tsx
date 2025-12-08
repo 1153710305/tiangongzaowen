@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Button } from './Button';
 import { apiService } from '../services/geminiService';
 import { ProductPlan, ProductType } from '../types';
+import { API_BASE_URL } from '../constants'; // 引入 API 基地址
 
 interface Props {
     onClose: () => void;
@@ -17,10 +18,8 @@ export const PricingModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     useEffect(() => {
         const loadProducts = async () => {
             try {
-                // 假设有一个 API 获取商品列表，或者我们直接使用硬编码，因为 prompt 说“后台配置”，
-                // 为了演示我们这里先 fetch，如果 fetch 失败（因为 admin router 还没配好 public endpoint）则使用兜底数据
-                // 实际项目中应调用 apiService.getProducts()
-                const res = await fetch('/api/products'); 
+                // 修改：使用绝对路径，确保在本地开发环境也能指向正确的后端端口 (3000)
+                const res = await fetch(`${API_BASE_URL}/api/products`); 
                 if(res.ok) {
                     const data = await res.json();
                     if(data.length > 0) {

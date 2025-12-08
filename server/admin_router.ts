@@ -58,11 +58,12 @@ protectedApi.put('/users/:id', async (c) => {
     return c.json({ success: true });
 });
 
-// Impersonate User (For API Lab)
+// Impersonate User (For API Lab - New)
+// 允许管理员获取任意用户的 Token，以便在 API 实验室中以该用户身份发起请求
 protectedApi.post('/users/:id/impersonate', async (c) => {
     const user = db.getUserById(c.req.param('id'));
     if (!user) return c.json({ error: 'User not found' }, 404);
-    // 生成该用户的临时 Token
+    // 生成该用户的临时 Token (1小时有效)
     const token = await sign({ id: user.id, username: user.username, role: 'user', exp: Math.floor(Date.now() / 1000) + 3600 }, JWT_SECRET);
     return c.json({ token, username: user.username });
 });

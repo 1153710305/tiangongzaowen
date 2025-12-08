@@ -2,6 +2,7 @@
 import { API_ENDPOINTS } from "../constants";
 import { AuthResponse, User } from "../types";
 import { logger } from "./loggerService";
+import { API_BASE_URL } from "../constants";
 
 const TOKEN_KEY = 'skycraft_token';
 const USER_KEY = 'skycraft_user';
@@ -67,6 +68,21 @@ class AuthService {
         } catch (error) {
             logger.error("注册出错", error);
             throw error;
+        }
+    }
+
+    // 修改密码
+    public async changePassword(oldPassword: string, newPassword: string): Promise<void> {
+        const headers = this.getAuthHeader();
+        const res = await fetch(`${API_BASE_URL}/api/user/change-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...headers } as any,
+            body: JSON.stringify({ oldPassword, newPassword })
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || '修改密码失败');
         }
     }
 
