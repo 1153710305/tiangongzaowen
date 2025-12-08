@@ -80,6 +80,7 @@ export interface DbProject {
     idea_card_id?: string;
     created_at: string;
     updated_at: string;
+    deleted_at?: string | null; // 回收站软删除标记
 }
 
 export interface DbChapter {
@@ -133,7 +134,7 @@ export interface SystemModelConfig {
     isVip?: boolean; // 新增：是否为会员专属模型
 }
 
-// === 会员与经济系统 (New) ===
+// === 会员与经济系统 ===
 
 export enum TransactionType {
     GENERATE = 'generate',   // 生成消耗
@@ -167,4 +168,25 @@ export interface ProductPlan {
     tokens: number;      // 赠送代币
     days: number;        // 会员天数 (0表示不送会员)
     is_popular?: boolean;// 是否推荐
+}
+
+// === 留言板与公告 (New) ===
+
+export interface Message {
+    id: string;
+    user_id: string;
+    content: string;
+    reply?: string;
+    reply_at?: string;
+    created_at: string;
+    username?: string; // 联表查询用
+}
+
+export interface Announcement {
+    id: string;
+    title: string;
+    content: string;
+    is_published: number; // 0 or 1
+    created_at: string;
+    updated_at: string;
 }

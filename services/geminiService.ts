@@ -194,6 +194,14 @@ class ApiService {
         return res.ok ? await res.json() : [];
     }
 
+    // 回收站项目
+    public async getDeletedProjects(): Promise<Project[]> {
+        const authHeaders = authService.getAuthHeader();
+        const res = await fetch(`${API_ENDPOINTS.PROJECTS}/trash/all`, { headers: { ...authHeaders } as any });
+        return res.ok ? await res.json() : [];
+    }
+
+    // 软删除
     public async deleteProject(projectId: string): Promise<void> {
         const authHeaders = authService.getAuthHeader();
         const res = await fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}`, { 
@@ -201,6 +209,26 @@ class ApiService {
             headers: { ...authHeaders } as any 
         });
         if (!res.ok) throw new Error("删除项目失败");
+    }
+
+    // 恢复项目
+    public async restoreProject(projectId: string): Promise<void> {
+        const authHeaders = authService.getAuthHeader();
+        const res = await fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}/restore`, { 
+            method: 'POST',
+            headers: { ...authHeaders } as any 
+        });
+        if (!res.ok) throw new Error("恢复项目失败");
+    }
+
+    // 彻底删除
+    public async permanentDeleteProject(projectId: string): Promise<void> {
+        const authHeaders = authService.getAuthHeader();
+        const res = await fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}/permanent`, { 
+            method: 'DELETE',
+            headers: { ...authHeaders } as any 
+        });
+        if (!res.ok) throw new Error("彻底删除失败");
     }
 
     public async getProjectStructure(projectId: string): Promise<ProjectStructure> {
@@ -325,6 +353,28 @@ class ApiService {
             headers: { ...authHeaders } as any
         });
         if (!res.ok) throw new Error("删除失败");
+    }
+
+    // === 留言板 & 公告 ===
+    public async getMessages(): Promise<any[]> {
+        const authHeaders = authService.getAuthHeader();
+        const res = await fetch(`${API_BASE_URL}/api/messages`, { headers: { ...authHeaders } as any });
+        return res.ok ? await res.json() : [];
+    }
+
+    public async postMessage(content: string): Promise<void> {
+        const authHeaders = authService.getAuthHeader();
+        const res = await fetch(`${API_BASE_URL}/api/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders } as any,
+            body: JSON.stringify({ content })
+        });
+        if (!res.ok) throw new Error("发送失败");
+    }
+
+    public async getAnnouncements(): Promise<any[]> {
+        const res = await fetch(`${API_BASE_URL}/api/announcements`);
+        return res.ok ? await res.json() : [];
     }
 }
 

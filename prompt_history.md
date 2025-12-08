@@ -3,6 +3,22 @@
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
 
+## 版本 v3.2.0 (Community & Safety)
+
+### 功能变更
+- **Recycle Bin (Project Safety)**:
+    - 数据库 `projects` 表新增 `deleted_at` 字段。
+    - 修改 API `DELETE /api/projects/:id` 为软删除（更新时间戳）。
+    - 新增 API `POST /api/projects/:id/restore` 用于恢复项目。
+    - 新增 API `DELETE /api/projects/:id/permanent` 用于彻底物理删除。
+    - 后端启动时运行 `db.cleanupRecycleBin()`，物理删除超过 30 天的记录。
+- **Community Features**:
+    - **Guestbook**: 用户可提交留言，管理员后台回复。数据结构包含 `reply` 和 `reply_at` 字段。
+    - **Announcements**: 管理员发布公告，前端侧边栏展示。
+- **UI Updates**:
+    - `ProjectListModal` 增加 Tab 切换（进行中/回收站）。
+    - 侧边栏增加留言和公告入口。
+
 ## 版本 v3.1.0 (Membership & Economy)
 
 ### 功能变更

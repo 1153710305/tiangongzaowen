@@ -27,6 +27,8 @@ export const ADMIN_SCRIPT = `
             users: [],
             logs: [],
             apiKeys: [],
+            messages: [],
+            announcements: [],
             
             // Key Modals
             showAddKeyModal: false,
@@ -40,6 +42,10 @@ export const ADMIN_SCRIPT = `
             showArchivesModal: false,
             currentArchiveUser: '',
             currentUserArchives: [],
+            
+            // Announcement Modal
+            showAnnouncementModal: false,
+            annForm: { id: null, title: '', content: '', is_published: true },
             
             // Detail Modal State
             showDetailModal: false,
@@ -56,7 +62,7 @@ export const ADMIN_SCRIPT = `
             // Config State
             config: {
                 aiModelsJson: '[]',
-                parsedModels: [], // For editable UI
+                parsedModels: [], 
                 defaultModel: ''
             },
 
@@ -90,6 +96,8 @@ export const ADMIN_SCRIPT = `
                 if (tab === 'users') this.fetchUsers();
                 if (tab === 'keys') this.fetchKeys();
                 if (tab === 'settings') this.fetchConfig();
+                if (tab === 'messages') this.fetchMessages();
+                if (tab === 'announcements') this.fetchAnnouncements();
                 if (tab === 'logs') { 
                     this.fetchLogs(); 
                     if (!this.isAutoRefresh) this.toggleAutoRefresh(); 
@@ -135,7 +143,49 @@ export const ADMIN_SCRIPT = `
                 } catch (e) { console.error(e); } 
             },
 
-            // === Keys (New) ===
+            // === Messages ===
+            async fetchMessages() {
+                try {
+                    const res = await this.authedFetch('/admin/api/messages');
+                    this.messages = Array.isArray(res) ? res.map(m => ({...m, newReply: ''})) : [];
+                } catch(e) { this.messages = []; }
+            },
+            async replyMessage(msg) {
+                if(!msg.newReply) return alert("请输入内容");
+                try {
+                    const res = await fetch('/admin/api/messages/'+msg.id+'/reply', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.adminToken },
+                        body: JSON.stringify({ reply: msg.newReply })
+                    });
+                    if(res.ok) { alert("回复成功"); this.fetchMessages(); } else alert("失败");
+                } catch(e){ alert("错误"); }
+            },
+
+            // === Announcements ===
+            async fetchAnnouncements() {
+                try { this.announcements = await this.authedFetch('/admin/api/announcements') || []; } catch(e) { this.announcements=[]; }
+            },
+            openAnnouncementModal() { this.annForm = { id: null, title: '', content: '', is_published: true }; this.showAnnouncementModal = true; },
+            editAnnouncement(ann) { this.annForm = { ...ann, is_published: !!ann.is_published }; this.showAnnouncementModal = true; },
+            async saveAnnouncement() {
+                if(!this.annForm.title) return alert("请输入标题");
+                const method = this.annForm.id ? 'PUT' : 'POST';
+                const url = this.annForm.id ? '/admin/api/announcements/'+this.annForm.id : '/admin/api/announcements';
+                try {
+                    const res = await fetch(url, {
+                         method, headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.adminToken},
+                         body: JSON.stringify(this.annForm)
+                    });
+                    if(res.ok) { this.showAnnouncementModal=false; this.fetchAnnouncements(); } else alert("失败");
+                } catch(e){ alert("Error"); }
+            },
+            async deleteAnnouncement(id) {
+                if(!confirm("删除?")) return;
+                try { await this.authedFetch('/admin/api/announcements/'+id, {method:'DELETE'}); this.fetchAnnouncements(); } catch(e){}
+            },
+
+            // === Keys ===
             async fetchKeys() {
                 try {
                     const res = await this.authedFetch('/admin/api/keys');
@@ -220,30 +270,11 @@ export const ADMIN_SCRIPT = `
             },
             async saveAiModels() {
                 try {
-                    // Filter out empty rows
                     const validModels = this.config.parsedModels.filter(m => m.id && m.name);
                     const jsonStr = JSON.stringify(validModels);
-                    
-                    const res = await fetch('/admin/api/configs', {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.adminToken },
-                        body: JSON.stringify({ key: 'ai_models', value: jsonStr })
-                    });
-                    if (res.ok) { 
-                        alert('模型列表已更新');
-                        this.fetchConfig();
-                    } else alert('更新失败');
+                    const res = await fetch('/admin/api/configs', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.adminToken }, body: JSON.stringify({ key: 'ai_models', value: jsonStr }) });
+                    if (res.ok) { alert('模型列表已更新'); this.fetchConfig(); } else alert('更新失败');
                 } catch(e) { alert('Error: ' + e.message); }
-            },
-            async saveDefaultModel() {
-                try {
-                     const res = await fetch('/admin/api/configs', {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.adminToken },
-                        body: JSON.stringify({ key: 'default_model', value: this.config.defaultModel })
-                    });
-                    if (res.ok) alert('默认模型已更新'); else alert('更新失败');
-                } catch(e) { alert('更新失败'); }
             },
 
             // === Logs ===

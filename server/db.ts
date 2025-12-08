@@ -1,6 +1,6 @@
 
 import Database from 'better-sqlite3';
-import { User, Archive, DbIdeaCard, IdeaCardData, DbProject, DbChapter, DbMindMap, DbUserPrompt, PromptType, ApiKey, SystemModelConfig, TransactionType, UserTransaction, ProductPlan, ProductType } from './types.ts';
+import { User, Archive, DbIdeaCard, IdeaCardData, DbProject, DbChapter, DbMindMap, DbUserPrompt, PromptType, ApiKey, SystemModelConfig, TransactionType, UserTransaction, ProductPlan, ProductType, Message, Announcement } from './types.ts';
 import fs from 'fs';
 import path from 'path';
 
@@ -16,14 +16,14 @@ db.pragma('foreign_keys = ON');
 // 初始化表结构
 export function initDB() {
     db.exec(`
-        -- 用户表升级：支持代币和会员
+        -- 用户表
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
             username TEXT UNIQUE,
             password_hash TEXT,
-            tokens INTEGER DEFAULT 1000, -- 初始赠送1000代币
-            vip_expiry TEXT,             -- 会员过期时间
-            referral_code TEXT,          -- 邀请码
+            tokens INTEGER DEFAULT 1000,
+            vip_expiry TEXT,
+            referral_code TEXT,
             created_at TEXT
         );
 
@@ -58,9 +58,11 @@ export function initDB() {
             idea_card_id TEXT,
             created_at TEXT,
             updated_at TEXT,
+            deleted_at TEXT, -- 软删除时间，NULL表示未删除
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
         CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
+        CREATE INDEX IF NOT EXISTS idx_projects_deleted ON projects(deleted_at);
 
         CREATE TABLE IF NOT EXISTS chapters (
             id TEXT PRIMARY KEY,
@@ -73,7 +75,7 @@ export function initDB() {
         );
         CREATE INDEX IF NOT EXISTS idx_chapters_project ON chapters(project_id);
         
-        -- 思维导图表：核心性能点
+        -- 思维导图表
         CREATE TABLE IF NOT EXISTS mind_maps (
             id TEXT PRIMARY KEY,
             project_id TEXT,
@@ -96,7 +98,6 @@ export function initDB() {
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
         CREATE INDEX IF NOT EXISTS idx_prompts_user ON user_prompts(user_id);
-        CREATE INDEX IF NOT EXISTS idx_prompts_type ON user_prompts(type);
 
         -- === 系统配置表 ===
         CREATE TABLE IF NOT EXISTS system_configs (
@@ -110,7 +111,7 @@ export function initDB() {
             id TEXT PRIMARY KEY,
             key TEXT UNIQUE,
             provider TEXT DEFAULT 'google',
-            is_active INTEGER DEFAULT 1, -- 1: true, 0: false
+            is_active INTEGER DEFAULT 1,
             last_used_at TEXT,
             usage_count INTEGER DEFAULT 0,
             total_tokens INTEGER DEFAULT 0,
@@ -118,13 +119,12 @@ export function initDB() {
             created_at TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_api_keys_active ON api_keys(is_active);
-        CREATE INDEX IF NOT EXISTS idx_api_keys_last_used ON api_keys(last_used_at);
 
-        -- === 交易记录表 (New) ===
+        -- === 交易记录表 ===
         CREATE TABLE IF NOT EXISTS user_transactions (
             id TEXT PRIMARY KEY,
             user_id TEXT,
-            type TEXT, -- generate, recharge, etc.
+            type TEXT,
             amount INTEGER,
             balance_after INTEGER,
             description TEXT,
@@ -132,20 +132,45 @@ export function initDB() {
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
         CREATE INDEX IF NOT EXISTS idx_trans_user ON user_transactions(user_id);
-        CREATE INDEX IF NOT EXISTS idx_trans_created ON user_transactions(created_at);
+
+        -- === 留言板 (New) ===
+        CREATE TABLE IF NOT EXISTS messages (
+            id TEXT PRIMARY KEY,
+            user_id TEXT,
+            content TEXT,
+            reply TEXT,
+            reply_at TEXT,
+            created_at TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(user_id);
+        CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
+
+        -- === 公告 (New) ===
+        CREATE TABLE IF NOT EXISTS announcements (
+            id TEXT PRIMARY KEY,
+            title TEXT,
+            content TEXT,
+            is_published INTEGER DEFAULT 0, -- 1: published, 0: draft
+            created_at TEXT,
+            updated_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_announcements_pub ON announcements(is_published);
     `);
     
-    // 数据库迁移：如果 users 表没有 tokens 字段，添加它
+    // 数据库迁移：projects 增加 deleted_at
     try {
-        db.prepare('SELECT tokens FROM users LIMIT 1').get();
+        db.prepare('SELECT deleted_at FROM projects LIMIT 1').get();
     } catch (e) {
-        console.log('[DB Migration] Adding tokens, vip_expiry, referral_code columns to users table...');
-        db.exec('ALTER TABLE users ADD COLUMN tokens INTEGER DEFAULT 1000');
-        db.exec('ALTER TABLE users ADD COLUMN vip_expiry TEXT');
-        db.exec('ALTER TABLE users ADD COLUMN referral_code TEXT');
+        console.log('[DB Migration] Adding deleted_at column to projects table...');
+        db.exec('ALTER TABLE projects ADD COLUMN deleted_at TEXT');
     }
 
-    // 初始化默认模型配置
+    // 初始化默认配置
+    initDefaultConfigs();
+}
+
+function initDefaultConfigs() {
     const checkConfig = db.prepare('SELECT key FROM system_configs WHERE key = ?').get('ai_models');
     if (!checkConfig) {
         const defaultModels: SystemModelConfig[] = [
@@ -157,28 +182,24 @@ export function initDB() {
         db.prepare('INSERT INTO system_configs (key, value, updated_at) VALUES (?, ?, ?)').run('default_model', 'gemini-2.5-flash', now);
     }
 
-    // 初始化默认商品配置
     const checkProducts = db.prepare('SELECT key FROM system_configs WHERE key = ?').get('product_plans');
     if (!checkProducts) {
         const defaultPlans: ProductPlan[] = [
             { id: 'plan_monthly', type: ProductType.SUBSCRIPTION, name: '月度会员', description: '30天会员 + 5万代币/天', price: 2900, tokens: 50000, days: 30, is_popular: true },
-            { id: 'plan_quarterly', type: ProductType.SUBSCRIPTION, name: '季度会员', description: '90天会员 + 8折优惠', price: 7900, tokens: 160000, days: 90 },
-            { id: 'pack_small', type: ProductType.TOKEN_PACK, name: '灵感加油包 (小)', description: '增加 10万代币', price: 990, tokens: 100000, days: 0 },
-            { id: 'pack_large', type: ProductType.TOKEN_PACK, name: '灵感加油包 (大)', description: '增加 50万代币', price: 3990, tokens: 500000, days: 0 }
+            { id: 'pack_small', type: ProductType.TOKEN_PACK, name: '灵感加油包 (小)', description: '增加 10万代币', price: 990, tokens: 100000, days: 0 }
         ];
         const now = new Date().toISOString();
         db.prepare('INSERT INTO system_configs (key, value, updated_at) VALUES (?, ?, ?)').run('product_plans', JSON.stringify(defaultPlans), now);
     }
 }
 
-// ... existing functions ...
+// ... existing user/token functions ...
 
-// === Users Updated ===
 export function createUser(id: string, username: string, passwordHash: string): User {
     const stmt = db.prepare('INSERT INTO users (id, username, password_hash, tokens, referral_code, created_at) VALUES (?, ?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
     const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-    stmt.run(id, username, passwordHash, 1000, referralCode, now); // 新用户默认 1000 Tokens
+    stmt.run(id, username, passwordHash, 1000, referralCode, now); 
     return { id, username, password_hash: passwordHash, tokens: 1000, vip_expiry: null, referral_code: referralCode, created_at: now };
 }
 
@@ -197,69 +218,39 @@ export function updateUserPassword(id: string, newPasswordHash: string): void {
     stmt.run(newPasswordHash, id);
 }
 
-// === 会员与代币逻辑 ===
-
-/**
- * 扣除用户代币并记录交易
- * @param amount 扣除数量（正数）
- */
 export function deductUserTokens(userId: string, amount: number, description: string): void {
     const transaction = db.transaction(() => {
-        // 1. 获取当前余额
         const user = db.prepare('SELECT tokens FROM users WHERE id = ?').get(userId) as { tokens: number };
         if (!user) throw new Error("User not found");
-
         const balanceAfter = user.tokens - amount;
-        
-        // 2. 更新用户表
         db.prepare('UPDATE users SET tokens = ? WHERE id = ?').run(balanceAfter, userId);
-
-        // 3. 记录交易
         const transId = crypto.randomUUID();
         const now = new Date().toISOString();
-        db.prepare(`
-            INSERT INTO user_transactions (id, user_id, type, amount, balance_after, description, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(transId, userId, TransactionType.GENERATE, -amount, balanceAfter, description, now);
+        db.prepare(`INSERT INTO user_transactions (id, user_id, type, amount, balance_after, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(transId, userId, TransactionType.GENERATE, -amount, balanceAfter, description, now);
     });
     transaction();
 }
 
-/**
- * 用户充值/增加代币/开通会员
- */
 export function rechargeUser(userId: string, tokenAmount: number, vipDays: number, description: string): void {
     const transaction = db.transaction(() => {
         const user = db.prepare('SELECT tokens, vip_expiry FROM users WHERE id = ?').get(userId) as User;
         if (!user) throw new Error("User not found");
-
-        // 计算代币
         const balanceAfter = (user.tokens || 0) + tokenAmount;
-        
-        // 计算会员时间
         let newVipExpiry = user.vip_expiry;
         const now = new Date();
         if (vipDays > 0) {
             let currentExpiry = user.vip_expiry ? new Date(user.vip_expiry) : new Date();
-            if (currentExpiry < now) currentExpiry = now; // 如果已过期，从现在开始算
+            if (currentExpiry < now) currentExpiry = now; 
             currentExpiry.setDate(currentExpiry.getDate() + vipDays);
             newVipExpiry = currentExpiry.toISOString();
         }
-
-        // 更新用户
         db.prepare('UPDATE users SET tokens = ?, vip_expiry = ? WHERE id = ?').run(balanceAfter, newVipExpiry, userId);
-
-        // 记录交易
         const transId = crypto.randomUUID();
-        db.prepare(`
-            INSERT INTO user_transactions (id, user_id, type, amount, balance_after, description, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(transId, userId, TransactionType.RECHARGE, tokenAmount, balanceAfter, description, now.toISOString());
+        db.prepare(`INSERT INTO user_transactions (id, user_id, type, amount, balance_after, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(transId, userId, TransactionType.RECHARGE, tokenAmount, balanceAfter, description, now.toISOString());
     });
     transaction();
 }
 
-// === Config Getters ===
 export function getSystemConfig(key: string): string | null {
     const row = db.prepare('SELECT value FROM system_configs WHERE key = ?').get(key) as { value: string } | undefined;
     return row ? row.value : null;
@@ -267,16 +258,114 @@ export function getSystemConfig(key: string): string | null {
 
 export function setSystemConfig(key: string, value: string): void {
     const now = new Date().toISOString();
-    db.prepare(`
-        INSERT INTO system_configs (key, value, updated_at) 
-        VALUES (?, ?, ?) 
-        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-    `).run(key, value, now);
+    db.prepare(`INSERT INTO system_configs (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`).run(key, value, now);
 }
 
-// ... existing helpers for Key/Project/Archive ...
+// === Projects (Updated for Recycle Bin) ===
 
-// === API Key Management ===
+export function createProject(id: string, userId: string, title: string, description: string, ideaCardId?: string): DbProject {
+    const stmt = db.prepare('INSERT INTO projects (id, user_id, title, description, idea_card_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const now = new Date().toISOString();
+    stmt.run(id, userId, title, description, ideaCardId || null, now, now);
+    return { id, user_id: userId, title, description, idea_card_id: ideaCardId, created_at: now, updated_at: now };
+}
+
+// 获取未删除的项目
+export function getProjectsByUser(userId: string): DbProject[] {
+    const stmt = db.prepare('SELECT * FROM projects WHERE user_id = ? AND (deleted_at IS NULL) ORDER BY updated_at DESC');
+    return stmt.all(userId) as DbProject[];
+}
+
+// 获取回收站的项目
+export function getDeletedProjectsByUser(userId: string): DbProject[] {
+    const stmt = db.prepare('SELECT * FROM projects WHERE user_id = ? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC');
+    return stmt.all(userId) as DbProject[];
+}
+
+export function getProjectById(id: string): DbProject | undefined {
+    const stmt = db.prepare('SELECT * FROM projects WHERE id = ?');
+    return stmt.get(id) as DbProject | undefined;
+}
+
+// 软删除
+export function deleteProject(id: string, userId: string): void {
+    const now = new Date().toISOString();
+    const stmt = db.prepare('UPDATE projects SET deleted_at = ? WHERE id = ? AND user_id = ?');
+    stmt.run(now, id, userId);
+}
+
+// 恢复项目
+export function restoreProject(id: string, userId: string): void {
+    const stmt = db.prepare('UPDATE projects SET deleted_at = NULL WHERE id = ? AND user_id = ?');
+    stmt.run(id, userId);
+}
+
+// 彻底删除
+export function permanentDeleteProject(id: string, userId: string): void {
+    // 级联删除由 ON DELETE CASCADE 数据库约束处理 (chapters, mind_maps)
+    const stmt = db.prepare('DELETE FROM projects WHERE id = ? AND user_id = ?');
+    stmt.run(id, userId);
+}
+
+// 清理超过30天的项目 (定时任务用)
+export function cleanupRecycleBin(): number {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const result = db.prepare('DELETE FROM projects WHERE deleted_at IS NOT NULL AND deleted_at < ?').run(thirtyDaysAgo);
+    return result.changes;
+}
+
+// === Messages (Guestbook) ===
+export function createMessage(id: string, userId: string, content: string): Message {
+    const now = new Date().toISOString();
+    db.prepare('INSERT INTO messages (id, user_id, content, created_at) VALUES (?, ?, ?, ?)').run(id, userId, content, now);
+    return { id, user_id: userId, content, created_at: now };
+}
+
+export function getMessagesByUser(userId: string): Message[] {
+    return db.prepare('SELECT * FROM messages WHERE user_id = ? ORDER BY created_at DESC').all(userId) as Message[];
+}
+
+export function getAllMessagesAdmin(): Message[] {
+    return db.prepare(`
+        SELECT m.*, u.username 
+        FROM messages m 
+        LEFT JOIN users u ON m.user_id = u.id 
+        ORDER BY m.created_at DESC
+    `).all() as Message[];
+}
+
+export function replyMessage(id: string, reply: string): void {
+    const now = new Date().toISOString();
+    db.prepare('UPDATE messages SET reply = ?, reply_at = ? WHERE id = ?').run(reply, now, id);
+}
+
+// === Announcements ===
+export function createAnnouncement(title: string, content: string): Announcement {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    db.prepare('INSERT INTO announcements (id, title, content, is_published, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)').run(id, title, content, now, now);
+    return { id, title, content, is_published: 1, created_at: now, updated_at: now };
+}
+
+export function getPublishedAnnouncements(): Announcement[] {
+    return db.prepare('SELECT * FROM announcements WHERE is_published = 1 ORDER BY created_at DESC').all() as Announcement[];
+}
+
+export function getAllAnnouncementsAdmin(): Announcement[] {
+    return db.prepare('SELECT * FROM announcements ORDER BY created_at DESC').all() as Announcement[];
+}
+
+export function updateAnnouncement(id: string, title: string, content: string, isPublished: boolean): void {
+    const now = new Date().toISOString();
+    db.prepare('UPDATE announcements SET title = ?, content = ?, is_published = ?, updated_at = ? WHERE id = ?').run(title, content, isPublished ? 1 : 0, now, id);
+}
+
+export function deleteAnnouncement(id: string): void {
+    db.prepare('DELETE FROM announcements WHERE id = ?').run(id);
+}
+
+// ... existing helpers ...
+
 export function getNextAvailableApiKey(): ApiKey | undefined {
     const stmt = db.prepare('SELECT * FROM api_keys WHERE is_active = 1 ORDER BY last_used_at ASC LIMIT 1');
     return stmt.get() as ApiKey | undefined;
@@ -284,14 +373,7 @@ export function getNextAvailableApiKey(): ApiKey | undefined {
 
 export function updateApiKeyStats(id: string, latencyMs: number, tokenCount: number = 0): void {
     const now = new Date().toISOString();
-    const stmt = db.prepare(`
-        UPDATE api_keys 
-        SET last_used_at = ?, 
-            usage_count = usage_count + 1, 
-            total_tokens = total_tokens + ?, 
-            total_latency_ms = total_latency_ms + ?
-        WHERE id = ?
-    `);
+    const stmt = db.prepare(`UPDATE api_keys SET last_used_at = ?, usage_count = usage_count + 1, total_tokens = total_tokens + ?, total_latency_ms = total_latency_ms + ? WHERE id = ?`);
     stmt.run(now, tokenCount, latencyMs, id);
 }
 
@@ -303,193 +385,133 @@ export function getAllApiKeys(): ApiKey[] {
 export function createApiKey(key: string, provider: string = 'google'): void {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
-    const stmt = db.prepare(`
-        INSERT INTO api_keys (id, key, provider, is_active, last_used_at, created_at) 
-        VALUES (?, ?, ?, 1, '1970-01-01T00:00:00.000Z', ?)
-    `);
-    stmt.run(id, key, provider, now);
+    db.prepare(`INSERT INTO api_keys (id, key, provider, is_active, last_used_at, created_at) VALUES (?, ?, ?, 1, '1970-01-01T00:00:00.000Z', ?)`).run(id, key, provider, now);
 }
 
 export function deleteApiKey(id: string): void {
-    const stmt = db.prepare('DELETE FROM api_keys WHERE id = ?');
-    stmt.run(id);
+    db.prepare('DELETE FROM api_keys WHERE id = ?').run(id);
 }
 
 export function toggleApiKeyStatus(id: string, isActive: boolean): void {
-    const val = isActive ? 1 : 0;
-    const stmt = db.prepare('UPDATE api_keys SET is_active = ? WHERE id = ?');
-    stmt.run(val, id);
+    db.prepare('UPDATE api_keys SET is_active = ? WHERE id = ?').run(isActive ? 1 : 0, id);
 }
 
-// === Archives ===
 export function createArchive(id: string, userId: string, title: string, content: string): Archive {
-    const stmt = db.prepare('INSERT INTO archives (id, user_id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
-    stmt.run(id, userId, title, content, now, now);
+    db.prepare('INSERT INTO archives (id, user_id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, userId, title, content, now, now);
     return { id, user_id: userId, title, content, created_at: now, updated_at: now };
 }
 
 export function updateArchive(id: string, userId: string, title: string, content: string): void {
-    const stmt = db.prepare('UPDATE archives SET title = ?, content = ?, updated_at = ? WHERE id = ? AND user_id = ?');
     const now = new Date().toISOString();
-    stmt.run(title, content, now, id, userId);
+    db.prepare('UPDATE archives SET title = ?, content = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(title, content, now, id, userId);
 }
 
 export function getArchivesByUser(userId: string): Archive[] {
-    const stmt = db.prepare('SELECT * FROM archives WHERE user_id = ? ORDER BY updated_at DESC');
-    return stmt.all(userId) as Archive[];
+    return db.prepare('SELECT * FROM archives WHERE user_id = ? ORDER BY updated_at DESC').all(userId) as Archive[];
 }
 
 export function getArchiveById(id: string): Archive | undefined {
-    const stmt = db.prepare('SELECT * FROM archives WHERE id = ?');
-    return stmt.get(id) as Archive | undefined;
+    return db.prepare('SELECT * FROM archives WHERE id = ?').get(id) as Archive | undefined;
 }
 
 export function deleteArchive(id: string, userId: string): void {
-    const stmt = db.prepare('DELETE FROM archives WHERE id = ? AND user_id = ?');
-    stmt.run(id, userId);
+    db.prepare('DELETE FROM archives WHERE id = ? AND user_id = ?').run(id, userId);
 }
 
-// === Idea Cards ===
 export function createIdeaCard(id: string, userId: string, data: IdeaCardData): DbIdeaCard {
-    const stmt = db.prepare('INSERT INTO idea_cards (id, user_id, title, content, created_at) VALUES (?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
     const contentStr = JSON.stringify(data);
-    stmt.run(id, userId, data.title, contentStr, now);
+    db.prepare('INSERT INTO idea_cards (id, user_id, title, content, created_at) VALUES (?, ?, ?, ?, ?)').run(id, userId, data.title, contentStr, now);
     return { id, user_id: userId, title: data.title, content: contentStr, created_at: now };
 }
 
 export function getIdeaCardsByUser(userId: string): DbIdeaCard[] {
-    const stmt = db.prepare('SELECT * FROM idea_cards WHERE user_id = ? ORDER BY created_at DESC');
-    return stmt.all(userId) as DbIdeaCard[];
+    return db.prepare('SELECT * FROM idea_cards WHERE user_id = ? ORDER BY created_at DESC').all(userId) as DbIdeaCard[];
 }
 
 export function deleteIdeaCard(id: string, userId: string): void {
-    const stmt = db.prepare('DELETE FROM idea_cards WHERE id = ? AND user_id = ?');
-    stmt.run(id, userId);
+    db.prepare('DELETE FROM idea_cards WHERE id = ? AND user_id = ?').run(id, userId);
 }
 
-// === Projects ===
-export function createProject(id: string, userId: string, title: string, description: string, ideaCardId?: string): DbProject {
-    const stmt = db.prepare('INSERT INTO projects (id, user_id, title, description, idea_card_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    const now = new Date().toISOString();
-    stmt.run(id, userId, title, description, ideaCardId || null, now, now);
-    return { id, user_id: userId, title, description, idea_card_id: ideaCardId, created_at: now, updated_at: now };
-}
-
-export function getProjectsByUser(userId: string): DbProject[] {
-    const stmt = db.prepare('SELECT * FROM projects WHERE user_id = ? ORDER BY updated_at DESC');
-    return stmt.all(userId) as DbProject[];
-}
-
-export function getProjectById(id: string): DbProject | undefined {
-    const stmt = db.prepare('SELECT * FROM projects WHERE id = ?');
-    return stmt.get(id) as DbProject | undefined;
-}
-
-export function deleteProject(id: string, userId: string): void {
-    const stmt = db.prepare('DELETE FROM projects WHERE id = ? AND user_id = ?');
-    stmt.run(id, userId);
-}
-
-// === Chapters ===
 export function createChapter(id: string, projectId: string, title: string, content: string, orderIndex: number): DbChapter {
-    const stmt = db.prepare('INSERT INTO chapters (id, project_id, title, content, order_index, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
-    stmt.run(id, projectId, title, content, orderIndex, now);
+    db.prepare('INSERT INTO chapters (id, project_id, title, content, order_index, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, projectId, title, content, orderIndex, now);
     return { id, project_id: projectId, title, content, order_index: orderIndex, updated_at: now };
 }
 
 export function getChaptersByProject(projectId: string): Omit<DbChapter, 'content'>[] {
-    const stmt = db.prepare('SELECT id, project_id, title, order_index, updated_at FROM chapters WHERE project_id = ? ORDER BY order_index ASC');
-    return stmt.all(projectId) as Omit<DbChapter, 'content'>[];
+    return db.prepare('SELECT id, project_id, title, order_index, updated_at FROM chapters WHERE project_id = ? ORDER BY order_index ASC').all(projectId) as Omit<DbChapter, 'content'>[];
 }
 
 export function getChapterById(id: string): DbChapter | undefined {
-    const stmt = db.prepare('SELECT * FROM chapters WHERE id = ?');
-    return stmt.get(id) as DbChapter | undefined;
+    return db.prepare('SELECT * FROM chapters WHERE id = ?').get(id) as DbChapter | undefined;
 }
 
 export function updateChapter(id: string, projectId: string, title: string, content: string): void {
-    const stmt = db.prepare('UPDATE chapters SET title = ?, content = ?, updated_at = ? WHERE id = ? AND project_id = ?');
     const now = new Date().toISOString();
-    stmt.run(title, content, now, id, projectId);
+    db.prepare('UPDATE chapters SET title = ?, content = ?, updated_at = ? WHERE id = ? AND project_id = ?').run(title, content, now, id, projectId);
 }
 
 export function deleteChapter(id: string, projectId: string): void {
-    const stmt = db.prepare('DELETE FROM chapters WHERE id = ? AND project_id = ?');
-    stmt.run(id, projectId);
+    db.prepare('DELETE FROM chapters WHERE id = ? AND project_id = ?').run(id, projectId);
 }
 
-// === Mind Maps ===
 export function createMindMap(id: string, projectId: string, title: string, data: string): DbMindMap {
-    const stmt = db.prepare('INSERT INTO mind_maps (id, project_id, title, data, updated_at) VALUES (?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
-    stmt.run(id, projectId, title, data, now);
+    db.prepare('INSERT INTO mind_maps (id, project_id, title, data, updated_at) VALUES (?, ?, ?, ?, ?)').run(id, projectId, title, data, now);
     return { id, project_id: projectId, title, data, updated_at: now };
 }
 
 export function getMindMapsByProject(projectId: string): Omit<DbMindMap, 'data'>[] {
-    const stmt = db.prepare('SELECT id, project_id, title, updated_at FROM mind_maps WHERE project_id = ? ORDER BY updated_at DESC');
-    return stmt.all(projectId) as Omit<DbMindMap, 'data'>[];
+    return db.prepare('SELECT id, project_id, title, updated_at FROM mind_maps WHERE project_id = ? ORDER BY updated_at DESC').all(projectId) as Omit<DbMindMap, 'data'>[];
 }
 
 export function getMindMapById(id: string): DbMindMap | undefined {
-    const stmt = db.prepare('SELECT * FROM mind_maps WHERE id = ?');
-    return stmt.get(id) as DbMindMap | undefined;
+    return db.prepare('SELECT * FROM mind_maps WHERE id = ?').get(id) as DbMindMap | undefined;
 }
 
 export function updateMindMap(id: string, projectId: string, title: string, data: string): void {
-    const stmt = db.prepare('UPDATE mind_maps SET title = ?, data = ?, updated_at = ? WHERE id = ? AND project_id = ?');
     const now = new Date().toISOString();
-    stmt.run(title, data, now, id, projectId);
+    db.prepare('UPDATE mind_maps SET title = ?, data = ?, updated_at = ? WHERE id = ? AND project_id = ?').run(title, data, now, id, projectId);
 }
 
 export function deleteMindMap(id: string, projectId: string): void {
-    const stmt = db.prepare('DELETE FROM mind_maps WHERE id = ? AND project_id = ?');
-    stmt.run(id, projectId);
+    db.prepare('DELETE FROM mind_maps WHERE id = ? AND project_id = ?').run(id, projectId);
 }
 
-// === Prompts ===
 export function createUserPrompt(id: string, userId: string, type: PromptType, title: string, content: string): DbUserPrompt {
-    const stmt = db.prepare('INSERT INTO user_prompts (id, user_id, type, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
-    stmt.run(id, userId, type, title, content, now, now);
+    db.prepare('INSERT INTO user_prompts (id, user_id, type, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, userId, type, title, content, now, now);
     return { id, user_id: userId, type, title, content, created_at: now, updated_at: now };
 }
 
 export function getUserPrompts(userId: string): DbUserPrompt[] {
-    const stmt = db.prepare('SELECT * FROM user_prompts WHERE user_id = ? ORDER BY created_at DESC');
-    return stmt.all(userId) as DbUserPrompt[];
+    return db.prepare('SELECT * FROM user_prompts WHERE user_id = ? ORDER BY created_at DESC').all(userId) as DbUserPrompt[];
 }
 
 export function updateUserPrompt(id: string, userId: string, title: string, content: string): void {
-    const stmt = db.prepare('UPDATE user_prompts SET title = ?, content = ?, updated_at = ? WHERE id = ? AND user_id = ?');
     const now = new Date().toISOString();
-    stmt.run(title, content, now, id, userId);
+    db.prepare('UPDATE user_prompts SET title = ?, content = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(title, content, now, id, userId);
 }
 
 export function deleteUserPrompt(id: string, userId: string): void {
-    const stmt = db.prepare('DELETE FROM user_prompts WHERE id = ? AND user_id = ?');
-    stmt.run(id, userId);
+    db.prepare('DELETE FROM user_prompts WHERE id = ? AND user_id = ?').run(id, userId);
 }
 
-// === Admin ===
 export function getSystemStats() {
     const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
     const archiveCount = db.prepare('SELECT COUNT(*) as count FROM archives').get() as { count: number };
     const cardCount = db.prepare('SELECT COUNT(*) as count FROM idea_cards').get() as { count: number };
-    const projectCount = db.prepare('SELECT COUNT(*) as count FROM projects').get() as { count: number };
+    const projectCount = db.prepare('SELECT COUNT(*) as count FROM projects WHERE deleted_at IS NULL').get() as { count: number };
     const keyCount = db.prepare('SELECT COUNT(*) as count FROM api_keys WHERE is_active = 1').get() as { count: number };
-    const lastActive = db.prepare('SELECT updated_at FROM archives ORDER BY updated_at DESC LIMIT 1').get() as { updated_at: string } | undefined;
-
     return {
         totalUsers: userCount.count,
         totalArchives: archiveCount.count,
         totalCards: cardCount.count,
         totalProjects: projectCount.count,
         activeKeys: keyCount.count,
-        lastActiveTime: lastActive?.updated_at || '无数据'
+        lastActiveTime: '实时'
     };
 }
 
@@ -498,21 +520,14 @@ export function getAllUsers(): User[] {
 }
 
 export function deleteUserFull(userId: string) {
-    const deleteArchives = db.prepare('DELETE FROM archives WHERE user_id = ?');
-    const deleteCards = db.prepare('DELETE FROM idea_cards WHERE user_id = ?');
-    const deleteProjects = db.prepare('DELETE FROM projects WHERE user_id = ?');
-    const deletePrompts = db.prepare('DELETE FROM user_prompts WHERE user_id = ?');
-    const deleteTransactions = db.prepare('DELETE FROM user_transactions WHERE user_id = ?');
-    const deleteUser = db.prepare('DELETE FROM users WHERE id = ?');
-    
     const transaction = db.transaction(() => {
-        deleteArchives.run(userId);
-        deleteCards.run(userId);
-        deleteProjects.run(userId);
-        deletePrompts.run(userId);
-        deleteTransactions.run(userId);
-        deleteUser.run(userId);
+        db.prepare('DELETE FROM archives WHERE user_id = ?').run(userId);
+        db.prepare('DELETE FROM idea_cards WHERE user_id = ?').run(userId);
+        db.prepare('DELETE FROM projects WHERE user_id = ?').run(userId);
+        db.prepare('DELETE FROM user_prompts WHERE user_id = ?').run(userId);
+        db.prepare('DELETE FROM user_transactions WHERE user_id = ?').run(userId);
+        db.prepare('DELETE FROM messages WHERE user_id = ?').run(userId);
+        db.prepare('DELETE FROM users WHERE id = ?').run(userId);
     });
-    
     transaction();
 }

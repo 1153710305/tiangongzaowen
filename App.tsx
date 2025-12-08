@@ -114,7 +114,10 @@ export default function App() {
     };
 
     const handleDeleteProject = async (pid: string) => {
-        await apiService.deleteProject(pid); setProjectList(prev => prev.filter(p => p.id !== pid));
+        // 父组件只处理状态移除（假设是放入回收站），具体逻辑在 ProjectListModal 中处理
+        // 但这里为了保持列表同步，当 ProjectListModal 关闭时会重新获取
+        // 这里仅作兼容
+        setProjectList(prev => prev.filter(p => p.id !== pid));
     };
 
     const handleLogout = () => {
@@ -128,13 +131,13 @@ export default function App() {
             {/* 移除 font-sans，添加 dark:text-slate-200 以支持动态字体和主题 */}
             <div className="flex h-screen bg-dark text-slate-900 dark:text-slate-200 transition-colors duration-300">
                 {currentProject ? (
-                    <ProjectIDE project={currentProject} onBack={() => setCurrentProject(null)} />
+                    <ProjectIDE project={currentProject} onBack={() => { setCurrentProject(null); loadUserData(); }} />
                 ) : (
                     <>
                         <AppSidebar 
                             user={user} projectCount={projectList.length} savedCardsCount={savedCards.length}
                             showCardHistory={showCardHistory} setShowCardHistory={setShowCardHistory}
-                            onShowProjectList={() => setShowProjectList(true)} onLogout={handleLogout} onShowAuthModal={() => setShowAuthModal(true)}
+                            onShowProjectList={() => { loadUserData(); setShowProjectList(true); }} onLogout={handleLogout} onShowAuthModal={() => setShowAuthModal(true)}
                             archives={archives} currentArchiveId={currentArchiveId} currentArchiveTitle={currentArchiveTitle}
                             setCurrentArchiveTitle={setCurrentArchiveTitle} onLoadArchive={loadArchive} onDeleteArchive={async (id, e) => { e.stopPropagation(); await apiService.deleteArchive(id); setArchives(prev => prev.filter(a => a.id !== id)); }}
                             onResetArchive={resetArchive} onSaveArchive={() => saveArchive(currentArchiveId, currentArchiveTitle)} isSavingArchive={isSaving}
@@ -151,7 +154,7 @@ export default function App() {
                         />
 
                         {selectedCard && <IdeaCardDetailModal card={selectedCard} onClose={() => setSelectedCard(null)} onProjectCreated={async () => { await loadUserData(); const projs = await apiService.getProjects(); if (projs.length) setCurrentProject(projs[0]); }} />}
-                        {showProjectList && <ProjectListModal projects={projectList} onClose={() => setShowProjectList(false)} onSelectProject={p => { setShowProjectList(false); setCurrentProject(p); }} onDeleteProject={handleDeleteProject} />}
+                        {showProjectList && <ProjectListModal projects={projectList} onClose={() => { setShowProjectList(false); loadUserData(); }} onSelectProject={p => { setShowProjectList(false); setCurrentProject(p); }} onDeleteProject={handleDeleteProject} />}
                     </>
                 )}
 
