@@ -24,12 +24,12 @@ export const DEFAULT_NOVEL_SETTINGS: NovelSettings = {
  * 2. CRA 环境变量 (REACT_APP_API_URL)
  * 3. 本地默认值 (http://localhost:3000)
  */
-export const API_BASE_URL = 
+export const API_BASE_URL =
     // 使用类型断言 (as any) 规避 TypeScript 报错: Property 'env' does not exist on type 'ImportMeta'
-    (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_API_BASE_URL) || 
+    (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_API_BASE_URL) ||
     // 兼容 Create React App 或其他 Node.js 环境的全局 process.env
-    (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || 
-    'http://localhost:3000';
+    (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) ||
+    'http://192.168.1.19:3000';
 
 /**
  * API 接口端点集合
@@ -40,14 +40,14 @@ export const API_ENDPOINTS = {
     GENERATE: `${API_BASE_URL}/api/generate`,
     /** 配置池接口：用于获取后端的随机素材配置 */
     CONFIG: `${API_BASE_URL}/api/config/pool`,
-    
+
     // === 认证接口 ===
     AUTH_LOGIN: `${API_BASE_URL}/api/auth/login`,
     AUTH_REGISTER: `${API_BASE_URL}/api/auth/register`,
-    
+
     // === 存档接口 (旧版) ===
     ARCHIVES: `${API_BASE_URL}/api/archives`,
-    
+
     // === 脑洞卡片接口 ===
     CARDS: `${API_BASE_URL}/api/cards`,
 
