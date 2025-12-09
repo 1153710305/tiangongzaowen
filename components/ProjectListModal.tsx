@@ -12,7 +12,7 @@ interface Props {
 }
 
 export const ProjectListModal: React.FC<Props> = ({ projects: activeProjects, onClose, onSelectProject, onDeleteProject }) => {
-    
+
     const [tab, setTab] = useState<'active' | 'trash'>('active');
     const [trashProjects, setTrashProjects] = useState<Project[]>([]);
     const [isLoadingTrash, setIsLoadingTrash] = useState(false);
@@ -41,16 +41,16 @@ export const ProjectListModal: React.FC<Props> = ({ projects: activeProjects, on
             setTrashProjects(prev => prev.filter(p => p.id !== id));
             alert("项目已恢复");
             // 刷新列表需要由父组件重新获取，这里简单提示用户重新打开
-        } catch(e) { alert("恢复失败"); }
+        } catch (e) { alert("恢复失败"); }
     };
 
     const handlePermanentDelete = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-        if(!confirm("⚠️ 警告：彻底删除后无法找回！确定吗？")) return;
+        if (!confirm("⚠️ 警告：彻底删除后无法找回！确定吗？")) return;
         try {
             await apiService.permanentDeleteProject(id);
             setTrashProjects(prev => prev.filter(p => p.id !== id));
-        } catch(e) { alert("删除失败"); }
+        } catch (e) { alert("删除失败"); }
     };
 
     const displayList = tab === 'active' ? activeProjects : trashProjects;
@@ -58,7 +58,7 @@ export const ProjectListModal: React.FC<Props> = ({ projects: activeProjects, on
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">
             <div className="bg-paper border border-slate-700 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col relative overflow-hidden">
-                
+
                 {/* Header */}
                 <div className="p-6 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
                     <div>
@@ -87,27 +87,36 @@ export const ProjectListModal: React.FC<Props> = ({ projects: activeProjects, on
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {displayList.map(project => (
-                                <div 
+                                <div
                                     key={project.id}
                                     onClick={() => tab === 'active' && onSelectProject(project)}
                                     className={`bg-slate-800 border border-slate-700 rounded-xl p-5 transition-all group relative flex flex-col h-48 ${tab === 'active' ? 'cursor-pointer hover:border-indigo-500 hover:shadow-lg' : 'opacity-75'}`}
                                 >
                                     {tab === 'active' && <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500 rounded-l-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>}
-                                    
+
                                     <div className="flex justify-between items-start mb-2">
                                         <h3 className="font-bold text-lg text-white truncate pr-2">{project.title}</h3>
                                     </div>
-                                    
+
                                     <p className="text-sm text-slate-400 line-clamp-3 mb-4 flex-1">
                                         {project.description || '无简介'}
                                     </p>
-                                    
+
                                     <div className="flex justify-between items-end border-t border-slate-700/50 pt-3">
                                         <span className="text-xs text-slate-500">
-                                            {new Date(project.updated_at).toLocaleDateString()} 更新
+                                            {tab === 'active' ? (
+                                                `${new Date(project.updated_at).toLocaleDateString()} 更新`
+                                            ) : (
+                                                (() => {
+                                                    const deletedAt = project.deleted_at ? new Date(project.deleted_at) : new Date();
+                                                    const expireAt = new Date(deletedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+                                                    const daysLeft = Math.ceil((expireAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                                                    return <span className="text-orange-400 font-medium">⚠️ {daysLeft > 0 ? daysLeft : 0}天后清除</span>;
+                                                })()
+                                            )}
                                         </span>
                                         {tab === 'active' ? (
-                                            <button 
+                                            <button
                                                 onClick={(e) => handleDelete(e, project.id)}
                                                 className="text-slate-600 hover:text-red-400 p-1 rounded hover:bg-slate-700 transition-colors"
                                                 title="移入回收站"
@@ -121,7 +130,7 @@ export const ProjectListModal: React.FC<Props> = ({ projects: activeProjects, on
                                             </div>
                                         )}
                                     </div>
-                                    
+
                                     {tab === 'active' && <div className="absolute inset-0 bg-indigo-500/5 opacity-0 group-hover:opacity-100 rounded-xl transition-opacity pointer-events-none"></div>}
                                 </div>
                             ))}

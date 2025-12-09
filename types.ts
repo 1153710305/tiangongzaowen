@@ -45,6 +45,7 @@ export interface Project {
     idea_card_id?: string;
     created_at: string;
     updated_at: string;
+    deleted_at?: string;
 }
 
 export interface Chapter {
