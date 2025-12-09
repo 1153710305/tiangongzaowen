@@ -40,6 +40,109 @@
 
 ---
 
+---
+
+## 🚀 服务器部署详细指南 (Server)
+
+本项目的服务端基于 Node.js 环境，推荐部署在 Linux 服务器 (如 Ubuntu/CentOS) 上。
+
+### 1. 环境准备
+*   **Node.js**: v18.0.0 或更高版本
+*   **PM2**: 用于进程守护 (`npm install -g pm2`)
+*   **Nginx** (可选): 用于反向代理和 SSL 配置
+
+### 2. 部署步骤
+1.  **上传代码**: 将项目代码上传至服务器。
+2.  **安装依赖**:
+    ```bash
+    npm install
+    ```
+3.  **配置环境变量**:
+    复制 `.env.example` 为 `.env` (如果没有则新建)，并填入必要信息：
+    ```env
+    PORT=3000
+    DB_PATH=skycraft.db
+    JWT_SECRET=your_secure_jwt_secret
+    GEMINI_API_KEY=your_google_api_key
+    ADMIN_PASSWORD=your_admin_password
+    ```
+4.  **启动服务**:
+    ```bash
+    # 方式一：直接运行 (开发调试)
+    npx tsx server/index.ts
+
+    # 方式二：使用 PM2 (生产环境推荐)
+    pm2 start "npx tsx server/index.ts" --name skycraft-backend
+    pm2 save
+    pm2 startup
+    ```
+
+---
+
+## 📦 前端部署手册 (Client)
+
+### 方案 A: 静态托管 (Vercel) - 推荐
+
+由于本项目采用前后端分离架构，推荐将前端部署在 Vercel 等 CDN 边缘网络，后端部署在 VPS。
+
+#### 1. 准备工作
+*   确保后端 API 已经部署并可通过公网访问 (例如 `https://api.yourdomain.com`)。
+*   **注意**: Vercel 部署的是前端静态资源，它需要通过公网访问你的后端 API。
+
+#### 2. Vercel 部署步骤
+1.  登录 [Vercel](https://vercel.com) 并连接你的 Git 仓库。
+2.  **Import Project**: 选择本项目仓库。
+3.  **Build Settings**:
+    *   **Framework Preset**: Vite
+    *   **Build Command**: `npm run build`
+    *   **Output Directory**: `dist`
+4.  **Environment Variables (环境变量)**:
+    *   在 Vercel 项目设置中添加以下变量，指向你的后端地址：
+    *   `VITE_API_BASE_URL`: `https://api.yourdomain.com` (注意不要带末尾的 /)
+5.  **Deploy**: 点击部署。
+
+### 方案 B: 统一通过 Nginx 部署 (VPS)
+
+如果你只有一台服务器，可以使用 Nginx 同时托管前端静态文件和反向代理后端 API。
+
+1.  **构建前端**:
+    在本地或服务器上执行构建命令：
+    ```bash
+    npm run build
+    ```
+    构建完成后，会生成 `dist/` 目录。
+
+2.  **配置 Nginx**:
+    编辑 Nginx 配置文件 (如 `/etc/nginx/sites-available/default`)：
+
+    ```nginx
+    server {
+        listen 80;
+        server_name yourdomain.com;
+
+        # 前端静态文件
+        location / {
+            root /path/to/your/project/dist;
+            try_files $uri $uri/ /index.html;
+        }
+
+        # 后端 API 反向代理
+        location /api {
+            proxy_pass http://localhost:3000;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+        }
+        
+        # 后台管理 API
+        location /admin {
+            proxy_pass http://localhost:3000;
+        }
+    }
+    ```
+3.  **重启 Nginx**: `sudo systemctl restart nginx`
+
+---
+
 ## 🔐 后台管理系统 (Admin Dashboard)
 
 访问地址: `http://YOUR_SERVER_IP:3000/admin` (默认密码: `admin123`)

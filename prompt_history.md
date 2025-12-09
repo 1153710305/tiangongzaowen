@@ -12,6 +12,8 @@
         - 新增了 `/api` 和 `/admin` 的反向代理配置，将请求转发至 `http://localhost:3000`，解决了本地浏览器无法获取商品信息和用户数据的问题。
     - **User Experience**:
         - 解决了因 API 请求 404 导致的用户状态显示异常（如已登录但无法加载数据）的问题。
+        - **Optimization**: 优化前后端端口冲突处理 (Vite 5173 / Server 3000)。
+        - **Documentation**: 新增详细的服务器部署指南 (PM2/Nginx) 与前端 Vercel 部署手册。
 
 ## 版本 v3.3.0 (API Lab & Localization Optimization)
 
