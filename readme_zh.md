@@ -59,6 +59,10 @@
 
 ## 📝 版本历史 (Changelog)
 
+**v3.3.1 (Proxy Fixes)**
+*   **Fix (Dev)**: 修复本地开发环境代理配置，解决商品列表和用户数据无法加载的问题。
+*   **Optimization**: 优化前后端端口冲突处理 (Vite 5173 / Server 3000)。
+
 **v3.3.0 (API Lab & Localization)**
 *   **Feature (Admin)**: 后台管理系统新增“API 实验室”，提供可视化接口测试、文档浏览与监控。
 *   **Fix**: 修复思维导图添加节点无反应的问题 (UUID 兼容性)。

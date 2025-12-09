@@ -3,6 +3,16 @@
 
 > 记录每次代码迭代后固化的核心 Prompt 逻辑，便于回溯和优化。
 
+## 版本 v3.3.1 (Proxy Fixes)
+
+### 功能变更
+- **Development Environment**:
+    - **Vite Proxy**: 修复了本地开发环境下的代理配置问题。
+        - 移除了 `vite.config.ts` 中的固定端口 3000，允许 Vite 自动选择可用端口（通常为 5173），避免与后端服务端口冲突。
+        - 新增了 `/api` 和 `/admin` 的反向代理配置，将请求转发至 `http://localhost:3000`，解决了本地浏览器无法获取商品信息和用户数据的问题。
+    - **User Experience**:
+        - 解决了因 API 请求 404 导致的用户状态显示异常（如已登录但无法加载数据）的问题。
+
 ## 版本 v3.3.0 (API Lab & Localization Optimization)
 
 ### 功能变更
