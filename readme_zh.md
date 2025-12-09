@@ -59,6 +59,11 @@
 
 ## 📝 版本历史 (Changelog)
 
+**v3.4.0 (UX Enhancements)**
+*   **Feature (Frontend)**: 侧边栏支持折叠，优化小屏体验。
+*   **Feature (Frontend)**: 新增用户个人信息面板，查看详细账户状态。
+*   **Feature (Frontend)**: 优化公告通知机制，未读公告自动弹窗提醒。
+
 **v3.3.1 (Proxy Fixes)**
 *   **Fix (Dev)**: 修复本地开发环境代理配置，解决商品列表和用户数据无法加载的问题。
 *   **Optimization**: 优化前后端端口冲突处理 (Vite 5173 / Server 3000)。
