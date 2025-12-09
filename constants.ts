@@ -29,7 +29,7 @@ export const API_BASE_URL =
     (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_API_BASE_URL) ||
     // 兼容 Create React App 或其他 Node.js 环境的全局 process.env
     (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) ||
-    'https://tiangongzaowenserver-3ihai9l3p-1153710305s-projects.vercel.app/:3000';
+    'https://tiangongzaowenserver-27e6dnt29-1153710305s-projects.vercel.app';
 
 /**
  * API 接口端点集合
