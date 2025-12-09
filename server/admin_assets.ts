@@ -73,12 +73,22 @@ export const ADMIN_SCRIPT = `
             },
 
             get filteredLogs() {
-                if (!this.logs || !Array.isArray(this.logs)) return [];
-                return this.logs.filter(log => {
+                if (!this.logs || !Array.isArray(this.logs)) {
+                    console.log('[Debug] filteredLogs: this.logs is not an array', this.logs);
+                    return [];
+                }
+                const res = this.logs.filter(log => {
                     const matchesLevel = this.logLevelFilter ? log.level === this.logLevelFilter : true;
-                    const matchesSearch = this.logSearch ? (log.message.toLowerCase().includes(this.logSearch.toLowerCase()) || (log.meta && JSON.stringify(log.meta).toLowerCase().includes(this.logSearch.toLowerCase()))) : true;
+                    const msg = log.message || '';
+                    const search = this.logSearch ? this.logSearch.toLowerCase() : '';
+                    if (!search) return matchesLevel;
+                    
+                    const matchesSearch = msg.toLowerCase().includes(search) || 
+                                          (log.meta && JSON.stringify(log.meta).toLowerCase().includes(search));
                     return matchesLevel && matchesSearch;
                 });
+                console.log('[Debug] filteredLogs input:', this.logs.length, 'output:', res.length);
+                return res;
             },
 
             init() {
@@ -335,7 +345,17 @@ export const ADMIN_SCRIPT = `
             },
 
             // === Logs ===
-            async fetchLogs() { try { const res = await this.authedFetch('/admin/api/logs'); this.logs = res; } catch (e) {} },
+            async fetchLogs() { 
+                try { 
+                    console.log('[Debug] Fetching logs...'); 
+                    const res = await this.authedFetch('/admin/api/logs'); 
+                    console.log('[Debug] Logs response:', res); 
+                    this.logs = Array.isArray(res) ? res : []; 
+                } catch (e) { 
+                    console.error('[Debug] Fetch logs error:', e); 
+                    this.logs = []; 
+                } 
+            },
             toggleAutoRefresh() { 
                 if (this.isAutoRefresh) { 
                     clearInterval(this.logInterval); 
