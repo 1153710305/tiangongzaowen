@@ -69,7 +69,7 @@ export default function App() {
             }
             addToHistory(Role.MODEL, finalContent);
             setGeneratedContent('');
-            if (currentArchiveId && step !== WorkflowStep.IDEA) {
+            if (currentArchiveId || step === WorkflowStep.IDEA || step === WorkflowStep.ANALYSIS_IDEA) {
                 saveArchive(currentArchiveId, currentArchiveTitle, [...history, { id: Date.now().toString(), role: Role.MODEL, content: finalContent, timestamp: Date.now() }]);
             }
         } catch (error: any) {
