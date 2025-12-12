@@ -179,7 +179,19 @@ app.post('/api/generate', async (c) => {
                 }
             } catch (err: any) {
                 await writer.write(encoder.encode(`\n[Error: ${err.message}]`));
-            } finally { await writer.close(); }
+            } finally {
+                await writer.close();
+                // Enhanced Logging for AI Tasks
+                logger.info("AI Generation Task Completed", {
+                    systemInstruction: SYSTEM_INSTRUCTION,
+                    context: prompt,
+                    response: fullText,
+                    tokens: totalTokens,
+                    model: modelName,
+                    apiKey: `...${apiKeyData.key.slice(-4)}`,
+                    duration: `${Date.now() - startTime}ms`
+                });
+            }
         })();
 
         return c.newResponse(readable, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Transfer-Encoding': 'chunked' } });

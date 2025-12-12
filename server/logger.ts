@@ -39,8 +39,8 @@ class ServerLogger {
             [LogLevel.ERROR]: '\x1b[31m%s\x1b[0m', // Red
             [LogLevel.DEBUG]: '\x1b[90m%s\x1b[0m', // Gray
         };
-        
-        const metaStr = entry.meta ? JSON.stringify(entry.meta) : '';
+
+        const metaStr = entry.meta ? JSON.stringify(entry.meta, null, 2) : '';
         console.log(colorMap[entry.level], `[${entry.timestamp}] [${entry.level}] ${entry.message} ${metaStr}`);
 
         // 存入内存队列
