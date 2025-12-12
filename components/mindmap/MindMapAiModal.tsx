@@ -41,8 +41,12 @@ export const MindMapAiModal: React.FC<Props> = ({
     // Chapter Mode Specific
     const [chapters, setChapters] = useState<Chapter[]>([]);
     const [preChapterId, setPreChapterId] = useState<string>('');
-    const [nextChapterId, setNextChapterId] = useState<string>('');
+    const [nextSiblingId, setNextSiblingId] = useState<string>('');
     const [isChapterSaved, setIsChapterSaved] = useState(false);
+
+    // Topology State
+    const [isChapterNode, setIsChapterNode] = useState(false);
+    const [siblingNodes, setSiblingNodes] = useState<MindMapNode[]>([]);
 
     // Context Menu State
     const aiTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -53,7 +57,18 @@ export const MindMapAiModal: React.FC<Props> = ({
     const [aiActiveMapId, setAiActiveMapId] = useState<string | null>(null);
     const [aiNodeOptions, setAiNodeOptions] = useState<{ id: string, label: string }[]>([]);
 
-    // Init
+    // Helper: Find Parent
+    const findParent = (root: MindMapNode, targetId: string): MindMapNode | null => {
+        if (!root.children) return null;
+        for (const child of root.children) {
+            if (child.id === targetId) return root;
+            const res = findParent(child, targetId);
+            if (res) return res;
+        }
+        return null;
+    }
+
+    // Init & Topology Analysis
     useEffect(() => {
         setAiPrompt(`基于“${node.label}”，请生成...`);
         apiService.getAiModels().then(c => {
@@ -61,14 +76,48 @@ export const MindMapAiModal: React.FC<Props> = ({
             setAiModel(c.defaultModel);
         });
 
-        // Check if we are in "章节细纲" branch? Optional but good UX. 
-        // Always fetch chapters just in case user switches tab.
-        apiService.getProjectStructure(projectId).then(struct => {
-            setChapters(struct.chapters.sort((a, b) => a.order_index - b.order_index));
-        });
-    }, []);
+        const fetchContext = async () => {
+            // 1. Fetch Chapters
+            const struct = await apiService.getProjectStructure(projectId);
+            const sortedChapters = struct.chapters.sort((a, b) => a.order_index - b.order_index);
+            setChapters(sortedChapters);
 
-    // --- Context Menu Logic (Extracted) ---
+            // 2. Analyze Topology (Am I a Chapter Outline Node?)
+            const parent = findParent(rootNode, node.id);
+            const isChildOfOutline = parent && (parent.label === '章节细纲' || parent.label.includes('细纲') || parent.label === 'Chapter Outline');
+
+            setIsChapterNode(!!isChildOfOutline);
+
+            // 3. Auto-Selection Logic
+            if (isChildOfOutline && parent?.children) {
+                setSiblingNodes(parent.children);
+                const myIndex = parent.children.findIndex(c => c.id === node.id);
+
+                // Auto Select Previous Chapter (Match by Title or Index)
+                if (myIndex > 0) {
+                    const prevSibling = parent.children[myIndex - 1];
+                    // Try match by title
+                    const matchTitle = sortedChapters.find(c => c.title === prevSibling.label);
+                    if (matchTitle) setPreChapterId(matchTitle.id);
+                }
+
+                // Auto Select Next Chapter (Sibling Node)
+                if (myIndex >= 0 && myIndex < parent.children.length - 1) {
+                    const nextSibling = parent.children[myIndex + 1];
+                    setNextSiblingId(nextSibling.id);
+                }
+            }
+
+            // Determine initial tab
+            if (isChildOfOutline) {
+                setActiveTab('chapter');
+                setAiPrompt('请基于此节点大纲撰写正文...');
+            }
+        }
+        fetchContext();
+    }, [node.id, rootNode, projectId]);
+
+    // --- Context Menu Logic ---
     const updateAiCursorCoords = () => {
         if (!aiTextareaRef.current || !aiMirrorRef.current) return;
         const textarea = aiTextareaRef.current;
@@ -114,12 +163,9 @@ export const MindMapAiModal: React.FC<Props> = ({
                 fetchMapNodes(mid);
             } else {
                 setAiActiveMapId(mapId);
-                if (rootNode) {
-                    const flatNodes = getAllNodesFlat(rootNode);
-                    setAiNodeOptions(flatNodes.map(n => ({ id: n.id, label: n.label })));
-                } else {
-                    setAiNodeOptions([]);
-                }
+                // Use rootNode prop
+                const flatNodes = getAllNodesFlat(rootNode);
+                setAiNodeOptions(flatNodes.map(n => ({ id: n.id, label: n.label })));
             }
             return;
         }
@@ -184,11 +230,9 @@ export const MindMapAiModal: React.FC<Props> = ({
                     } catch (e) { }
                 } else if (type === '引用节点') {
                     if (id1 === mapId) {
-                        // Local Ref
                         const target = getAllNodesFlat(rootNode).find(n => n.id === id2);
                         if (target) referencesData.push(`【参考节点结构：${target.label}】\n${serializeNodeTree(target)}`);
                     } else {
-                        // Remote Ref
                         try {
                             const map = await apiService.getMindMapDetail(projectId, id1);
                             if (map?.data) {
@@ -218,19 +262,24 @@ export const MindMapAiModal: React.FC<Props> = ({
                 // Chapter Mode
                 let preContent = '';
                 let nextContent = '';
+
+                // Get pre-chapter (Content from DB)
                 if (preChapterId) {
                     try { const c = await apiService.getChapterDetail(projectId, preChapterId); preContent = c.content; } catch (e) { }
                 }
-                if (nextChapterId) { // Usually next chapter content is empty if we are writing it, but maybe outlines?
-                    // Wait, "next chapter" usually implies we are inserting. Or maybe next chapter outline?
-                    // For now let's just fetch content. If empty it's empty.
-                    try { const c = await apiService.getChapterDetail(projectId, nextChapterId); nextContent = c.title + '\n' + c.content; } catch (e) { }
+
+                // Get next-chapter (Structure from Sibling Node)
+                if (nextSiblingId) {
+                    const sibling = siblingNodes.find(n => n.id === nextSiblingId);
+                    if (sibling) {
+                        nextContent = `【下章大纲预设 (来自思维导图节点 "${sibling.label}")】\n` + serializeNodeTree(sibling);
+                    }
                 }
 
                 await apiService.generateStream(
                     novelSettings || {} as any,
                     WorkflowStep.CHAPTER_FROM_NODE,
-                    node.label, // Context is the node content/label
+                    node.label,
                     finalRefs,
                     (chunk) => setAiContent(p => p + chunk),
                     finalPrompt,
@@ -252,16 +301,10 @@ export const MindMapAiModal: React.FC<Props> = ({
         if (!aiContent) return;
         try {
             const title = node.label.length > 20 ? node.label.slice(0, 20) + '...' : node.label;
-            // Find max order
             const maxOrder = chapters.length > 0 ? Math.max(...chapters.map(c => c.order_index)) : 0;
-
-            // Create Chapter
             const newChap = await apiService.createChapter(projectId, title, maxOrder + 1);
-            // Update Content
             await apiService.updateChapter(projectId, newChap.id, title, aiContent);
-
             setIsChapterSaved(true);
-            // Refresh chapters list
             const struct = await apiService.getProjectStructure(projectId);
             setChapters(struct.chapters.sort((a, b) => a.order_index - b.order_index));
         } catch (e) {
@@ -284,12 +327,14 @@ export const MindMapAiModal: React.FC<Props> = ({
                             >
                                 节点扩展
                             </button>
-                            <button
-                                onClick={() => { setActiveTab('chapter'); setAiPrompt(`请基于此节点大纲撰写正文...`); }}
-                                className={`px-3 py-1 text-xs rounded transition-colors ${activeTab === 'chapter' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                            >
-                                撰写正文
-                            </button>
+                            {isChapterNode && (
+                                <button
+                                    onClick={() => { setActiveTab('chapter'); setAiPrompt(`请基于此节点大纲撰写正文...`); }}
+                                    className={`px-3 py-1 text-xs rounded transition-colors ${activeTab === 'chapter' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                                >
+                                    撰写正文 (小说模式)
+                                </button>
+                            )}
                         </div>
                     </div>
                     <button onClick={onClose} className="text-slate-400 hover:text-white">✕</button>
@@ -301,17 +346,17 @@ export const MindMapAiModal: React.FC<Props> = ({
                     {activeTab === 'chapter' && (
                         <div className="grid grid-cols-2 gap-4 mb-4 bg-slate-900/30 p-3 rounded border border-slate-700/50">
                             <div>
-                                <label className="block text-xs text-slate-500 mb-1">上一章节 (承接上下文)</label>
+                                <label className="block text-xs text-slate-500 mb-1">上一章节 (承接上下文 - 已发布章节)</label>
                                 <select value={preChapterId} onChange={(e) => setPreChapterId(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white outline-none">
                                     <option value="">(无)</option>
                                     {chapters.map(c => <option key={c.id} value={c.id}>{c.order_index}. {c.title}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs text-slate-500 mb-1">下一章节 (铺垫伏笔)</label>
-                                <select value={nextChapterId} onChange={(e) => setNextChapterId(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white outline-none">
-                                    <option value="">(无)</option>
-                                    {chapters.map(c => <option key={c.id} value={c.id}>{c.order_index}. {c.title}</option>)}
+                                <label className="block text-xs text-slate-500 mb-1">下一章节 (铺垫伏笔 - 后续节点大纲)</label>
+                                <select value={nextSiblingId} onChange={(e) => setNextSiblingId(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white outline-none">
+                                    <option value="">(无 - 也是节点末尾了)</option>
+                                    {siblingNodes.map(n => <option key={n.id} value={n.id}>👉 {n.label}</option>)}
                                 </select>
                             </div>
                         </div>
