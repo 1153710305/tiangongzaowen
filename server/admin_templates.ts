@@ -450,16 +450,52 @@ export const SETTINGS_HTML = `
 export const LOGS_HTML = `
     <!-- 日志 -->
     <div x-show="currentTab === 'logs'" class="h-full flex flex-col animate-fade-in">
-            <div class="bg-[#0d1117] rounded-xl p-4 font-mono text-xs flex-1 overflow-y-auto border border-slate-700 shadow-inner">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-2xl font-bold text-white">系统日志</h2>
+            <div class="flex gap-2">
+                 <button @click="fetchLogs" class="bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded text-white text-xs font-bold transition-colors flex items-center gap-1">
+                    <span>🔄</span> 刷新
+                </button>
+                <button @click="toggleAutoRefresh" :class="isAutoRefresh ? 'bg-green-600 hover:bg-green-500' : 'bg-slate-700 hover:bg-slate-600'" class="px-3 py-1.5 rounded text-white text-xs font-bold transition-colors">
+                    <span x-text="isAutoRefresh ? '🟢 自动刷新: ON' : '⚪️ 自动刷新: OFF'"></span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 过滤器 -->
+        <div class="flex gap-2 mb-4">
+             <input x-model="logSearch" placeholder="🔍 搜索日志内容..." class="bg-slate-800 border border-slate-600 rounded px-3 py-1.5 text-xs text-white outline-none focus:border-indigo-500 w-64">
+             <select x-model="logLevelFilter" class="bg-slate-800 border border-slate-600 rounded px-3 py-1.5 text-xs text-white outline-none focus:border-indigo-500">
+                <option value="">所有级别</option>
+                <option value="INFO">INFO</option>
+                <option value="WARN">WARN</option>
+                <option value="ERROR">ERROR</option>
+                <option value="DEBUG">DEBUG</option>
+             </select>
+             <div class="ml-auto text-xs text-slate-500 flex items-center">
+                共 <span x-text="filteredLogs.length" class="mx-1 text-white font-bold"></span> 条记录
+             </div>
+        </div>
+
+        <div class="bg-[#0d1117] rounded-xl p-4 font-mono text-xs flex-1 overflow-y-auto border border-slate-700 shadow-inner">
             <template x-for="(l, idx) in filteredLogs" :key="l.id || idx">
-                <div class="mb-2 border-b border-slate-800/50 pb-2 last:border-0 hover:bg-white/5 p-1 rounded transition-colors">
-                    <div class="flex gap-2 mb-1">
-                        <span class="text-slate-500" x-text="formatTime(l.timestamp)"></span>
-                        <span class="font-bold" :class="l.level === 'ERROR' ? 'text-red-500' : (l.level === 'WARN' ? 'text-yellow-400' : 'text-blue-400')" x-text="l.level"></span>
-                        <span class="text-slate-200" x-text="l.message"></span>
+                <div class="mb-2 border-b border-slate-800/50 pb-2 last:border-0 hover:bg-white/5 p-1 rounded transition-colors group">
+                    <div class="flex gap-2 mb-1 items-start">
+                        <span class="text-slate-500 shrink-0" x-text="formatTime(l.timestamp)"></span>
+                        <span class="font-bold shrink-0 w-12" :class="{
+                            'text-green-400': l.level === 'INFO',
+                            'text-yellow-400': l.level === 'WARN',
+                            'text-red-500': l.level === 'ERROR',
+                            'text-slate-400': l.level === 'DEBUG'
+                        }" x-text="l.level"></span>
+                        <span class="text-slate-200 break-all" x-text="l.message"></span>
+                    </div>
+                    <div x-show="l.meta" class="pl-20 text-[10px] text-slate-500 font-mono overflow-x-auto">
+                        <pre x-text="JSON.stringify(l.meta, null, 0)"></pre>
                     </div>
                 </div>
             </template>
+            <div x-show="filteredLogs.length === 0" class="text-center text-slate-500 py-10">暂无日志数据</div>
         </div>
     </div>
 `;

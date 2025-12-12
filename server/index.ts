@@ -39,8 +39,11 @@ app.use('*', async (c, next) => {
     const start = Date.now();
     await next();
     const ms = Date.now() - start;
-    if (c.res.status >= 500) logger.error(`${c.req.method} ${c.req.url} - ${c.res.status} (${ms}ms)`);
-    else if (c.res.status >= 400 && c.res.status !== 401) logger.warn(`${c.req.method} ${c.req.url} - ${c.res.status} (${ms}ms)`);
+
+    // 忽略日志轮询接口，避免刷屏
+    if (c.req.path === '/admin/api/logs' && c.req.method === 'GET') return;
+
+    logger.logRequest(c.req.method, c.req.path, c.res.status, ms);
 });
 
 app.onError((err, c) => {
