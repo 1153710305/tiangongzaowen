@@ -222,7 +222,27 @@ app.post('/api/projects/from-card', async (c) => {
     const { cardId, title, description } = await c.req.json();
     const pid = crypto.randomUUID();
     const proj = db.createProject(pid, c.get('jwtPayload').id, title, description, cardId);
-    db.createMindMap(crypto.randomUUID(), pid, '核心架构', JSON.stringify({ root: { id: 'root', label: title || '核心创意', children: [] } }));
+
+    // 默认思维导图 1: 核心架构
+    const coreMapChildren = ['世界设定', '爽点体系', '角色塑造', '关键角色成长体系'].map(label => ({
+        id: crypto.randomUUID(),
+        label,
+        children: []
+    }));
+    db.createMindMap(crypto.randomUUID(), pid, '核心架构', JSON.stringify({
+        root: { id: 'root', label: '核心架构', children: coreMapChildren }
+    }));
+
+    // 默认思维导图 2: 事件发展
+    const eventMapChildren = ['分卷大纲', '事件流', '单元细纲', '章节细纲', '角色状态时间线', '剧情锚点伏笔提取'].map(label => ({
+        id: crypto.randomUUID(),
+        label,
+        children: []
+    }));
+    db.createMindMap(crypto.randomUUID(), pid, '事件发展', JSON.stringify({
+        root: { id: 'root', label: '事件发展', children: eventMapChildren }
+    }));
+
     db.createChapter(crypto.randomUUID(), pid, '第一章', '', 1);
     return c.json(proj);
 });

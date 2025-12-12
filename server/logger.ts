@@ -19,7 +19,7 @@ export interface ServerLogEntry {
  */
 class ServerLogger {
     private logs: ServerLogEntry[] = [];
-    private readonly MAX_LOGS = 200; // 内存中最多保留200条日志
+    private readonly MAX_LOGS = 500; // 内存中最多保留500条日志
 
     private createEntry(level: LogLevel, message: string, meta?: any): ServerLogEntry {
         return {
@@ -64,6 +64,22 @@ class ServerLogger {
 
     public debug(message: string, meta?: any) {
         this.pushLog(this.createEntry(LogLevel.DEBUG, message, meta));
+    }
+
+    /**
+     * 记录 HTTP 请求日志
+     */
+    public logRequest(method: string, path: string, status: number, durationMs: number, ip?: string) {
+        const level = status >= 500 ? LogLevel.ERROR : (status >= 400 ? LogLevel.WARN : LogLevel.INFO);
+        const message = `${method} ${path} ${status} (${durationMs}ms)`;
+        this.pushLog(this.createEntry(level, message, { ip, status, duration: durationMs }));
+    }
+
+    /**
+     * 清空日志
+     */
+    public clearLogs() {
+        this.logs = [];
     }
 
     /**

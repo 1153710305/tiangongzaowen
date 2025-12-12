@@ -9,9 +9,10 @@ interface Props {
     onClose: () => void;
     onSelectProject: (project: Project) => void;
     onDeleteProject: (projectId: string) => void;
+    onRestoreProject?: () => void;
 }
 
-export const ProjectListModal: React.FC<Props> = ({ projects: activeProjects, onClose, onSelectProject, onDeleteProject }) => {
+export const ProjectListModal: React.FC<Props> = ({ projects: activeProjects, onClose, onSelectProject, onDeleteProject, onRestoreProject }) => {
 
     const [tab, setTab] = useState<'active' | 'trash'>('active');
     const [trashProjects, setTrashProjects] = useState<Project[]>([]);
@@ -40,7 +41,7 @@ export const ProjectListModal: React.FC<Props> = ({ projects: activeProjects, on
             await apiService.restoreProject(id);
             setTrashProjects(prev => prev.filter(p => p.id !== id));
             alert("项目已恢复");
-            // 刷新列表需要由父组件重新获取，这里简单提示用户重新打开
+            if (onRestoreProject) onRestoreProject();
         } catch (e) { alert("恢复失败"); }
     };
 

@@ -2,9 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { LogViewer } from './components/LogViewer';
 import { AuthForm } from './components/AuthForm';
-import { IdeaCardDetailModal } from './components/IdeaCardDetailModal'; 
-import { ProjectIDE } from './components/ProjectIDE'; 
-import { ProjectListModal } from './components/ProjectListModal'; 
+import { IdeaCardDetailModal } from './components/IdeaCardDetailModal';
+import { ProjectIDE } from './components/ProjectIDE';
+import { ProjectListModal } from './components/ProjectListModal';
 import { AppSidebar } from './components/layout/AppSidebar';
 import { AppMainContent } from './components/layout/AppMainContent';
 import { NovelSettings, WorkflowStep, ChatMessage, Role, User, Archive, ReferenceNovel, IdeaCard, Project } from './types';
@@ -65,8 +65,8 @@ export default function App() {
                 try {
                     const parsed = JSON.parse(finalContent);
                     if (Array.isArray(parsed)) setDraftCards(parsed);
-                } catch(e) {}
-            } 
+                } catch (e) { }
+            }
             addToHistory(Role.MODEL, finalContent);
             setGeneratedContent('');
             if (currentArchiveId && step !== WorkflowStep.IDEA) {
@@ -88,7 +88,7 @@ export default function App() {
             } else {
                 setArchives(prev => prev.map(a => a.id === id ? { ...a, title, settings, history: historySnapshot } : a));
             }
-        } catch (e: any) { if (e.message === "Unauthorized") { handleLogout(); setShowAuthModal(true); } } 
+        } catch (e: any) { if (e.message === "Unauthorized") { handleLogout(); setShowAuthModal(true); } }
         finally { setIsSaving(false); }
     };
 
@@ -101,7 +101,7 @@ export default function App() {
     };
 
     const handleDeleteCard = async (id: string, e: React.MouseEvent) => {
-        e.stopPropagation(); if(!confirm("删除?")) return;
+        e.stopPropagation(); if (!confirm("删除?")) return;
         await apiService.deleteIdeaCard(id); setSavedCards(prev => prev.filter(c => c.id !== id));
     };
 
@@ -114,10 +114,16 @@ export default function App() {
     };
 
     const handleDeleteProject = async (pid: string) => {
-        // 父组件只处理状态移除（假设是放入回收站），具体逻辑在 ProjectListModal 中处理
-        // 但这里为了保持列表同步，当 ProjectListModal 关闭时会重新获取
-        // 这里仅作兼容
-        setProjectList(prev => prev.filter(p => p.id !== pid));
+        try {
+            await apiService.deleteProject(pid);
+            setProjectList(prev => prev.filter(p => p.id !== pid));
+        } catch (e: any) {
+            alert("删除失败: " + e.message);
+        }
+    };
+
+    const handleRestoreProject = async () => {
+        await loadUserData();
     };
 
     const handleLogout = () => {
@@ -134,7 +140,7 @@ export default function App() {
                     <ProjectIDE project={currentProject} onBack={() => { setCurrentProject(null); loadUserData(); }} />
                 ) : (
                     <>
-                        <AppSidebar 
+                        <AppSidebar
                             user={user} projectCount={projectList.length} savedCardsCount={savedCards.length}
                             showCardHistory={showCardHistory} setShowCardHistory={setShowCardHistory}
                             onShowProjectList={() => { loadUserData(); setShowProjectList(true); }} onLogout={handleLogout} onShowAuthModal={() => setShowAuthModal(true)}
@@ -148,13 +154,13 @@ export default function App() {
                             onGenerateChapter={() => handleGeneration(WorkflowStep.CHAPTER, "撰写正文", history.slice(-1)[0]?.content)}
                         />
 
-                        <AppMainContent 
+                        <AppMainContent
                             showCardHistory={showCardHistory} savedCards={savedCards} onSelectCard={setSelectedCard} onDeleteCard={handleDeleteCard}
                             user={user} history={history} generatedContent={generatedContent} draftCards={draftCards} onSaveCard={handleSaveCard}
                         />
 
                         {selectedCard && <IdeaCardDetailModal card={selectedCard} onClose={() => setSelectedCard(null)} onProjectCreated={async () => { await loadUserData(); const projs = await apiService.getProjects(); if (projs.length) setCurrentProject(projs[0]); }} />}
-                        {showProjectList && <ProjectListModal projects={projectList} onClose={() => { setShowProjectList(false); loadUserData(); }} onSelectProject={p => { setShowProjectList(false); setCurrentProject(p); }} onDeleteProject={handleDeleteProject} />}
+                        {showProjectList && <ProjectListModal projects={projectList} onClose={() => { setShowProjectList(false); loadUserData(); }} onSelectProject={p => { setShowProjectList(false); setCurrentProject(p); }} onDeleteProject={handleDeleteProject} onRestoreProject={handleRestoreProject} />}
                     </>
                 )}
 
