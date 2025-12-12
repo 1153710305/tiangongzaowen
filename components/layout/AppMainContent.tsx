@@ -108,16 +108,6 @@ export const AppMainContent: React.FC<AppMainContentProps> = ({
                     </div>
                 )}
 
-                {/* Live Draft Cards View (Replaces streaming text when available) */}
-                {draftCards.length > 0 && (
-                    <div className="flex flex-col gap-4 max-w-5xl mx-auto pb-10 animate-fade-in">
-                        <div className="flex items-center gap-2 text-pink-400 font-bold px-1">
-                            <span>💡</span> AI 生成了以下脑洞方案，请点击收藏：
-                        </div>
-                        <IdeaCardList cards={draftCards} onSave={onSaveCard} savedCards={savedCards} />
-                    </div>
-                )}
-
                 <div ref={contentEndRef} />
             </div>
         </div>
