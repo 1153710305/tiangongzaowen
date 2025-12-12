@@ -490,8 +490,8 @@ export const LOGS_HTML = `
                         }" x-text="l.level"></span>
                         <span class="text-slate-200 break-all" x-text="l.message"></span>
                     </div>
-                    <div x-show="l.meta" class="pl-20 text-[10px] text-slate-500 font-mono overflow-x-auto">
-                        <pre x-text="JSON.stringify(l.meta, null, 0)"></pre>
+                    <div x-show="l.meta" class="mt-1 pl-20 overflow-x-auto">
+                        <pre class="text-[11px] font-mono text-slate-400 bg-slate-950/50 p-2 rounded border border-slate-800/50" x-text="JSON.stringify(l.meta, null, 2)"></pre>
                     </div>
                 </div>
             </template>
