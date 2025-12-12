@@ -96,7 +96,8 @@ export default function App() {
         if (!user) { setShowAuthModal(true); return; }
         try {
             const newCard = await apiService.saveIdeaCard({ ...draft, title: draft.title || '未命名' } as any);
-            setSavedCards(prev => [newCard, ...prev]); setDraftCards(prev => prev.filter(d => d.title !== draft.title));
+            setSavedCards(prev => [newCard, ...prev]);
+            // setDraftCards(prev => prev.filter(d => d.title !== draft.title)); // Removed to keep card visible
         } catch (e: any) { if (e.message === "Unauthorized") { handleLogout(); setShowAuthModal(true); } }
     };
 

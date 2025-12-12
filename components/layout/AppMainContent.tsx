@@ -1,8 +1,8 @@
-
 import React, { useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Button } from '../Button';
 import { ChatMessage, Role, IdeaCard } from '../../types';
+import { IdeaCardList } from '../IdeaCardList';
 
 interface AppMainContentProps {
     showCardHistory: boolean;
@@ -26,10 +26,30 @@ export const AppMainContent: React.FC<AppMainContentProps> = ({
         contentEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [generatedContent, history, draftCards]);
 
+    // Helper to render message content
+    const renderMessage = (content: string) => {
+        try {
+            // Try to parse as JSON Array of Cards
+            const parsed = JSON.parse(content);
+            if (Array.isArray(parsed) && parsed.length > 0 && (parsed[0].title || parsed[0].intro || parsed[0].highlight)) {
+                return (
+                    <div className="mt-2 text-left">
+                        <div className="text-xs text-slate-500 mb-2">生成了 {parsed.length} 个脑洞方案:</div>
+                        <IdeaCardList cards={parsed} onSave={onSaveCard} savedCards={savedCards} />
+                    </div>
+                );
+            }
+        } catch (e) {
+            // Not JSON or not Cards
+        }
+        return <ReactMarkdown>{content}</ReactMarkdown>;
+    };
+
     if (showCardHistory) {
+        // ... (Keep existing side panel logic) ...
         return (
             <div className="w-96 flex-shrink-0 flex flex-col h-full bg-[#161b22] border-r border-slate-700 p-4 overflow-y-auto">
-                 <div className="space-y-4 animate-fade-in">
+                <div className="space-y-4 animate-fade-in">
                     {savedCards.map(card => (
                         <div key={card.id} onClick={() => onSelectCard(card)} className="bg-paper border border-slate-700 rounded-lg p-3 relative group hover:border-pink-500/50 transition-colors cursor-pointer">
                             <button onClick={(e) => onDeleteCard(card.id, e)} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 z-10">×</button>
@@ -38,7 +58,7 @@ export const AppMainContent: React.FC<AppMainContentProps> = ({
                             <span className="text-[10px] bg-indigo-900/40 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/30">查看详情</span>
                         </div>
                     ))}
-                    {savedCards.length === 0 && <div className="text-center text-slate-500 py-10 text-xs">暂无收藏的脑洞卡片。<br/>{user ? '去"生成创意"中挑选心仪的灵感吧！' : '请先登录'}</div>}
+                    {savedCards.length === 0 && <div className="text-center text-slate-500 py-10 text-xs">暂无收藏的脑洞卡片。<br />{user ? '去"生成创意"中挑选心仪的灵感吧！' : '请先登录'}</div>}
                 </div>
             </div>
         );
@@ -66,13 +86,14 @@ export const AppMainContent: React.FC<AppMainContentProps> = ({
                                 <span className="ml-auto text-xs text-slate-500">{new Date(msg.timestamp).toLocaleTimeString()}</span>
                             </div>
                             <div className={`prose prose-invert prose-slate max-w-none ${msg.isError ? 'text-red-300' : ''}`}>
-                                <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                {msg.role === Role.MODEL ? renderMessage(msg.content) : <ReactMarkdown>{msg.content}</ReactMarkdown>}
                             </div>
                         </div>
                     </div>
                 ))}
 
-                {generatedContent && (
+                {/* Show Generated Content ONLY if no draft cards parsed yet */}
+                {generatedContent && draftCards.length === 0 && (
                     <div className="flex justify-start animate-pulse">
                         <div className="max-w-4xl w-full p-4 rounded-xl bg-paper border border-secondary/50 shadow-[0_0_15px_rgba(236,72,153,0.1)]">
                             <div className="flex items-center mb-2 pb-2 border-b border-slate-600/50">
@@ -85,79 +106,16 @@ export const AppMainContent: React.FC<AppMainContentProps> = ({
                     </div>
                 )}
 
+                {/* Live Draft Cards View (Replaces streaming text when available) */}
                 {draftCards.length > 0 && (
-                    <div className="flex flex-col gap-4 max-w-5xl mx-auto pb-10">
+                    <div className="flex flex-col gap-4 max-w-5xl mx-auto pb-10 animate-fade-in">
                         <div className="flex items-center gap-2 text-pink-400 font-bold px-1">
                             <span>💡</span> AI 生成了以下脑洞方案，请点击收藏：
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
-                            {draftCards.map((draft, idx) => (
-                                <div key={idx} className="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg flex flex-col relative group hover:border-pink-500 transition-all h-[480px]">
-                                    {/* 标题 */}
-                                    <h3 className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-indigo-400 mb-4 shrink-0 truncate">
-                                        {draft.title || '未命名脑洞'}
-                                    </h3>
-
-                                    {/* 滚动内容区域 */}
-                                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3 mb-4 text-xs">
-                                        
-                                        {/* 简介 */}
-                                        <div className="bg-black/20 rounded-lg p-3 border border-slate-700/50">
-                                            <div className="text-slate-500 font-bold mb-1 flex items-center gap-1">
-                                                <span>📖</span> 简介
-                                            </div>
-                                            <div className="text-slate-300 leading-relaxed">
-                                                {draft.intro || '暂无简介描述...'}
-                                            </div>
-                                        </div>
-
-                                        {/* 开局爆点 */}
-                                        {draft.explosive_point && (
-                                            <div className="bg-red-900/10 rounded-lg p-3 border border-red-500/20">
-                                                <div className="text-red-400 font-bold mb-1 flex items-center gap-1">
-                                                    <span>💣</span> 开局爆点
-                                                </div>
-                                                <div className="text-slate-300 leading-relaxed">
-                                                    {draft.explosive_point}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* 核心爽点 */}
-                                        {draft.highlight && (
-                                            <div className="bg-indigo-900/10 rounded-lg p-3 border border-indigo-500/20">
-                                                <div className="text-indigo-400 font-bold mb-1 flex items-center gap-1">
-                                                    <span>🔥</span> 核心爽点
-                                                </div>
-                                                <div className="text-slate-300 leading-relaxed">
-                                                    {draft.highlight}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* 金手指 */}
-                                        {draft.golden_finger && (
-                                            <div className="bg-yellow-900/10 rounded-lg p-3 border border-yellow-500/20">
-                                                <div className="text-yellow-400 font-bold mb-1 flex items-center gap-1">
-                                                    <span>✨</span> 金手指
-                                                </div>
-                                                <div className="text-slate-300 leading-relaxed">
-                                                    {draft.golden_finger}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                    
-                                    {/* 底部按钮 */}
-                                    <Button onClick={() => onSaveCard(draft)} className="w-full mt-auto shrink-0 shadow-lg border border-white/5" size="sm" variant="secondary">
-                                        💾 收藏此脑洞
-                                    </Button>
-                                </div>
-                            ))}
-                        </div>
+                        <IdeaCardList cards={draftCards} onSave={onSaveCard} savedCards={savedCards} />
                     </div>
                 )}
-                
+
                 <div ref={contentEndRef} />
             </div>
         </div>
