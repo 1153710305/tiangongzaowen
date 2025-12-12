@@ -29,8 +29,10 @@ export const AppMainContent: React.FC<AppMainContentProps> = ({
     // Helper to render message content
     const renderMessage = (content: string) => {
         try {
+            // Clean up Markdown code blocks if present
+            const cleanContent = content.replace(/^```json\s*/, '').replace(/\s*```$/, '');
             // Try to parse as JSON Array of Cards
-            const parsed = JSON.parse(content);
+            const parsed = JSON.parse(cleanContent);
             if (Array.isArray(parsed) && parsed.length > 0 && (parsed[0].title || parsed[0].intro || parsed[0].highlight)) {
                 return (
                     <div className="mt-2 text-left">
