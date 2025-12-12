@@ -1,7 +1,6 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { MindMapNode, WorkflowStep, NovelSettings, Chapter } from '../../types';
+import { MindMapNode, WorkflowStep, NovelSettings, Chapter, IdeaCard } from '../../types';
 import { Button } from '../Button';
 import { PromptSelector } from '../PromptSelector';
 import { serializeNodeTree, getAllNodesFlat } from './utils';
@@ -39,12 +38,16 @@ export const MindMapAiModal: React.FC<Props> = ({
     const [aiIdentity, setAiIdentity] = useState('');
     const [aiConstraints, setAiConstraints] = useState('');
 
+    // Idea Cards
+    const [includeIdeaCards, setIncludeIdeaCards] = useState(true);
+    const [ideaCards, setIdeaCards] = useState<IdeaCard[]>([]);
+
     // Chapter Mode Specific
     const [chapters, setChapters] = useState<Chapter[]>([]);
     const [preChapterId, setPreChapterId] = useState<string>('');
     const [nextSiblingId, setNextSiblingId] = useState<string>('');
     const [isChapterSaved, setIsChapterSaved] = useState(false);
-    const [wordCount, setWordCount] = useState<number>(3000);
+    const [wordCount, setWordCount] = useState<number>(2000);
 
     // Topology State
     const [isChapterNode, setIsChapterNode] = useState(false);
@@ -79,6 +82,14 @@ export const MindMapAiModal: React.FC<Props> = ({
         });
 
         const fetchContext = async () => {
+            // 0. Fetch Idea Cards
+            try {
+                const cards = await apiService.getIdeaCards();
+                setIdeaCards(cards);
+            } catch (e) {
+                logger.error("Failed to load idea cards", e);
+            }
+
             // 1. Fetch Chapters
             const struct = await apiService.getProjectStructure(projectId);
             const sortedChapters = struct.chapters.sort((a, b) => a.order_index - b.order_index);
@@ -222,6 +233,12 @@ export const MindMapAiModal: React.FC<Props> = ({
             const promptText = aiPrompt;
             let finalPrompt = promptText;
             if (aiConstraints) finalPrompt = finalPrompt + `\n【强制约束】:${aiConstraints}`;
+
+            // Idea Cards Injection
+            if (includeIdeaCards && ideaCards.length > 0) {
+                const ideasContent = ideaCards.map(c => `- 【${c.title}】: ${c.content}`).join('\n');
+                referencesData.push(`【核心设定/脑洞卡片】：\n${ideasContent}`);
+            }
 
             while ((match = refRegex.exec(promptText)) !== null) {
                 const [_, type, id1, id2] = match;
@@ -394,7 +411,25 @@ export const MindMapAiModal: React.FC<Props> = ({
                         </div>
                         <div><PromptSelector type="system" label="身份设定" onSelect={setAiIdentity} /></div>
                         <div><PromptSelector type="constraint" label="约束条件" onSelect={setAiConstraints} /></div>
-                        <div><PromptSelector type="normal" label="常用指令" onSelect={(val) => insertAiText(val)} /></div>
+                        <div>
+                            <label className="block text-xs text-slate-500 mb-1 hidden lg:block">&nbsp;</label>
+                            <div className="flex items-center h-[26px]">
+                                <label className="flex items-center space-x-2 cursor-pointer text-xs text-slate-300 hover:text-white select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={includeIdeaCards}
+                                        onChange={e => setIncludeIdeaCards(e.target.checked)}
+                                        className="form-checkbox h-3.5 w-3.5 text-indigo-500 rounded border-slate-600 bg-slate-900 focus:ring-0"
+                                    />
+                                    <span>包含脑洞卡片设定 ({ideaCards.length})</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-2 mb-2">
+                        <div className="flex-1"></div>
+                        <PromptSelector type="normal" label="常用指令" onSelect={(val) => insertAiText(val)} />
                     </div>
 
                     {/* Text Area & Mirror */}
