@@ -155,6 +155,12 @@ app.post('/api/generate', async (c) => {
         else if (step === WorkflowStep.CHARACTER) prompt = PROMPT_BUILDERS.CHARACTER(settings);
         else if (step === WorkflowStep.CHAPTER) prompt = PROMPT_BUILDERS.CHAPTER(settings, context, references);
         else if (step === WorkflowStep.MIND_MAP_NODE) prompt = PROMPT_BUILDERS.MIND_MAP_NODE(context, extraPrompt, references);
+        else if (step === WorkflowStep.CHAPTER_FROM_NODE) {
+            // body.preChapter and body.nextChapter are passed via context json or separate fields?
+            // Let's assume they come in the body as 'preChapter' and 'nextChapter'
+            const { preChapter, nextChapter } = body;
+            prompt = PROMPT_BUILDERS.CHAPTER_FROM_NODE(settings, context, preChapter, nextChapter, references);
+        }
 
         if (extraPrompt && step !== WorkflowStep.MIND_MAP_NODE) prompt += `\n\n【用户指令】:\n${extraPrompt}`;
 

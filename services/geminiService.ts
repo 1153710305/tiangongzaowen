@@ -70,7 +70,9 @@ class ApiService {
         onChunk: (text: string) => void,
         extraPrompt?: string,
         model?: string,
-        systemInstruction?: string
+        systemInstruction?: string,
+        preChapter?: string,
+        nextChapter?: string
     ): Promise<string> {
 
         logger.info(`[Client] 请求生成: ${step}`, { model });
@@ -80,7 +82,7 @@ class ApiService {
             const response = await fetch(API_ENDPOINTS.GENERATE, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...authHeaders } as any,
-                body: JSON.stringify({ settings, step, context, references, extraPrompt, model, systemInstruction })
+                body: JSON.stringify({ settings, step, context, references, extraPrompt, model, systemInstruction, preChapter, nextChapter })
             });
 
             if (response.status === 401) throw new Error("Unauthorized");
