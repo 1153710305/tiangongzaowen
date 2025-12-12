@@ -14,8 +14,21 @@ export const DEFAULT_NOVEL_SETTINGS: NovelSettings = {
     goldenFinger: '能够看到每个人未来的死亡倒计时和原因',
     pacing: 'fast',
     targetAudience: 'male',
-    tone: '表面轻松，实则紧张刺激，带有悬疑感'
+    tone: '表面轻松，实则紧张刺激，带有悬疑感',
+    platform: '番茄'
 };
+
+/**
+ * 支持的网文平台列表
+ */
+export const NOVEL_PLATFORMS = [
+    { id: '番茄', name: '番茄小说', style: '节奏快、脑洞大、爽点密集、情绪价值高' },
+    { id: '起点', name: '起点中文网', style: '逻辑严密、世界观宏大、慢热、升级流' },
+    { id: '晋江', name: '晋江文学城', style: '细腻、情感丰富、人设出彩、纯爱/言情' },
+    { id: '飞卢', name: '飞卢小说', style: '极速节奏、开局无敌、系统流、脑洞夸张' },
+    { id: '知乎', name: '知乎盐选', style: '第一人称、反转多、现实题材、脑洞短篇' },
+    { id: '七猫', name: '七猫小说', style: '爽文、都市、赘婿、战神、甜宠' }
+];
 
 /**
  * 后端 API 地址配置
@@ -29,7 +42,7 @@ export const API_BASE_URL =
     (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_API_BASE_URL) ||
     // 兼容 Create React App 或其他 Node.js 环境的全局 process.env
     (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) ||
-    'http://192.168.1.19:3000';
+    'http://192.168.1.18:3000';
 
 /**
  * API 接口端点集合

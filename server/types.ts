@@ -11,6 +11,7 @@ export interface NovelSettings {
     pacing: 'fast' | 'normal' | 'slow';
     targetAudience: 'male' | 'female';
     tone: string;
+    platform?: string;
 }
 
 export interface ReferenceNovel {

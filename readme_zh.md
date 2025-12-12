@@ -59,6 +59,12 @@
 
 ## 📝 版本历史 (Changelog)
 
+**v3.5.0 (Platform Customization)**
+*   **Feature (Core)**: 新增“平台定向创作”功能。
+    *   支持选择 **番茄、起点、晋江、飞卢、知乎、七猫** 等主流平台。
+    *   AI 脑洞生成算法升级，能够根据目标平台的调性（书名风格、三章节奏、核心爽点）生成定制化创意。
+    *   更新了 `NovelSettings` 数据结构，新增 `platform` 字段。
+
 **v3.4.0 (UX Enhancements)**
 *   **Feature (Frontend)**: 侧边栏支持折叠，优化小屏体验。
 *   **Feature (Frontend)**: 新增用户个人信息面板，查看详细账户状态。

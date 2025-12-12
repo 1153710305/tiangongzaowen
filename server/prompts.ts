@@ -28,8 +28,23 @@ export const SYSTEM_INSTRUCTION = `
 export const PROMPT_BUILDERS = {
     // 创意脑暴
     IDEA: (settings: NovelSettings, context?: string) => {
+        const platform = settings.platform || '番茄';
         const baseReq = `
-请生成 3 个具有"爆款潜质"的小说开篇创意。
+请作为一名熟悉"${platform}"平台风格的资深主编，生成 3 个符合该平台调性的爆款小说开篇创意。
+
+**平台风格参考**：
+- 番茄：节奏极快，脑洞大，情绪价值高，书名直白吸睛（如《开局...》、《我能...》）。
+- 起点：逻辑严密，世界观宏大，慢热，升级体系完善。
+- 晋江：情感细腻，人设出彩，强调CP感和情感拉扯。
+- 飞卢：极速节奏，脑洞夸张，系统流，爽点密集，开局即无敌。
+- 知乎：第一人称，反转多，脑洞奇特，现实题材或悬疑惊悚。
+- 七猫：主打爽文，都市/赘婿/战神/甜宠，在这个分类下做到极致。
+
+**生成要求**：
+1. **书名**：必须符合"${platform}"平台的取名套路。
+2. **简介**：必须符合"${platform}"平台的简介风格（如番茄的黄金三章预告风，起点的世界观铺设风，晋江的情感文案风）。
+3. **爽点/爆点**：必须精准击中"${platform}"读者的核心爽点。
+
 **非常重要：必须严格只返回一个合法的 JSON 数组字符串。**
 不要包含 \`\`\`json 或其他任何 Markdown 标记。
 不要有前言后语，直接以 '[' 开头，以 ']' 结尾。
@@ -42,7 +57,7 @@ export const PROMPT_BUILDERS = {
 5. "golden_finger": 金手指设定 (String)
 `;
         if (context && context.trim().length > 0) {
-            return `${baseReq}\n**核心灵感**：\n"${context}"\n请基于灵感进行裂变。`;
+            return `${baseReq}\n**核心灵感**：\n"${context}"\n请基于此灵感，结合"${platform}"风格进行裂变。`;
         }
         return `${baseReq}\n**设定要求**：\n- **流派**：${settings.genre}\n- **核心梗**：${settings.trope}\n- **主角类型**：${settings.protagonistType}\n- **金手指**：${settings.goldenFinger}\n`;
     },

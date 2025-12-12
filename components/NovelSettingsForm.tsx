@@ -4,6 +4,7 @@ import { NovelSettings, ReferenceNovel } from '../types';
 import { Button } from './Button';
 import { logger } from '../services/loggerService';
 import { apiService } from '../services/geminiService';
+import { NOVEL_PLATFORMS } from '../constants';
 
 interface Props {
     settings: NovelSettings;
@@ -16,15 +17,15 @@ interface Props {
 type InputMode = 'config' | 'oneliner' | 'analysis';
 
 export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGenerateIdea, isGenerating, loadedFromArchive }) => {
-    
+
     // 本地状态存储从后端获取的素材池
     const [dataPool, setDataPool] = useState<any>(null);
     const [isLoadingPool, setIsLoadingPool] = useState(true);
-    
+
     // 模型选择状态
     const [aiModel, setAiModel] = useState('');
-    const [availableModels, setAvailableModels] = useState<{id: string, name: string, isVip?: boolean}[]>([]);
-    
+    const [availableModels, setAvailableModels] = useState<{ id: string, name: string, isVip?: boolean }[]>([]);
+
     // 用户状态 (用于前端校验 VIP)
     const [isVip, setIsVip] = useState(false);
 
@@ -49,12 +50,12 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                 ]);
 
                 if (pool) setDataPool(pool);
-                
+
                 if (modelConfig) {
                     setAvailableModels(modelConfig.models);
                     setAiModel(modelConfig.defaultModel);
                 }
-                
+
                 if (userStatus) {
                     setIsVip(userStatus.isVip);
                 }
@@ -106,7 +107,7 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
             targetAudience: Math.random() > 0.5 ? 'male' : 'female',
             pacing: Math.random() > 0.3 ? 'fast' : (Math.random() > 0.5 ? 'normal' : 'slow')
         };
-        
+
         onChange(newSettings);
         logger.info("用户使用了随机生成配置功能", newSettings);
     };
@@ -146,14 +147,14 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                     已加载存档: {loadedFromArchive}
                 </div>
             )}
-            
+
             <div className="flex justify-between items-center mb-2">
                 <h2 className="text-xl font-bold text-primary flex items-center">
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
                     创作模式
                 </h2>
                 {inputMode === 'config' && (
-                    <button 
+                    <button
                         onClick={handleRandomize}
                         disabled={isGenerating || isLoadingPool}
                         className="text-xs flex items-center bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white px-3 py-1.5 rounded-full transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -166,8 +167,8 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
             {/* 模型选择器 (VIP 标识) */}
             <div className="mb-4 bg-slate-800/50 p-2 rounded-lg border border-slate-700/50 flex items-center gap-2">
                 <span className="text-xs text-slate-400 font-medium whitespace-nowrap">AI 模型:</span>
-                <select 
-                    value={aiModel} 
+                <select
+                    value={aiModel}
                     onChange={(e) => handleModelChange(e.target.value)}
                     className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-slate-300 outline-none focus:border-indigo-500 cursor-pointer hover:bg-slate-800 transition-colors"
                 >
@@ -189,13 +190,21 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                 <button onClick={() => setInputMode('oneliner')} className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${inputMode === 'oneliner' ? 'bg-primary text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>脑洞发散</button>
                 <button onClick={() => setInputMode('analysis')} className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${inputMode === 'analysis' ? 'bg-primary text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>爆款仿写</button>
             </div>
-            
+
             {/* 1. 参数配置模式 */}
             {inputMode === 'config' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
                     <div>
                         <label className="block text-sm font-medium text-slate-400 mb-1">流派 (Genre)</label>
                         <input type="text" value={settings.genre} onChange={(e) => handleChange('genre', e.target.value)} className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-400 mb-1">目标平台 (Platform)</label>
+                        <select value={settings.platform || '番茄'} onChange={(e) => handleChange('platform', e.target.value)} className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors">
+                            {NOVEL_PLATFORMS.map(p => (
+                                <option key={p.id} value={p.id}>{p.name} ({p.style})</option>
+                            ))}
+                        </select>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-400 mb-1">核心梗 (Trope)</label>
@@ -210,8 +219,8 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                         <textarea value={settings.goldenFinger} onChange={(e) => handleChange('goldenFinger', e.target.value)} className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none h-20 resize-none transition-colors" />
                     </div>
                     <div className="md:col-span-2">
-                         <label className="block text-sm font-medium text-slate-400 mb-1">整体基调 (Tone)</label>
-                         <input type="text" value={settings.tone} onChange={(e) => handleChange('tone', e.target.value)} className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
+                        <label className="block text-sm font-medium text-slate-400 mb-1">整体基调 (Tone)</label>
+                        <input type="text" value={settings.tone} onChange={(e) => handleChange('tone', e.target.value)} className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors" />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-400 mb-1">节奏 (Pacing)</label>
@@ -239,7 +248,7 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                         <textarea value={oneLinerInput} onChange={(e) => setOneLinerInput(e.target.value)} className="w-full bg-dark border border-slate-600 rounded px-3 py-2 text-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none h-48 resize-none transition-colors text-base" />
                     </div>
                     <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-700/50">
-                         <div>
+                        <div>
                             <label className="block text-xs font-medium text-slate-500 mb-1">受众 (Target)</label>
                             <select value={settings.targetAudience} onChange={(e) => handleChange('targetAudience', e.target.value as any)} className="w-full bg-dark border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-300 outline-none focus:border-primary">
                                 <option value="male">男频</option>
@@ -247,8 +256,8 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                             </select>
                         </div>
                         <div>
-                             <label className="block text-xs font-medium text-slate-500 mb-1">基调 (Tone)</label>
-                             <input type="text" value={settings.tone} onChange={(e) => handleChange('tone', e.target.value)} className="w-full bg-dark border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-300 outline-none focus:border-primary" />
+                            <label className="block text-xs font-medium text-slate-500 mb-1">基调 (Tone)</label>
+                            <input type="text" value={settings.tone} onChange={(e) => handleChange('tone', e.target.value)} className="w-full bg-dark border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-300 outline-none focus:border-primary" />
                         </div>
                     </div>
                 </div>
@@ -278,7 +287,7 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                     </div>
                     {references.length < 3 && <button onClick={addReference} className="w-full py-2 border border-dashed border-slate-600 rounded text-slate-400 hover:text-white text-sm">+ 添加参考案例</button>}
                     <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-700/50">
-                         <div>
+                        <div>
                             <label className="block text-xs font-medium text-slate-500 mb-1">您的目标受众</label>
                             <select value={settings.targetAudience} onChange={(e) => handleChange('targetAudience', e.target.value as any)} className="w-full bg-dark border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-300 outline-none focus:border-primary">
                                 <option value="male">男频</option>
@@ -286,8 +295,8 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
                             </select>
                         </div>
                         <div>
-                             <label className="block text-xs font-medium text-slate-500 mb-1">您的期望基调</label>
-                             <input type="text" value={settings.tone} onChange={(e) => handleChange('tone', e.target.value)} className="w-full bg-dark border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-300 outline-none focus:border-primary" />
+                            <label className="block text-xs font-medium text-slate-500 mb-1">您的期望基调</label>
+                            <input type="text" value={settings.tone} onChange={(e) => handleChange('tone', e.target.value)} className="w-full bg-dark border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-300 outline-none focus:border-primary" />
                         </div>
                     </div>
                 </div>

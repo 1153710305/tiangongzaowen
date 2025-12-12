@@ -15,6 +15,7 @@ export interface NovelSettings {
     pacing: 'fast' | 'normal' | 'slow'; // 节奏
     targetAudience: 'male' | 'female'; // 男频/女频
     tone: string; // 基调
+    platform?: string; // 目标平台
 }
 
 // 参考小说接口
