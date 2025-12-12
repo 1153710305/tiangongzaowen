@@ -17,12 +17,14 @@ interface Props {
     onClose: () => void;
     onApply: (content: string) => void;
     onChapterSaved?: (chapterId: string) => void;
+    projectTitle?: string;
+    projectIdeaCardId?: string;
 }
 
 type TabMode = 'expand' | 'chapter';
 
 export const MindMapAiModal: React.FC<Props> = ({
-    projectId, node, rootNode, mapId, availableMaps, novelSettings, onClose, onApply, onChapterSaved
+    projectId, node, rootNode, mapId, availableMaps, novelSettings, onClose, onApply, onChapterSaved, projectTitle, projectIdeaCardId
 }) => {
     const [activeTab, setActiveTab] = useState<TabMode>('expand');
 
@@ -82,10 +84,19 @@ export const MindMapAiModal: React.FC<Props> = ({
         });
 
         const fetchContext = async () => {
-            // 0. Fetch Idea Cards
+            // 0. Fetch Idea Cards & Filter
             try {
                 const cards = await apiService.getIdeaCards();
-                setIdeaCards(cards);
+                let filteredCards: IdeaCard[] = [];
+
+                if (projectIdeaCardId) {
+                    filteredCards = cards.filter(c => c.id === projectIdeaCardId);
+                } else if (projectTitle) {
+                    filteredCards = cards.filter(c => c.title === projectTitle);
+                }
+
+                setIdeaCards(filteredCards);
+                if (filteredCards.length === 0) setIncludeIdeaCards(false);
             } catch (e) {
                 logger.error("Failed to load idea cards", e);
             }
@@ -128,7 +139,7 @@ export const MindMapAiModal: React.FC<Props> = ({
             }
         }
         fetchContext();
-    }, [node.id, rootNode, projectId]);
+    }, [node.id, rootNode, projectId, projectTitle, projectIdeaCardId]);
 
     // --- Context Menu Logic ---
     const updateAiCursorCoords = () => {
@@ -236,7 +247,9 @@ export const MindMapAiModal: React.FC<Props> = ({
 
             // Idea Cards Injection
             if (includeIdeaCards && ideaCards.length > 0) {
-                const ideasContent = ideaCards.map(c => `- 【${c.title}】: ${c.content}`).join('\n');
+                const ideasContent = ideaCards.map(c =>
+                    `- 【${c.title}】\n  简介: ${c.intro}\n  亮点: ${c.highlight}\n  爽点: ${c.explosive_point}\n  金手指: ${c.golden_finger}`
+                ).join('\n\n');
                 referencesData.push(`【核心设定/脑洞卡片】：\n${ideasContent}`);
             }
 

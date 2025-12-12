@@ -252,6 +252,8 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
                                         novelSettings={DEFAULT_NOVEL_SETTINGS}
                                         availableMaps={structure.maps}
                                         onChapterCreated={handleChapterCreatedFromMindMap}
+                                        projectTitle={project.title}
+                                        projectIdeaCardId={project.idea_card_id}
                                     />
                                 )}
                             </div>
