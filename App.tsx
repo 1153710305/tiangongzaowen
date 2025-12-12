@@ -108,10 +108,12 @@ export default function App() {
 
     const loadArchive = (a: Archive) => {
         setCurrentArchiveId(a.id); setCurrentArchiveTitle(a.title); setSettings(a.settings || DEFAULT_NOVEL_SETTINGS); setHistory(a.history || []);
+        setGeneratedContent(''); setDraftCards([]);
     };
 
     const resetArchive = () => {
-        setCurrentArchiveId(undefined); setCurrentArchiveTitle(`新小说 ${new Date().toLocaleDateString()}`); setSettings(DEFAULT_NOVEL_SETTINGS); setHistory([]); setGeneratedContent('');
+        setCurrentArchiveId(undefined); setCurrentArchiveTitle(`新小说 ${new Date().toLocaleDateString()}`); setSettings(DEFAULT_NOVEL_SETTINGS); setHistory([]);
+        setGeneratedContent(''); setDraftCards([]);
     };
 
     const handleDeleteProject = async (pid: string) => {
