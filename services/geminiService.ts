@@ -11,7 +11,8 @@ class ApiService {
 
     public async fetchConfigPool(): Promise<any> {
         try {
-            const res = await fetch(API_ENDPOINTS.CONFIG);
+            const authHeaders = authService.getAuthHeader();
+            const res = await fetch(API_ENDPOINTS.CONFIG, { headers: { ...authHeaders } as any });
             if (!res.ok) throw new Error("无法连接至服务器");
             return await res.json();
         } catch (error) {

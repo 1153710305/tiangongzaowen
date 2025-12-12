@@ -156,8 +156,21 @@ export function initDB() {
             updated_at TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_announcements_pub ON announcements(is_published);
+
+        -- === 用户个性化选项表 ===
+        CREATE TABLE IF NOT EXISTS user_novel_choices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            category TEXT,
+            value TEXT,
+            usage_count INTEGER DEFAULT 1,
+            created_at TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id),
+            UNIQUE(user_id, category, value)
+        );
+        CREATE INDEX IF NOT EXISTS idx_novel_choices_user ON user_novel_choices(user_id, category);
     `);
-    
+
     // 数据库迁移：projects 增加 deleted_at
     try {
         db.prepare('SELECT deleted_at FROM projects LIMIT 1').get();
@@ -204,7 +217,7 @@ export function createUser(id: string, username: string, passwordHash: string): 
     const stmt = db.prepare('INSERT INTO users (id, username, password_hash, tokens, referral_code, created_at) VALUES (?, ?, ?, ?, ?, ?)');
     const now = new Date().toISOString();
     const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-    
+
     // 获取系统配置的初始 Token
     let initialTokens = 1000;
     try {
@@ -212,7 +225,7 @@ export function createUser(id: string, username: string, passwordHash: string): 
         if (conf) initialTokens = parseInt(conf, 10) || 1000;
     } catch (e) { console.error("Error reading initial tokens config", e); }
 
-    stmt.run(id, username, passwordHash, initialTokens, referralCode, now); 
+    stmt.run(id, username, passwordHash, initialTokens, referralCode, now);
     return { id, username, password_hash: passwordHash, tokens: initialTokens, vip_expiry: null, referral_code: referralCode, created_at: now };
 }
 
@@ -259,7 +272,7 @@ export function rechargeUser(userId: string, tokenAmount: number, vipDays: numbe
         const now = new Date();
         if (vipDays > 0) {
             let currentExpiry = user.vip_expiry ? new Date(user.vip_expiry) : new Date();
-            if (currentExpiry < now) currentExpiry = now; 
+            if (currentExpiry < now) currentExpiry = now;
             currentExpiry.setDate(currentExpiry.getDate() + vipDays);
             newVipExpiry = currentExpiry.toISOString();
         }
@@ -538,6 +551,49 @@ export function getAllUsers(): User[] {
     return db.prepare('SELECT id, username, tokens, vip_expiry, created_at FROM users ORDER BY created_at DESC').all() as User[];
 }
 
+// 记录用户的小说配置选项 (Genre, Trope, etc.)
+export function recordUserNovelChoice(userId: string, category: string, value: string): void {
+    if (!value || !value.trim()) return;
+    const val = value.trim();
+    const now = new Date().toISOString();
+    // SQLite upsert
+    db.prepare(`
+        INSERT INTO user_novel_choices (user_id, category, value, created_at, usage_count)
+        VALUES (?, ?, ?, ?, 1)
+        ON CONFLICT(user_id, category, value) 
+        DO UPDATE SET usage_count = usage_count + 1
+    `).run(userId, category, val, now);
+}
+
+export function getUserNovelChoices(userId: string): Record<string, string[]> {
+    const rows = db.prepare('SELECT category, value FROM user_novel_choices WHERE user_id = ? ORDER BY usage_count DESC, created_at DESC').all(userId) as { category: string, value: string }[];
+    const result: Record<string, string[]> = {
+        genres: [],
+        tropes: [],
+        protagonistTypes: [],
+        goldenFingers: [],
+        tones: []
+    };
+
+    // Map DB category names to Frontend/ConfigPool keys
+    // DB keys: genre, trope, protagonistType, goldenFinger, tone
+    // ConfigPool/Result keys: genres, tropes, protagonistTypes, goldenFingers, tones
+    for (const row of rows) {
+        let key = '';
+        switch (row.category) {
+            case 'genre': key = 'genres'; break;
+            case 'trope': key = 'tropes'; break;
+            case 'protagonistType': key = 'protagonistTypes'; break;
+            case 'goldenFinger': key = 'goldenFingers'; break;
+            case 'tone': key = 'tones'; break;
+        }
+        if (key && result[key]) {
+            result[key].push(row.value);
+        }
+    }
+    return result;
+}
+
 export function deleteUserFull(userId: string) {
     const transaction = db.transaction(() => {
         db.prepare('DELETE FROM archives WHERE user_id = ?').run(userId);
@@ -546,6 +602,7 @@ export function deleteUserFull(userId: string) {
         db.prepare('DELETE FROM user_prompts WHERE user_id = ?').run(userId);
         db.prepare('DELETE FROM user_transactions WHERE user_id = ?').run(userId);
         db.prepare('DELETE FROM messages WHERE user_id = ?').run(userId);
+        db.prepare('DELETE FROM user_novel_choices WHERE user_id = ?').run(userId);
         db.prepare('DELETE FROM users WHERE id = ?').run(userId);
     });
     transaction();

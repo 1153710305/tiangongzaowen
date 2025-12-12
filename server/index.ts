@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { jwt } from 'hono/jwt';
-import { sign } from 'hono/jwt';
+import { sign, verify } from 'hono/jwt';
 import { GoogleGenAI } from '@google/genai';
 import { SYSTEM_INSTRUCTION, PROMPT_BUILDERS } from './prompts.ts';
 import { RANDOM_DATA_POOL } from './data.ts';
@@ -62,7 +62,30 @@ app.route('/admin', adminRouter);
 
 // === 公开路由 ===
 app.get('/', (c) => c.text('SkyCraft AI Backend (v3.1.0) is Running!'));
-app.get('/api/config/pool', (c) => c.json(RANDOM_DATA_POOL));
+app.get('/api/config/pool', async (c) => {
+    let pool = { ...RANDOM_DATA_POOL };
+    const authHeader = c.req.header('Authorization');
+    if (authHeader) {
+        try {
+            const token = authHeader.split(' ')[1];
+            const payload = await verify(token, JWT_SECRET);
+            if (payload && payload.id) {
+                const userChoices = db.getUserNovelChoices(payload.id as string);
+                // Merge logic: Add user choices to the front of the arrays or just Append
+                // Set ensures uniqueness if logic repeats
+                if (userChoices.genres) pool.genres = [...new Set([...pool.genres, ...userChoices.genres])];
+                if (userChoices.tropes) pool.tropes = [...new Set([...pool.tropes, ...userChoices.tropes])];
+                if (userChoices.protagonistTypes) pool.protagonistTypes = [...new Set([...pool.protagonistTypes, ...userChoices.protagonistTypes])];
+                if (userChoices.goldenFingers) pool.goldenFingers = [...new Set([...pool.goldenFingers, ...userChoices.goldenFingers])];
+                if (userChoices.tones) pool.tones = [...new Set([...pool.tones, ...userChoices.tones])];
+            }
+        } catch (e) {
+            // Ignore invalid tokens for public endpoint
+        }
+    }
+    return c.json(pool);
+});
+
 app.get('/api/config/models', (c) => {
     try {
         const modelsStr = db.getSystemConfig('ai_models');
@@ -133,6 +156,16 @@ app.post('/api/generate', async (c) => {
 
     const body = await c.req.json();
     const { settings, step, context, references, extraPrompt, model, systemInstruction } = body as any;
+
+    // Record User Choices
+    if (settings) {
+        const { genre, trope, protagonistType, goldenFinger, tone } = settings as NovelSettings;
+        if (genre) db.recordUserNovelChoice(payload.id, 'genre', genre);
+        if (trope) db.recordUserNovelChoice(payload.id, 'trope', trope);
+        if (protagonistType) db.recordUserNovelChoice(payload.id, 'protagonistType', protagonistType);
+        if (goldenFinger) db.recordUserNovelChoice(payload.id, 'goldenFinger', goldenFinger);
+        if (tone) db.recordUserNovelChoice(payload.id, 'tone', tone);
+    }
 
     // VIP Check
     let modelName = model || db.getSystemConfig('default_model') || 'gemini-2.5-flash';
