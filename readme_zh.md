@@ -59,6 +59,13 @@
 
 ## 📝 版本历史 (Changelog)
 
+**v3.5.3 (AI Chapter Generation from Mind Map)**
+*   **Feature (Core)**: 新增“思维导图生成正文”功能。
+    *   在思维导图中直接点击节点，通过 AI 生成章节正文或内容扩展。
+    *   **Contextual Writing**: 支持指定“上一章”和“下一章”上下文，实现承上启下、自动回收伏笔的连贯写作。
+    *   **Smart Reference**: 支持在 Prompt 中使用 `@` 引用其他节点、使用 `:` 引用其他导图，实现跨文档上下文注入。
+    *   **Workflow**: 生成的内容可直接保存为正文卷宗的新章节，自动同步章节序号。
+
 **v3.5.0 (Platform Customization)**
 *   **Feature (Core)**: 新增“平台定向创作”功能。
     *   支持选择 **番茄、起点、晋江、飞卢、知乎、七猫** 等主流平台。

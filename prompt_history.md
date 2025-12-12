@@ -146,3 +146,23 @@ const guide = `
 1.  Created `components/JsonDisplay.tsx` to render JSON data with syntax highlighting, collapsible sections, and copy functionality.
 2.  Updated `components/LogViewer.tsx` to use `JsonDisplay` for rendering log details instead of a plain `pre` block.
 3.  Optimized the display of long string values (like AI responses) in logs to be collapsible and readable (preserving newlines).
+
+## Response 7
+**User Request**: 在“章节细纲”中，点击节点，AI 能够根据上一章、下一章、节点大纲，来续写这一章的正文内容，并且自动保存到正文卷宗中。
+
+**Action Taken**:
+1.  **Frontend**:
+    -   Added `CHAPTER_FROM_NODE` to `WorkflowStep`.
+    -   Refactored `MindMapEditor.tsx` to extract modal logic into new `components/mindmap/MindMapAiModal.tsx`.
+    -   Updated context menu in `MindMapAiModal` to support inserting references to other nodes (`@`) and maps (`:`).
+    -   Implemented logic to fetch previous and next chapter content if available.
+    -   Added functionality to auto-save generated content as a new chapter.
+2.  **Backend**:
+    -   Updated `PROMPT_BUILDERS.CHAPTER_FROM_NODE` in `server/prompts.ts` (implied in previous context, ensured connection in `server/index.ts`).
+    -   Modified `/api/generate` in `server/index.ts` to handle `CHAPTER_FROM_NODE` step and extract `preChapter`, `nextChapter` from request body.
+    -   Updated prompt construction to include:
+        -   **Current Node Outline**: The core content to expand.
+        -   **Context**: References from other nodes or maps.
+        -   **Flow**: Previous chapter (for continuity) and Next chapter (for foreshadowing).
+3.  **Prompt Logic**:
+    -   `CHAPTER_FROM_NODE` prompt instructs AI to function as a professional web novel writer, focusing on expanding the outline into a full chapter while maintaining plot consistency.
