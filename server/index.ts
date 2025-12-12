@@ -132,7 +132,7 @@ app.post('/api/generate', async (c) => {
     if (!user || user.tokens <= 0) return c.json({ error: "代币不足" }, 402);
 
     const body = await c.req.json();
-    const { settings, step, context, references, extraPrompt, model } = body as any;
+    const { settings, step, context, references, extraPrompt, model, systemInstruction } = body as any;
 
     // VIP Check
     let modelName = model || db.getSystemConfig('default_model') || 'gemini-2.5-flash';
@@ -158,9 +158,14 @@ app.post('/api/generate', async (c) => {
 
         if (extraPrompt && step !== WorkflowStep.MIND_MAP_NODE) prompt += `\n\n【用户指令】:\n${extraPrompt}`;
 
+        // Determine System Instruction (Dynamic or Default)
+        const activeSystemInstruction = systemInstruction && systemInstruction.trim().length > 0
+            ? systemInstruction
+            : SYSTEM_INSTRUCTION;
+
         const responseStream = await ai.models.generateContentStream({
             model: modelName, contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.85 }
+            config: { systemInstruction: activeSystemInstruction, temperature: 0.85 }
         });
 
         const { readable, writable } = new TransformStream();
@@ -186,7 +191,7 @@ app.post('/api/generate', async (c) => {
                 await writer.close();
                 // Enhanced Logging for AI Tasks
                 logger.info("AI Generation Task Completed", {
-                    systemInstruction: SYSTEM_INSTRUCTION,
+                    systemInstruction: activeSystemInstruction,
                     context: prompt,
                     response: fullText,
                     tokens: totalTokens,

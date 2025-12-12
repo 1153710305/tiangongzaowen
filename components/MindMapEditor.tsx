@@ -460,7 +460,7 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
 
             // 构建带配置的最终 Prompt
             let finalPrompt = promptText;
-            if (aiIdentity) finalPrompt = `【身份设定】:${aiIdentity}\n` + finalPrompt;
+            // Removed: identity injection here, now passed as systemInstruction
             if (aiConstraints) finalPrompt = finalPrompt + `\n【强制约束】:${aiConstraints}`;
 
             while ((match = refRegex.exec(promptText)) !== null) {
@@ -522,7 +522,8 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                 finalReferences, // 传入结构化数据作为上下文
                 (chunk) => setAiContent(p => p + chunk),
                 finalPrompt, // 使用带配置的 Prompt
-                aiModel // 传入选择的模型
+                aiModel, // 传入选择的模型
+                aiIdentity // 传入身份设定 (System Instruction)
             );
         } catch (e: any) {
             setAiError(e.message);

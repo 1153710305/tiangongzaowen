@@ -129,3 +129,12 @@ const guide = `
 3. **爽点/爆点**：必须精准击中"${platform}"读者的核心爽点。
 `
 ```
+
+## Response 5
+**User Request**: 当在AI扩展思维导图和AI续写正文的时候，选择的身份设定暂时替换systemInstruction。执行完再换回默认的systemInstruction。
+
+**Action Taken**:
+1.  Modified `server/index.ts` to accept `systemInstruction` in `/api/generate` request body and use it if present.
+2.  Updated `services/geminiService.ts` to support the new parameter in `generateStream`.
+3.  Updated `components/MindMapEditor.tsx` to pass the selected identity as `systemInstruction` instead of prepending it to the user prompt.
+4.  Updated `components/ChapterEditor.tsx` to pass the selected identity as `systemInstruction` instead of prepending it to the user prompt.

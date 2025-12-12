@@ -8,7 +8,7 @@ import { authService } from "./authService";
  * 前端 API 服务
  */
 class ApiService {
-    
+
     public async fetchConfigPool(): Promise<any> {
         try {
             const res = await fetch(API_ENDPOINTS.CONFIG);
@@ -22,7 +22,7 @@ class ApiService {
     /**
      * 获取后端配置的AI模型列表
      */
-    public async getAiModels(): Promise<{ models: {id: string, name: string, isVip?: boolean}[], defaultModel: string }> {
+    public async getAiModels(): Promise<{ models: { id: string, name: string, isVip?: boolean }[], defaultModel: string }> {
         try {
             const res = await fetch(`${API_ENDPOINTS.CONFIG.replace('/pool', '/models')}`);
             if (!res.ok) throw new Error("获取模型配置失败");
@@ -63,15 +63,16 @@ class ApiService {
      * 请求生成内容（流式）
      */
     public async generateStream(
-        settings: NovelSettings, 
-        step: WorkflowStep, 
-        context: string = '', 
-        references: ReferenceNovel[] | string | undefined, 
+        settings: NovelSettings,
+        step: WorkflowStep,
+        context: string = '',
+        references: ReferenceNovel[] | string | undefined,
         onChunk: (text: string) => void,
         extraPrompt?: string,
-        model?: string
+        model?: string,
+        systemInstruction?: string
     ): Promise<string> {
-        
+
         logger.info(`[Client] 请求生成: ${step}`, { model });
         const authHeaders = authService.getAuthHeader();
 
@@ -79,7 +80,7 @@ class ApiService {
             const response = await fetch(API_ENDPOINTS.GENERATE, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...authHeaders } as any,
-                body: JSON.stringify({ settings, step, context, references, extraPrompt, model })
+                body: JSON.stringify({ settings, step, context, references, extraPrompt, model, systemInstruction })
             });
 
             if (response.status === 401) throw new Error("Unauthorized");
@@ -89,7 +90,7 @@ class ApiService {
 
             const reader = response.body?.getReader();
             if (!reader) throw new Error("No response body");
-            
+
             const decoder = new TextDecoder();
             let fullText = '';
             let done = false;
@@ -101,7 +102,7 @@ class ApiService {
                     const chunkValue = decoder.decode(value, { stream: true });
                     // 如果后端返回的是错误JSON (流式中间报错)
                     if (chunkValue.startsWith('\n[Error:')) {
-                         throw new Error(chunkValue.replace('\n[Error: ', '').replace(']', ''));
+                        throw new Error(chunkValue.replace('\n[Error: ', '').replace(']', ''));
                     }
                     fullText += chunkValue;
                     onChunk(chunkValue);
@@ -204,9 +205,9 @@ class ApiService {
     // 软删除
     public async deleteProject(projectId: string): Promise<void> {
         const authHeaders = authService.getAuthHeader();
-        const res = await fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}`, { 
+        const res = await fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}`, {
             method: 'DELETE',
-            headers: { ...authHeaders } as any 
+            headers: { ...authHeaders } as any
         });
         if (!res.ok) throw new Error("删除项目失败");
     }
@@ -214,9 +215,9 @@ class ApiService {
     // 恢复项目
     public async restoreProject(projectId: string): Promise<void> {
         const authHeaders = authService.getAuthHeader();
-        const res = await fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}/restore`, { 
+        const res = await fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}/restore`, {
             method: 'POST',
-            headers: { ...authHeaders } as any 
+            headers: { ...authHeaders } as any
         });
         if (!res.ok) throw new Error("恢复项目失败");
     }
@@ -224,9 +225,9 @@ class ApiService {
     // 彻底删除
     public async permanentDeleteProject(projectId: string): Promise<void> {
         const authHeaders = authService.getAuthHeader();
-        const res = await fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}/permanent`, { 
+        const res = await fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}/permanent`, {
             method: 'DELETE',
-            headers: { ...authHeaders } as any 
+            headers: { ...authHeaders } as any
         });
         if (!res.ok) throw new Error("彻底删除失败");
     }
@@ -289,8 +290,8 @@ class ApiService {
 
     public async getChapterDetail(projectId: string, chapterId: string): Promise<Chapter> {
         const authHeaders = authService.getAuthHeader();
-        const res = await fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}/chapters/${chapterId}`, { 
-            headers: { ...authHeaders } as any 
+        const res = await fetch(`${API_ENDPOINTS.PROJECTS}/${projectId}/chapters/${chapterId}`, {
+            headers: { ...authHeaders } as any
         });
         if (!res.ok) throw new Error("获取章节详情失败");
         return await res.json();
@@ -318,8 +319,8 @@ class ApiService {
     // === 提示词库 CRUD (New) ===
     public async getUserPrompts(): Promise<UserPrompt[]> {
         const authHeaders = authService.getAuthHeader();
-        const res = await fetch(`${API_BASE_URL}/api/prompts`, { 
-            headers: { ...authHeaders } as any 
+        const res = await fetch(`${API_BASE_URL}/api/prompts`, {
+            headers: { ...authHeaders } as any
         });
         if (!res.ok) return [];
         return await res.json();
