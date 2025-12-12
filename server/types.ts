@@ -36,7 +36,8 @@ export enum WorkflowStep {
     CHARACTER = 'character',
     CHAPTER = 'chapter',
     REVIEW = 'review',
-    MIND_MAP_NODE = 'mind_map_node'
+    MIND_MAP_NODE = 'mind_map_node',
+    CHAPTER_FROM_NODE = 'chapter_from_node'
 }
 
 export enum LogLevel {

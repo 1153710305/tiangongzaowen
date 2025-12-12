@@ -65,6 +65,7 @@
     *   **Contextual Writing**: 支持指定“上一章”和“下一章”上下文，实现承上启下、自动回收伏笔的连贯写作。
     *   **Smart Reference**: 支持在 Prompt 中使用 `@` 引用其他节点、使用 `:` 引用其他导图，实现跨文档上下文注入。
     *   **Workflow**: 生成的内容可直接保存为正文卷宗的新章节，自动同步章节序号。
+*   **Refactor**: 实现了 `MindMapEditor` 的核心组件解耦，拆分出工具栏和 AI 助手模块，显著提升代码可维护性。
 
 **v3.5.0 (Platform Customization)**
 *   **Feature (Core)**: 新增“平台定向创作”功能。

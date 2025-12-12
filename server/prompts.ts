@@ -120,7 +120,35 @@ ${references}
 4. 输出长度：2000字左右。
 `,
 
-    // 思维导图节点扩展 (New)
+    // 基于思维导图节点撰写正文 (New)
+    CHAPTER_FROM_NODE: (settings: NovelSettings, outlineNode: string, preChapter?: string, nextChapter?: string, references?: string) => `
+请作为一名网文大神，基于提供的【本章大纲】撰写正文。
+
+**基本设定**：
+- 风格：${settings.pacing === 'fast' ? '快节奏、爽点密集' : '铺垫细腻、氛围感强'} (${settings.tone})
+- 受众：${settings.targetAudience}
+
+**【本章大纲/节点内容】** (核心依据):
+"${outlineNode}"
+
+${preChapter ? `**【上一章正文】** (承接上下文):\n"${preChapter.slice(-1500)}"` : ''}
+${nextChapter ? `**【下一章大纲/预告】** (铺垫伏笔):\n"${nextChapter.slice(0, 500)}"` : ''}
+
+${references ? `
+**⚠️ 参考资料 (思维导图/设定)**：
+${references}
+` : ''}
+
+**写作要求**：
+1. **严格贴合本章大纲**：核心剧情必须围绕大纲展开。
+2. **承上启下**：
+   - 必须自然承接上一章的结尾。
+   - 必须为下一章的剧情埋下伏笔或钩子（如果提供了下一章信息）。
+3. **沉浸感**：多用“展示”而非“讲述”（Show, don't tell）。
+4. **字数**：2000字左右。
+`,
+
+    // 思维导图节点扩展
     // context: 当前节点的内容
     // prompt: 用户的具体指令
     // references: 引用其他节点的内容
