@@ -38,9 +38,9 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
             if (data && !activeFile) {
                 // 默认选中第一个思维导图
                 if (data.maps.length > 0) {
-                     handleFileClick('mindmap', data.maps[0].id, data.maps[0].title);
+                    handleFileClick('mindmap', data.maps[0].id, data.maps[0].title);
                 } else if (data.chapters.length > 0) {
-                     handleFileClick('chapter', data.chapters[0].id, data.chapters[0].title);
+                    handleFileClick('chapter', data.chapters[0].id, data.chapters[0].title);
                 }
             }
         });
@@ -57,7 +57,7 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
                 logger.error("加载导图详情失败", e);
             }
         } else if (type === 'chapter') {
-             try {
+            try {
                 const detail = await apiService.getChapterDetail(project.id, id);
                 setActiveFile({ type, id, title, data: detail });
             } catch (e) {
@@ -77,7 +77,7 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
             alert('创建失败');
         }
     };
-    
+
     const handleCreateChapter = async () => {
         try {
             const order = structure.chapters.length + 1;
@@ -117,7 +117,7 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
             alert("保存失败");
         }
     };
-    
+
     const handleSaveChapter = async (chapId: string, title: string, content: string) => {
         try {
             await apiService.updateChapter(project.id, chapId, title, content);
@@ -128,6 +128,16 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
             if (activeFile?.id === chapId) setActiveFile(prev => prev ? { ...prev, title, data: { ...prev.data, title, content } } : null);
         } catch (e) {
             logger.error("保存章节失败", e);
+        }
+    };
+
+    const handleChapterCreatedFromMindMap = async (chapterId: string) => {
+        const newData = await loadStructure();
+        if (newData) {
+            const newChap = newData.chapters.find(c => c.id === chapterId);
+            if (newChap) {
+                handleFileClick('chapter', newChap.id, newChap.title);
+            }
         }
     };
 
@@ -152,7 +162,7 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
                     <div className="p-3 text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between items-center">
                         <span>资源管理器</span>
                     </div>
-                    
+
                     {loading ? (
                         <div className="p-4 text-center text-slate-600 text-xs">加载中...</div>
                     ) : (
@@ -168,8 +178,8 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
                                 </div>
                                 <div className="pl-4 space-y-1">
                                     {structure.maps.map(map => (
-                                        <div 
-                                            key={map.id} 
+                                        <div
+                                            key={map.id}
                                             onClick={() => handleFileClick('mindmap', map.id, map.title)}
                                             className={`group flex justify-between items-center cursor-pointer px-2 py-1 rounded text-xs transition-colors ${activeFile?.id === map.id ? 'bg-pink-900/30 text-pink-200' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
                                         >
@@ -192,8 +202,8 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
                                 </div>
                                 <div className="pl-4 space-y-1">
                                     {structure.chapters.map(chap => (
-                                        <div 
-                                            key={chap.id} 
+                                        <div
+                                            key={chap.id}
                                             onClick={() => handleFileClick('chapter', chap.id, chap.title)}
                                             className={`group flex justify-between items-center cursor-pointer px-2 py-1 rounded text-xs truncate transition-colors ${activeFile?.id === chap.id ? 'bg-indigo-900/30 text-indigo-200' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
                                         >
@@ -223,7 +233,7 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
                         {activeFile ? (
                             <div className="h-full w-full">
                                 {activeFile.type === 'chapter' && activeFile.data && (
-                                    <ChapterEditor 
+                                    <ChapterEditor
                                         projectId={project.id}
                                         chapter={activeFile.data}
                                         availableResources={{
@@ -235,12 +245,13 @@ export const ProjectIDE: React.FC<Props> = ({ project, onBack }) => {
                                     />
                                 )}
                                 {activeFile.type === 'mindmap' && activeFile.data && (
-                                    <MindMapEditor 
+                                    <MindMapEditor
                                         projectId={project.id}
-                                        mapData={activeFile.data} 
+                                        mapData={activeFile.data}
                                         onSave={handleSaveMindMap}
                                         novelSettings={DEFAULT_NOVEL_SETTINGS}
                                         availableMaps={structure.maps}
+                                        onChapterCreated={handleChapterCreatedFromMindMap}
                                     />
                                 )}
                             </div>

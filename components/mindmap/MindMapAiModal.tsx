@@ -17,12 +17,13 @@ interface Props {
     novelSettings?: NovelSettings;
     onClose: () => void;
     onApply: (content: string) => void;
+    onChapterSaved?: (chapterId: string) => void;
 }
 
 type TabMode = 'expand' | 'chapter';
 
 export const MindMapAiModal: React.FC<Props> = ({
-    projectId, node, rootNode, mapId, availableMaps, novelSettings, onClose, onApply
+    projectId, node, rootNode, mapId, availableMaps, novelSettings, onClose, onApply, onChapterSaved
 }) => {
     const [activeTab, setActiveTab] = useState<TabMode>('expand');
 
@@ -43,6 +44,7 @@ export const MindMapAiModal: React.FC<Props> = ({
     const [preChapterId, setPreChapterId] = useState<string>('');
     const [nextSiblingId, setNextSiblingId] = useState<string>('');
     const [isChapterSaved, setIsChapterSaved] = useState(false);
+    const [wordCount, setWordCount] = useState<number>(3000);
 
     // Topology State
     const [isChapterNode, setIsChapterNode] = useState(false);
@@ -276,6 +278,11 @@ export const MindMapAiModal: React.FC<Props> = ({
                     }
                 }
 
+                // Append Word Count Requirement
+                if (wordCount > 0) {
+                    finalPrompt += `\n【篇幅要求】：本章正文内容请尽量控制在 ${wordCount} 字左右，至少不低于 ${Math.floor(wordCount * 0.8)} 字。`;
+                }
+
                 await apiService.generateStream(
                     novelSettings || {} as any,
                     WorkflowStep.CHAPTER_FROM_NODE,
@@ -307,6 +314,11 @@ export const MindMapAiModal: React.FC<Props> = ({
             setIsChapterSaved(true);
             const struct = await apiService.getProjectStructure(projectId);
             setChapters(struct.chapters.sort((a, b) => a.order_index - b.order_index));
+
+            // Notify Parent to Refresh and Navigate
+            if (onChapterSaved) {
+                onChapterSaved(newChap.id);
+            }
         } catch (e) {
             setAiError("保存章节失败");
         }
@@ -344,19 +356,29 @@ export const MindMapAiModal: React.FC<Props> = ({
 
                     {/* Mode Specific Controls */}
                     {activeTab === 'chapter' && (
-                        <div className="grid grid-cols-2 gap-4 mb-4 bg-slate-900/30 p-3 rounded border border-slate-700/50">
+                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-4 bg-slate-900/30 p-3 rounded border border-slate-700/50">
                             <div>
-                                <label className="block text-xs text-slate-500 mb-1">上一章节 (承接上下文 - 已发布章节)</label>
+                                <label className="block text-xs text-slate-500 mb-1">上一章节 (承接上下文)</label>
                                 <select value={preChapterId} onChange={(e) => setPreChapterId(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white outline-none">
                                     <option value="">(无)</option>
                                     {chapters.map(c => <option key={c.id} value={c.id}>{c.order_index}. {c.title}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs text-slate-500 mb-1">下一章节 (铺垫伏笔 - 后续节点大纲)</label>
+                                <label className="block text-xs text-slate-500 mb-1">下一章节 (铺垫伏笔)</label>
                                 <select value={nextSiblingId} onChange={(e) => setNextSiblingId(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white outline-none">
                                     <option value="">(无 - 也是节点末尾了)</option>
                                     {siblingNodes.map(n => <option key={n.id} value={n.id}>👉 {n.label}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs text-slate-500 mb-1">目标字数</label>
+                                <select value={wordCount} onChange={(e) => setWordCount(Number(e.target.value))} className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white outline-none">
+                                    <option value={1000}>短篇 (约1000字)</option>
+                                    <option value={2000}>标准 (约2000字)</option>
+                                    <option value={3000}>中长 (约3000字)</option>
+                                    <option value={5000}>长篇 (约5000字)</option>
+                                    <option value={10000}>超长 (约10000字)</option>
                                 </select>
                             </div>
                         </div>

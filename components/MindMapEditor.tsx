@@ -18,9 +18,10 @@ interface Props {
     onSave: (mapId: string, title: string, dataStr: string) => Promise<void>;
     novelSettings?: NovelSettings;
     availableMaps?: { id: string, title: string }[];
+    onChapterCreated?: (chapterId: string) => void;
 }
 
-export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, novelSettings, availableMaps = [] }) => {
+export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, novelSettings, availableMaps = [], onChapterCreated }) => {
     // 数据状态
     const [rootNode, setRootNode] = useState<MindMapNode | null>(null);
     const [title, setTitle] = useState(mapData.title);
@@ -305,6 +306,7 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
                     novelSettings={novelSettings}
                     onClose={() => setShowAiModal(false)}
                     onApply={handleAiApply}
+                    onChapterSaved={onChapterCreated}
                 />
             )}
         </div>
