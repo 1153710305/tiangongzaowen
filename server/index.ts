@@ -226,24 +226,36 @@ app.post('/api/projects/from-card', async (c) => {
     const pid = crypto.randomUUID();
     const proj = db.createProject(pid, c.get('jwtPayload').id, title, description, cardId);
 
-    // 默认思维导图 1: 核心架构
-    const coreMapChildren = ['世界设定', '爽点体系', '角色塑造', '关键角色成长体系'].map(label => ({
-        id: crypto.randomUUID(),
-        label,
-        children: []
+    db.createMindMap(crypto.randomUUID(), pid, '世界设定', JSON.stringify({
+        root: { id: 'root', label: '世界设定', children: [] }
     }));
-    db.createMindMap(crypto.randomUUID(), pid, '核心架构', JSON.stringify({
-        root: { id: 'root', label: '核心架构', children: coreMapChildren }
+    db.createMindMap(crypto.randomUUID(), pid, '爽点体系', JSON.stringify({
+        root: { id: 'root', label: '爽点体系', children: [] }
+    }));
+    db.createMindMap(crypto.randomUUID(), pid, '角色塑造', JSON.stringify({
+        root: { id: 'root', label: '角色塑造', children: [] }
+    }));
+    db.createMindMap(crypto.randomUUID(), pid, '关键角色成长体系', JSON.stringify({
+        root: { id: 'root', label: '关键角色成长体系', children: [] }
     }));
 
-    // 默认思维导图 2: 事件发展
-    const eventMapChildren = ['分卷大纲', '事件流', '单元细纲', '章节细纲', '角色状态时间线', '剧情锚点伏笔提取'].map(label => ({
-        id: crypto.randomUUID(),
-        label,
-        children: []
+    db.createMindMap(crypto.randomUUID(), pid, '分卷大纲', JSON.stringify({
+        root: { id: 'root', label: '分卷大纲', children: [] }
     }));
-    db.createMindMap(crypto.randomUUID(), pid, '事件发展', JSON.stringify({
-        root: { id: 'root', label: '事件发展', children: eventMapChildren }
+    db.createMindMap(crypto.randomUUID(), pid, '事件流', JSON.stringify({
+        root: { id: 'root', label: '事件流', children: [] }
+    }));
+    db.createMindMap(crypto.randomUUID(), pid, '单元细纲', JSON.stringify({
+        root: { id: 'root', label: '单元细纲', children: [] }
+    }));
+    db.createMindMap(crypto.randomUUID(), pid, '章节细纲', JSON.stringify({
+        root: { id: 'root', label: '章节细纲', children: [] }
+    }));
+    db.createMindMap(crypto.randomUUID(), pid, '角色状态时间线', JSON.stringify({
+        root: { id: 'root', label: '角色状态时间线', children: [] }
+    }));
+    db.createMindMap(crypto.randomUUID(), pid, '剧情锚点伏笔提取', JSON.stringify({
+        root: { id: 'root', label: '剧情锚点伏笔提取', children: [] }
     }));
 
     db.createChapter(crypto.randomUUID(), pid, '第一章', '', 1);
