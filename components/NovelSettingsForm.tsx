@@ -91,25 +91,36 @@ export const NovelSettingsForm: React.FC<Props> = ({ settings, onChange, onGener
     };
 
     // 生成随机爆款配置
-    const handleRandomize = () => {
-        if (!dataPool) {
-            logger.warn("素材库未加载，无法随机");
-            return;
+    const handleRandomize = async () => {
+        try {
+            // 重新加载最新的配置池(包含用户新保存的数据)
+            const freshPool = await apiService.fetchConfigPool();
+            if (freshPool) {
+                setDataPool(freshPool);
+            }
+
+            const poolToUse = freshPool || dataPool;
+            if (!poolToUse) {
+                logger.warn("素材库未加载，无法随机");
+                return;
+            }
+
+            const newSettings: NovelSettings = {
+                genre: getRandomItem(poolToUse.genres),
+                trope: getRandomItem(poolToUse.tropes),
+                protagonistType: getRandomItem(poolToUse.protagonistTypes),
+                goldenFinger: getRandomItem(poolToUse.goldenFingers),
+                tone: getRandomItem(poolToUse.tones),
+                // 随机受众和节奏
+                targetAudience: Math.random() > 0.5 ? 'male' : 'female',
+                pacing: Math.random() > 0.3 ? 'fast' : (Math.random() > 0.5 ? 'normal' : 'slow')
+            };
+
+            onChange(newSettings);
+            logger.info("用户使用了随机生成配置功能", newSettings);
+        } catch (e) {
+            logger.error("随机配置失败", e);
         }
-
-        const newSettings: NovelSettings = {
-            genre: getRandomItem(dataPool.genres),
-            trope: getRandomItem(dataPool.tropes),
-            protagonistType: getRandomItem(dataPool.protagonistTypes),
-            goldenFinger: getRandomItem(dataPool.goldenFingers),
-            tone: getRandomItem(dataPool.tones),
-            // 随机受众和节奏
-            targetAudience: Math.random() > 0.5 ? 'male' : 'female',
-            pacing: Math.random() > 0.3 ? 'fast' : (Math.random() > 0.5 ? 'normal' : 'slow')
-        };
-
-        onChange(newSettings);
-        logger.info("用户使用了随机生成配置功能", newSettings);
     };
 
     // 统一处理点击生成按钮
