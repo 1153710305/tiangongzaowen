@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { LogEntry, LogLevel } from '../types';
 import { logger } from '../services/loggerService';
+import { JsonDisplay } from './JsonDisplay';
 
 export const LogViewer: React.FC = () => {
     const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -34,13 +35,13 @@ export const LogViewer: React.FC = () => {
 
     if (!isOpen) {
         return (
-            <button 
+            <button
                 onClick={() => setIsOpen(true)}
                 className="fixed bottom-4 right-4 bg-paper border border-slate-700 p-2 rounded-full shadow-lg hover:bg-slate-700 transition-colors z-50 text-xs text-slate-400"
                 title="打开系统日志"
             >
                 <span className="flex items-center gap-1">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 17l6-6-6-6" /><path d="M12 19h8" /></svg>
                     日志 ({logs.length})
                 </span>
             </button>
@@ -52,7 +53,7 @@ export const LogViewer: React.FC = () => {
             <div className="flex justify-between items-center p-2 bg-paper border-b border-slate-700">
                 <span className="font-bold text-slate-300">系统运行日志</span>
                 <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-white">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
                 </button>
             </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-1 bg-[#0d1117]">
@@ -63,9 +64,9 @@ export const LogViewer: React.FC = () => {
                         <span className={`mx-2 font-bold ${getLevelColor(log.level)}`}>{log.level}</span>
                         <span className="text-slate-300">{log.message}</span>
                         {log.details && (
-                            <pre className="mt-1 p-1 bg-black/30 rounded text-slate-500 overflow-x-auto">
-                                {typeof log.details === 'object' ? JSON.stringify(log.details, null, 2) : log.details}
-                            </pre>
+                            <div className="mt-1 p-2 bg-black/30 rounded border border-slate-800/50 overflow-x-auto">
+                                <JsonDisplay data={log.details} />
+                            </div>
                         )}
                     </div>
                 ))}

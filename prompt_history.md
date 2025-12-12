@@ -138,3 +138,11 @@ const guide = `
 2.  Updated `services/geminiService.ts` to support the new parameter in `generateStream`.
 3.  Updated `components/MindMapEditor.tsx` to pass the selected identity as `systemInstruction` instead of prepending it to the user prompt.
 4.  Updated `components/ChapterEditor.tsx` to pass the selected identity as `systemInstruction` instead of prepending it to the user prompt.
+
+## Response 6
+**User Request**: 优化后台系统日志的json结构的信息显示，便于开发人员进行查看
+
+**Action Taken**:
+1.  Created `components/JsonDisplay.tsx` to render JSON data with syntax highlighting, collapsible sections, and copy functionality.
+2.  Updated `components/LogViewer.tsx` to use `JsonDisplay` for rendering log details instead of a plain `pre` block.
+3.  Optimized the display of long string values (like AI responses) in logs to be collapsible and readable (preserving newlines).
