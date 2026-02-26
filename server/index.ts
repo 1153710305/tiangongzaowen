@@ -127,7 +127,7 @@ app.post('/api/auth/login', async (c) => {
 });
 
 // === 受保护路由 ===
-app.use('/api/*', jwt({ secret: JWT_SECRET }));
+app.use('/api/*', jwt({ secret: JWT_SECRET, alg: 'HS256' }));
 
 app.get('/api/user/status', (c) => {
     const payload = c.get('jwtPayload');

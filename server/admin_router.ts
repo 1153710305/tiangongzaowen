@@ -33,7 +33,7 @@ adminRouter.post('/api/login', async (c) => {
 
 // === 受保护的 API 路由组 ===
 const protectedApi = new Hono();
-protectedApi.use('/*', jwt({ secret: JWT_SECRET }));
+protectedApi.use('/*', jwt({ secret: JWT_SECRET, alg: 'HS256' }));
 protectedApi.use('/*', async (c, next) => {
     const payload = c.get('jwtPayload');
     if (payload.role !== 'admin') return c.json({ error: '无权限访问' }, 403);
