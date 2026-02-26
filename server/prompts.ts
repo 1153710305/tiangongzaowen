@@ -64,7 +64,7 @@ export const PROMPT_BUILDERS = {
     ANALYSIS_IDEA: (settings: NovelSettings, references: ReferenceNovel[]) => {
         const refsText = references.map((r, i) => `案例 ${i + 1}:\n书名：${r.title}\n简介：${r.intro}`).join('\n');
         return `
-请作为一名市场嗅觉敏锐的网文主编，对提供的爆款小说进行深度拆解，并基于其"爆火基因"生成 3 个全新的创意。
+请作为一名市场嗅觉敏锐的网文主编，对提供的爆款小说进行深度拆解，并基于其"爆火基因"生成 5 个全新的创意。
 
 **参考案例**：
 ${refsText}

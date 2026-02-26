@@ -42,7 +42,7 @@ export const API_BASE_URL =
     (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_API_BASE_URL) ||
     // 兼容 Create React App 或其他 Node.js 环境的全局 process.env
     (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) ||
-    'http://192.168.1.18:3000';
+    'http://localhost:3000';
 
 /**
  * API 接口端点集合
