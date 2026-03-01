@@ -270,7 +270,16 @@ export const MindMapAiModal: React.FC<Props> = ({
                         try {
                             const map = await apiService.getMindMapDetail(projectId, id1);
                             if (map?.data) {
-                                const traverse = (n: any): any => n.id === id2 ? n : (n.children?.find((c: any) => traverse(c)) || null);
+                                const traverse = (n: any): any => {
+                                    if (n.id === id2) return n;
+                                    if (n.children) {
+                                        for (const child of n.children) {
+                                            const res = traverse(child);
+                                            if (res) return res;
+                                        }
+                                    }
+                                    return null;
+                                };
                                 const target = traverse(JSON.parse(map.data).root);
                                 if (target) referencesData.push(`【参考节点结构 (from ${map.title})：${target.label}】\n${serializeNodeTree(target)}`);
                             }
