@@ -93,3 +93,27 @@ export const getAllNodesFlat = (node: MindMapNode): MindMapNode[] => {
     }
     return list;
 };
+
+// 查找节点深度
+export const findNodeDepth = (root: MindMapNode, targetId: string, currentDepth = 0): number | -1 => {
+    if (root.id === targetId) return currentDepth;
+    if (root.children) {
+        for (const child of root.children) {
+            const depth = findNodeDepth(child, targetId, currentDepth + 1);
+            if (depth !== -1) return depth;
+        }
+    }
+    return -1;
+};
+
+// 获取指定深度的所有节点
+export const getNodesAtDepth = (root: MindMapNode, targetDepth: number, currentDepth = 0): MindMapNode[] => {
+    if (currentDepth === targetDepth) return [root];
+    let nodes: MindMapNode[] = [];
+    if (root.children) {
+        for (const child of root.children) {
+            nodes = [...nodes, ...getNodesAtDepth(child, targetDepth, currentDepth + 1)];
+        }
+    }
+    return nodes;
+};

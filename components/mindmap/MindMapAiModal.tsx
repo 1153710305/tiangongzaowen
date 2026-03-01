@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import { MindMapNode, WorkflowStep, NovelSettings, Chapter, IdeaCard } from '../../types';
 import { Button } from '../Button';
 import { PromptSelector } from '../PromptSelector';
-import { serializeNodeTree, getAllNodesFlat } from './utils';
+import { serializeNodeTree, getAllNodesFlat, findNodeDepth, getNodesAtDepth } from './utils';
 import { apiService } from '../../services/geminiService';
 import { logger } from '../../services/loggerService';
 
@@ -114,23 +114,28 @@ export const MindMapAiModal: React.FC<Props> = ({
 
             setIsChapterNode(enableChapterMode);
 
-            // 3. Auto-Selection Logic
-            if (enableChapterMode && parent?.children) {
-                setSiblingNodes(parent.children);
-                const myIndex = parent.children.findIndex(c => c.id === node.id);
+            // 3. Auto-Selection Logic (Global Depth Traversal)
+            if (enableChapterMode) {
+                // Find global depth
+                const depth = findNodeDepth(rootNode, node.id);
+                if (depth !== -1) {
+                    const sameDepthNodes = getNodesAtDepth(rootNode, depth);
+                    setSiblingNodes(sameDepthNodes);
+                    const myIndex = sameDepthNodes.findIndex(c => c.id === node.id);
 
-                // Auto Select Previous Chapter (Match by Title or Index)
-                if (myIndex > 0) {
-                    const prevSibling = parent.children[myIndex - 1];
-                    // Try match by title
-                    const matchTitle = sortedChapters.find(c => c.title === prevSibling.label);
-                    if (matchTitle) setPreChapterId(matchTitle.id);
-                }
+                    // Auto Select Previous Chapter (Match by Title or Index from global list)
+                    if (myIndex > 0) {
+                        const prevSibling = sameDepthNodes[myIndex - 1];
+                        // Try match by title
+                        const matchTitle = sortedChapters.find(c => c.title === prevSibling.label);
+                        if (matchTitle) setPreChapterId(matchTitle.id);
+                    }
 
-                // Auto Select Next Chapter (Sibling Node)
-                if (myIndex >= 0 && myIndex < parent.children.length - 1) {
-                    const nextSibling = parent.children[myIndex + 1];
-                    setNextSiblingId(nextSibling.id);
+                    // Auto Select Next Chapter (Next Node in global list)
+                    if (myIndex >= 0 && myIndex < sameDepthNodes.length - 1) {
+                        const nextSibling = sameDepthNodes[myIndex + 1];
+                        setNextSiblingId(nextSibling.id);
+                    }
                 }
             }
 
