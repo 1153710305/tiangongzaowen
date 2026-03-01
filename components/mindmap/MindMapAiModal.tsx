@@ -109,11 +109,13 @@ export const MindMapAiModal: React.FC<Props> = ({
             // 2. Analyze Topology (Am I a Chapter Outline Node?)
             const parent = findParent(rootNode, node.id);
             const isChildOfOutline = parent && (parent.label === '章节细纲' || parent.label.includes('细纲') || parent.label === 'Chapter Outline');
+            const isChapterTitle = /第.+章/.test(node.label);
+            const enableChapterMode = !!isChildOfOutline || isChapterTitle;
 
-            setIsChapterNode(!!isChildOfOutline);
+            setIsChapterNode(enableChapterMode);
 
             // 3. Auto-Selection Logic
-            if (isChildOfOutline && parent?.children) {
+            if (enableChapterMode && parent?.children) {
                 setSiblingNodes(parent.children);
                 const myIndex = parent.children.findIndex(c => c.id === node.id);
 
@@ -133,7 +135,7 @@ export const MindMapAiModal: React.FC<Props> = ({
             }
 
             // Determine initial tab
-            if (isChildOfOutline) {
+            if (enableChapterMode) {
                 setActiveTab('chapter');
                 setAiPrompt('请基于此节点大纲撰写正文...');
             }
