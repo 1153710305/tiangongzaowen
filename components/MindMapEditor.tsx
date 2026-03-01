@@ -230,7 +230,7 @@ export const MindMapEditor: React.FC<Props> = ({ projectId, mapData, onSave, nov
         const stack: { node: MindMapNode, level: number }[] = [];
 
         for (const line of lines) {
-            const match = line.match(/^(\s*)[-*]\s+(.+)/);
+            const match = line.match(/^(\s*)(?:[-*+]|\d+\.)\s+(.+)/);
             if (!match) continue;
             const newNode: MindMapNode = { id: generateUUID(), label: match[2], children: [] };
             const indent = match[1].length;
